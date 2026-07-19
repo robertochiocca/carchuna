@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carchuna"
+version = "1.0.0"
+description = "Raio-X verificável da margem para PMEs brasileiras: decompõe onde o lucro morre (impostos, marketplaces, adquirência) e aponta remédios com base legal citada."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Roberto Chiocca" }]
+keywords = [
+    "fintech",
+    "legaltech",
+    "simples-nacional",
+    "e-commerce",
+    "margem",
+    "pme",
+    "rag",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+# O núcleo (margem, métricas, cenários, diagnóstico, RAG) é Python puro:
+# roda em qualquer lugar, sem nenhuma dependência — degradação graciosa.
+dependencies = []
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.7"]
+app = ["streamlit>=1.30", "pandas>=2.0", "matplotlib>=3.7", "openpyxl>=3.1"]
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "black>=24.0", "ruff>=0.4", "openpyxl>=3.1"]
+
+[project.urls]
+Repository = "https://github.com/robertochiocca/carchuna"
+
+[tool.setuptools]
+packages = ["carchuna", "carchuna.rag"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle (erros)
+    "W",   # pycodestyle (avisos)
+    "F",   # pyflakes
+    "I",   # isort (ordem dos imports)
+    "UP",  # pyupgrade (sintaxe moderna)
+    "B",   # flake8-bugbear (bugs prováveis)
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.lint.per-file-ignores]
+# exemplos e testes ajustam sys.path antes dos imports (rodam sem install)
+"examples/*" = ["E402"]
+"tests/*" = ["E402"]
+
+[tool.coverage.run]
+source = ["carchuna"]
