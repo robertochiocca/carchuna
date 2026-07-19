@@ -15,7 +15,7 @@ from decimal import Decimal
 
 from carchuna.cenarios import ResultadoCenario
 from carchuna.diagnostico import Achado
-from carchuna.margem import DecomposicaoMargem
+from carchuna.margem import ROTULOS_DEDUCOES, DecomposicaoMargem
 from carchuna.rag.retrieval import AVISO_LEGAL
 
 # Paleta "águas de Carchuna": mar transparente, areia e alerta.
@@ -25,16 +25,6 @@ AREIA = "#e8dcc3"
 CORAL = "#e4572e"
 VERDE_ALGA = "#7fb069"
 CINZA_TEXTO = "#2f3e46"
-
-_ROTULOS = {
-    "tributos": "Tributos (Simples/MEI)",
-    "comissoes_canal": "Comissões de canal",
-    "adquirencia": "Adquirência",
-    "antecipacao": "Antecipação",
-    "frete": "Frete",
-    "devolucoes": "Devoluções",
-    "cmv": "CMV (custo do produto)",
-}
 
 
 def _brl(valor: Decimal) -> str:
@@ -126,7 +116,9 @@ def _pagina_margem(plt, pdf, d: DecomposicaoMargem, titulo, narrativa):
             style="italic",
         )
 
-    nomes = ["Receita bruta"] + [_ROTULOS.get(x.nome, x.nome) for x in d.deducoes]
+    nomes = ["Receita bruta"] + [
+        ROTULOS_DEDUCOES.get(x.nome, x.nome) for x in d.deducoes
+    ]
     nomes += ["Margem líquida"]
     valores = [float(d.receita_bruta)]
     valores += [-float(x.valor) for x in d.deducoes]

@@ -1,0 +1,298 @@
+"""Fachada orientada a objetos da Carchuna: ``AnalisadorMargem``.
+
+Um único objeto reúne os quatro motores (margem, métricas, cenários,
+diagnóstico) sobre um conjunto de vendas — a "inteligência de margem" do
+produto: importa os dados, reconstrói a margem venda a venda, resume
+onde o lucro morreu, simula alternativas e só então chama a camada
+legal/IA para explicar. **A IA entra depois do cálculo, nunca antes.**
+
+Uso típico::
+
+    analise = AnalisadorMargem.demo(meses=6)          # ou .de_arquivo(...)
+    analise.resumo_executivo().frase()
+    # "No período de 7 mês(es), R$ 833.092,65 de margem se perderam entre
+    #  a margem anunciada (41.90%) e a real (13.36%); 35% dessa perda
+    #  veio de Comissões de canal."
+    analise.margem_por_venda()[0].margem_liquida      # venda a venda
+    analise.cenarios()                                # simulações
+    analise.diagnosticar()                            # achados com base legal
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
+from functools import cached_property
+
+from carchuna.cenarios import Cenario, ResultadoCenario, rodar_cenarios_padrao
+from carchuna.dados import carregar_transacoes, transacoes_sinteticas
+from carchuna.diagnostico import (
+    Achado,
+    MotorDiagnostico,
+    ParametrosDiagnostico,
+)
+from carchuna.margem import (
+    ROTULOS_DEDUCOES,
+    ConfigTributaria,
+    DecomposicaoMargem,
+    TabelaCustos,
+    Transacao,
+    decompor_margem,
+)
+from carchuna.metricas import (
+    instabilidade_margem,
+    lucro_acumulado,
+    maior_queda_margem,
+    margem_mensal,
+    serie_margem_pct,
+)
+from carchuna.rag.retrieval import Retriever
+
+
+def _brl(valor: Decimal) -> str:
+    """Formata em moeda brasileira: Decimal('1234.5') → 'R$ 1.234,50'."""
+    inteiro, _, centavos = f"{valor:.2f}".partition(".")
+    sinal = "-" if inteiro.startswith("-") else ""
+    inteiro = inteiro.lstrip("-")
+    grupos = []
+    while inteiro:
+        grupos.append(inteiro[-3:])
+        inteiro = inteiro[:-3]
+    return f"{sinal}R$ {'.'.join(reversed(grupos))},{centavos}"
+
+
+@dataclass(frozen=True)
+class FontePerda:
+    """Uma dedução vista como fonte de perda de margem."""
+
+    nome: str
+    rotulo: str
+    valor: Decimal
+    pct_da_perda: Decimal  # participação na perda total (ex.: 62.0)
+
+
+@dataclass(frozen=True)
+class ResumoExecutivo:
+    """A resposta da review em números: quanto se perdeu e de onde veio.
+
+    "Margem anunciada" é a conta ingênua que o lojista faz (receita −
+    custo do produto); "margem real" é o que sobra depois de impostos,
+    comissões, adquirência, antecipação, frete e devoluções. A diferença
+    entre as duas é a **perda de margem**, decomposta por fonte.
+    """
+
+    meses: int
+    receita_bruta: Decimal
+    margem_anunciada: Decimal  # receita − CMV (a conta ingênua)
+    margem_anunciada_pct: Decimal
+    margem_real: Decimal  # margem líquida calculada
+    margem_real_pct: Decimal
+    perda_total: Decimal  # anunciada − real
+    fontes_perda: tuple[FontePerda, ...]  # ordenadas por valor decrescente
+
+    @property
+    def maior_fonte(self) -> FontePerda:
+        return self.fontes_perda[0]
+
+    def frase(self) -> str:
+        """O diagnóstico em uma frase, no formato pedido pela review."""
+        maior = self.maior_fonte
+        return (
+            f"No período de {self.meses} mês(es), {_brl(self.perda_total)} de "
+            f"margem se perderam entre a margem anunciada "
+            f"({self.margem_anunciada_pct}%) e a real ({self.margem_real_pct}%); "
+            f"{maior.pct_da_perda.quantize(Decimal('1'))}% dessa perda veio de "
+            f"{maior.rotulo}."
+        )
+
+
+@dataclass(frozen=True)
+class MargemVenda:
+    """A margem real de UMA venda — o MVP da review: venda a venda."""
+
+    transacao: Transacao
+    decomposicao: DecomposicaoMargem
+
+    @property
+    def margem_liquida(self) -> Decimal:
+        return self.decomposicao.margem_liquida
+
+    @property
+    def margem_pct(self) -> Decimal:
+        return self.decomposicao.margem_pct
+
+
+class AnalisadorMargem:
+    """Fachada dos motores da Carchuna sobre um conjunto de vendas.
+
+    Guarda transações, configuração tributária e tabela de custos, e
+    expõe cada análise como método; resultados caros ficam em cache.
+    O objeto é imutável na prática: para outra base de vendas ou outra
+    configuração, crie outro analisador.
+    """
+
+    def __init__(
+        self,
+        transacoes: list[Transacao],
+        config: ConfigTributaria,
+        tabela: TabelaCustos | None = None,
+        parametros: ParametrosDiagnostico | None = None,
+        retriever: Retriever | None = None,
+    ):
+        if not transacoes:
+            raise ValueError("`transacoes` não pode ser vazio.")
+        self.transacoes = list(transacoes)
+        self.config = config
+        self.tabela = tabela or TabelaCustos()
+        self.parametros = parametros or ParametrosDiagnostico()
+        self._retriever = retriever
+
+    # -- construtores alternativos ------------------------------------------
+
+    @classmethod
+    def de_arquivo(
+        cls,
+        source,
+        config: ConfigTributaria,
+        tabela: TabelaCustos | None = None,
+        name: str | None = None,
+        **kwargs,
+    ) -> AnalisadorMargem:
+        """Cria o analisador direto de um CSV/JSON/XLSX de vendas."""
+        return cls(carregar_transacoes(source, name=name), config, tabela, **kwargs)
+
+    @classmethod
+    def demo(
+        cls,
+        meses: int = 6,
+        config: ConfigTributaria | None = None,
+        tabela: TabelaCustos | None = None,
+        seed: int = 7,
+        **kwargs,
+    ) -> AnalisadorMargem:
+        """Analisador com dados sintéticos reprodutíveis (roda offline)."""
+        config = config or ConfigTributaria(
+            regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+        )
+        return cls(
+            transacoes_sinteticas(meses=meses, seed=seed), config, tabela, **kwargs
+        )
+
+    # -- margem --------------------------------------------------------------
+
+    @cached_property
+    def decomposicao(self) -> DecomposicaoMargem:
+        """Decomposição da margem do período inteiro."""
+        return decompor_margem(self.transacoes, self.config, self.tabela)
+
+    @cached_property
+    def mensal(self) -> dict[str, DecomposicaoMargem]:
+        """Decomposição mês a mês ("AAAA-MM")."""
+        return margem_mensal(self.transacoes, self.config, self.tabela)
+
+    def margem_por_venda(self) -> list[MargemVenda]:
+        """A margem real de cada venda, decomposta pelo mesmo motor testado.
+
+        No Simples, os tributos por venda usam a alíquota efetiva. No
+        MEI o DAS é fixo mensal e não é rateável por venda — a visão por
+        venda considera tributos = 0 e o valor cheio segue na visão
+        mensal (``decomposicao``/``mensal``).
+        """
+        config = self.config
+        if config.regime == "mei":
+            config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("0"))
+        return [
+            MargemVenda(t, decompor_margem([t], config, self.tabela))
+            for t in self.transacoes
+        ]
+
+    def resumo_executivo(self) -> ResumoExecutivo:
+        """Quanto de margem se perdeu no período — e de onde veio a perda."""
+        d = self.decomposicao
+        cmv = d.deducao("cmv").valor
+        anunciada = d.receita_bruta - cmv
+        perdas = [x for x in d.deducoes if x.nome != "cmv"]
+        perda_total = sum((x.valor for x in perdas), Decimal("0"))
+        fontes = tuple(
+            FontePerda(
+                nome=x.nome,
+                rotulo=ROTULOS_DEDUCOES.get(x.nome, x.nome),
+                valor=x.valor,
+                pct_da_perda=(
+                    (x.valor / perda_total * 100).quantize(
+                        Decimal("0.1"), rounding=ROUND_HALF_UP
+                    )
+                    if perda_total
+                    else Decimal("0")
+                ),
+            )
+            for x in sorted(perdas, key=lambda x: x.valor, reverse=True)
+        )
+        pct = (
+            (anunciada / d.receita_bruta * 100).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if d.receita_bruta
+            else Decimal("0")
+        )
+        meses = len({(t.data.year, t.data.month) for t in self.transacoes})
+        return ResumoExecutivo(
+            meses=meses,
+            receita_bruta=d.receita_bruta,
+            margem_anunciada=anunciada,
+            margem_anunciada_pct=pct,
+            margem_real=d.margem_liquida,
+            margem_real_pct=d.margem_pct,
+            perda_total=perda_total,
+            fontes_perda=fontes,
+        )
+
+    # -- métricas ------------------------------------------------------------
+
+    @cached_property
+    def serie(self) -> list[tuple[str, Decimal]]:
+        return serie_margem_pct(self.mensal)
+
+    def maior_queda(self) -> Decimal:
+        return maior_queda_margem(self.serie)
+
+    def instabilidade(self) -> Decimal:
+        return instabilidade_margem(self.serie)
+
+    def lucro_acumulado(self) -> list[tuple[str, Decimal]]:
+        return lucro_acumulado(self.mensal)
+
+    # -- simulação -----------------------------------------------------------
+
+    def simular(self, cenario: Cenario) -> ResultadoCenario:
+        """Executa um cenário avulso (qualquer subclasse de ``Cenario``)."""
+        return cenario.executar(self.transacoes, self.config, self.tabela)
+
+    def cenarios(self) -> list[ResultadoCenario]:
+        """A bateria padrão de cenários de stress."""
+        return rodar_cenarios_padrao(self.transacoes, self.config, self.tabela)
+
+    # -- diagnóstico legal (a IA entra DEPOIS do cálculo) --------------------
+
+    @cached_property
+    def retriever(self) -> Retriever:
+        return self._retriever or Retriever()
+
+    def diagnosticar(self) -> list[Achado]:
+        """Achados das regras de detecção, com base legal citada."""
+        motor = MotorDiagnostico(retriever=self.retriever, parametros=self.parametros)
+        return motor.diagnosticar(self.transacoes, self.config, self.tabela)
+
+    # -- relatório -----------------------------------------------------------
+
+    def gerar_pdf(self, output, narrativa: str | None = None):
+        """Relatório PDF de 3 páginas (requer matplotlib, extra ``viz``)."""
+        from carchuna.relatorio import gerar_pdf_relatorio
+
+        return gerar_pdf_relatorio(
+            self.decomposicao,
+            self.cenarios(),
+            self.diagnosticar(),
+            output,
+            narrativa=narrativa,
+        )

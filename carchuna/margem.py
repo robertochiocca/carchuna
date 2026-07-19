@@ -93,6 +93,17 @@ ANEXOS_SIMPLES: dict[str, list[_Faixa]] = {
 
 CANAIS_VALIDOS = ("mercado_livre", "shopee", "amazon", "loja_propria", "fisico")
 
+# Rótulos legíveis das deduções (dashboard, PDF e resumo executivo).
+ROTULOS_DEDUCOES: dict[str, str] = {
+    "tributos": "Tributos (Simples/MEI)",
+    "comissoes_canal": "Comissões de canal",
+    "adquirencia": "Adquirência",
+    "antecipacao": "Antecipação",
+    "frete": "Frete",
+    "devolucoes": "Devoluções",
+    "cmv": "CMV (custo do produto)",
+}
+
 _CENTAVO = Decimal("0.01")
 
 

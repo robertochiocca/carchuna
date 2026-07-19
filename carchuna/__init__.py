@@ -1,25 +1,41 @@
-"""Carchuna — o raio-X verificável da margem para o PME brasileiro.
+"""Carchuna — inteligência de margem verificável para o PME brasileiro.
 
 Você fatura 400; a Carchuna mostra, com prova, por que sobra 8 — e o que
 a lei permite recuperar.
 """
 
+from carchuna.analise import (
+    AnalisadorMargem,
+    FontePerda,
+    MargemVenda,
+    ResumoExecutivo,
+)
 from carchuna.cenarios import (
+    Cenario,
+    CenarioAntecipacao,
+    CenarioComissao,
+    CenarioDevolucoesDobram,
+    CenarioMigracaoCanal,
+    CenarioMudancaAnexo,
     ResultadoCenario,
     cenario_antecipacao,
     cenario_comissao,
     cenario_devolucoes_dobram,
+    cenario_migracao_canal,
     cenario_mudanca_anexo,
     rodar_cenarios_padrao,
 )
 from carchuna.dados import carregar_transacoes, transacoes_sinteticas
 from carchuna.diagnostico import (
     Achado,
+    MotorDiagnostico,
     ParametrosDiagnostico,
+    RegraDeteccao,
     diagnosticar,
 )
 from carchuna.margem import (
     ANEXOS_SIMPLES,
+    ROTULOS_DEDUCOES,
     ConfigTributaria,
     DecomposicaoMargem,
     Deducao,
@@ -36,16 +52,29 @@ from carchuna.metricas import (
     serie_margem_pct,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     "ANEXOS_SIMPLES",
+    "ROTULOS_DEDUCOES",
     "Achado",
+    "AnalisadorMargem",
+    "Cenario",
+    "CenarioAntecipacao",
+    "CenarioComissao",
+    "CenarioDevolucoesDobram",
+    "CenarioMigracaoCanal",
+    "CenarioMudancaAnexo",
     "ConfigTributaria",
     "DecomposicaoMargem",
     "Deducao",
+    "FontePerda",
+    "MargemVenda",
+    "MotorDiagnostico",
     "ParametrosDiagnostico",
+    "RegraDeteccao",
     "ResultadoCenario",
+    "ResumoExecutivo",
     "TabelaCustos",
     "Transacao",
     "aliquota_efetiva_simples",
@@ -53,6 +82,7 @@ __all__ = [
     "cenario_antecipacao",
     "cenario_comissao",
     "cenario_devolucoes_dobram",
+    "cenario_migracao_canal",
     "cenario_mudanca_anexo",
     "decompor_margem",
     "diagnosticar",
