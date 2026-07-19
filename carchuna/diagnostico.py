@@ -6,6 +6,12 @@ língua do lojista, base legal restrita ao que o ``Retriever`` recuperou
 do corpus, um caminho prático e o nível de confiança sempre explícito
 ("calculado" ou "estimado").
 
+Organização orientada a objetos (padrão DireitoAberto): cada regra é uma
+classe :class:`RegraDeteccao` com uma única responsabilidade — avaliar o
+contexto e devolver achados — e o :class:`MotorDiagnostico` orquestra as
+regras registradas. Para adicionar uma regra nova, herde de
+``RegraDeteccao`` e inclua-a na lista do motor; nada mais muda.
+
 As regras da v1 são heurísticas transparentes — não há ML nem caixa
 preta; cada limiar tem default documentado e é editável pelo chamador.
 A Carchuna aponta indícios; quem decide é o lojista com o contador ou
@@ -14,11 +20,13 @@ advogado dele (aviso em toda resposta, padrão DireitoAberto).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 from carchuna.margem import (
     ConfigTributaria,
+    DecomposicaoMargem,
     TabelaCustos,
     Transacao,
     aliquota_efetiva_simples,
@@ -82,18 +90,277 @@ def _q2(valor: Decimal) -> Decimal:
     return valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _meses(transacoes: list[Transacao]) -> int:
-    return len({(t.data.year, t.data.month) for t in transacoes}) or 1
-
-
 @dataclass
-class _Contexto:
+class ContextoDiagnostico:
+    """Tudo que uma regra precisa para avaliar um caso, já pré-calculado."""
+
     transacoes: list[Transacao]
     config: ConfigTributaria
     tabela: TabelaCustos
     parametros: ParametrosDiagnostico
     retriever: Retriever
-    achados: list[Achado] = field(default_factory=list)
+    decomposicao: DecomposicaoMargem
+
+    @property
+    def meses(self) -> int:
+        return len({(t.data.year, t.data.month) for t in self.transacoes}) or 1
+
+
+class RegraDeteccao(ABC):
+    """Uma heurística de detecção: recebe o contexto, devolve achados."""
+
+    @abstractmethod
+    def avaliar(self, ctx: ContextoDiagnostico) -> list[Achado]:
+        """Lista de achados (vazia quando a regra não dispara)."""
+
+
+class RegraAnexoErrado(RegraDeteccao):
+    """Regra 1 — anexo do Simples incompatível com a atividade declarada."""
+
+    def avaliar(self, ctx: ContextoDiagnostico) -> list[Achado]:
+        if ctx.config.regime != "simples":
+            return []
+        esperados = ANEXO_POR_ATIVIDADE[ctx.parametros.atividade]
+        if ctx.config.anexo_simples in esperados:
+            return []
+
+        atual = aliquota_efetiva_simples(ctx.config.rbt12, ctx.config.anexo_simples)
+        esperado = esperados[0]
+        correta = aliquota_efetiva_simples(ctx.config.rbt12, esperado)
+        base = (
+            ctx.decomposicao.receita_bruta
+            - ctx.decomposicao.deducao("devolucoes").valor
+        )
+        impacto_mensal = _q2((atual - correta) * base / ctx.meses)
+
+        base_legal = ctx.retriever.buscar(
+            "anexo errado enquadramento atividade simples"
+        )
+        base_legal += ctx.retriever.buscar(
+            "restituição imposto pago a maior erro alíquota"
+        )
+        if impacto_mensal > 0:
+            explicacao = (
+                f"Sua atividade declarada é {ctx.parametros.atividade!r}, que em "
+                f"regra recolhe pelo Anexo {esperado}, mas a configuração indica o "
+                f"Anexo {ctx.config.anexo_simples}. Com a sua RBT12, a alíquota "
+                f"efetiva atual é {(atual * 100).quantize(Decimal('0.01'))}% contra "
+                f"{(correta * 100).quantize(Decimal('0.01'))}% no anexo esperado — "
+                "há indício de imposto pago a maior."
+            )
+            caminho = (
+                "Leve o enquadramento (CNAE × anexo) ao seu contador. Se o erro se "
+                "confirmar, o art. 165 do CTN garante pedir restituição do que foi "
+                "pago a maior nos últimos 5 anos (art. 168)."
+            )
+        else:
+            explicacao = (
+                f"Sua atividade declarada é {ctx.parametros.atividade!r} (Anexo "
+                f"{esperado}, em regra), mas a configuração indica o Anexo "
+                f"{ctx.config.anexo_simples}, de alíquota MENOR. Se o enquadramento "
+                "estiver errado, há risco de autuação e cobrança retroativa."
+            )
+            caminho = (
+                "Confirme com seu contador se o enquadramento atual tem amparo; "
+                "regularizar antes de fiscalização reduz multa e juros."
+            )
+        return [
+            Achado(
+                tipo="tributario",
+                titulo="Anexo do Simples possivelmente errado",
+                impacto_mensal=abs(impacto_mensal),
+                explicacao=explicacao,
+                base_legal=tuple(_dedup(base_legal)),
+                caminho_pratico=caminho,
+                confianca="calculado",
+            )
+        ]
+
+
+class RegraAntecipacaoCara(RegraDeteccao):
+    """Regra 2 — taxa de antecipação acima da mediana de mercado."""
+
+    def avaliar(self, ctx: ContextoDiagnostico) -> list[Achado]:
+        mediana = ctx.parametros.mediana_antecipacao_mensal
+        taxa = ctx.tabela.taxa_antecipacao_mensal
+        if taxa <= mediana:
+            return []
+        custo_atual = ctx.decomposicao.deducao("antecipacao").valor
+        if custo_atual == 0:
+            return []
+        # Custo proporcional à taxa: na mediana, o mesmo volume antecipado
+        # custaria custo_atual × (mediana / taxa).
+        impacto_mensal = _q2(custo_atual * (taxa - mediana) / taxa / ctx.meses)
+        base_legal = ctx.retriever.buscar(
+            "antecipação de recebíveis taxa registro negociar maquininha"
+        )
+        return [
+            Achado(
+                tipo="financeiro",
+                titulo="Taxa de antecipação acima da mediana de mercado",
+                impacto_mensal=impacto_mensal,
+                explicacao=(
+                    f"Sua taxa de antecipação é "
+                    f"{(taxa * 100).quantize(Decimal('0.01'))}% ao mês; a mediana "
+                    f"de referência é {(mediana * 100).quantize(Decimal('0.01'))}% "
+                    "(valor editável — calibre com cotações do seu perfil). A "
+                    "diferença custa cerca de "
+                    f"R$ {impacto_mensal}/mês no seu volume atual."
+                ),
+                base_legal=tuple(base_legal),
+                caminho_pratico=(
+                    "Desde o registro de recebíveis (Resolução CMN 4.734/2019), "
+                    "sua agenda de cartão pode ser antecipada por qualquer banco "
+                    "ou fintech, não só pela sua maquininha. Cote a taxa em 2–3 "
+                    "instituições e negocie."
+                ),
+                confianca="estimado",
+            )
+        ]
+
+
+class RegraDevolucoesAltas(RegraDeteccao):
+    """Regra 3 — devoluções acima do limiar (% da receita)."""
+
+    def avaliar(self, ctx: ContextoDiagnostico) -> list[Achado]:
+        devolucoes = ctx.decomposicao.deducao("devolucoes").valor
+        limite = ctx.decomposicao.receita_bruta * ctx.parametros.limiar_devolucoes
+        if devolucoes <= limite:
+            return []
+        impacto_mensal = _q2((devolucoes - limite) / ctx.meses)
+        pct = (
+            (devolucoes / ctx.decomposicao.receita_bruta * 100).quantize(Decimal("0.1"))
+            if ctx.decomposicao.receita_bruta
+            else Decimal("0")
+        )
+        base_legal = ctx.retriever.buscar(
+            "devolução arrependimento sete dias e-commerce venda cancelada"
+        )
+        limiar_pct = (ctx.parametros.limiar_devolucoes * 100).quantize(Decimal("0.1"))
+        return [
+            Achado(
+                tipo="operacional",
+                titulo="Devoluções acima do esperado",
+                impacto_mensal=impacto_mensal,
+                explicacao=(
+                    f"Suas devoluções somam {pct}% da receita — acima do limiar de "
+                    f"{limiar_pct}% (editável). O excesso corrói a margem em cerca "
+                    f"de R$ {impacto_mensal}/mês. Lembre: vendas devolvidas não "
+                    "compõem a base do Simples (LC 123/2006, art. 3º, § 1º) — "
+                    "confira se o seu contador está excluindo essas vendas da "
+                    "apuração."
+                ),
+                base_legal=tuple(base_legal),
+                caminho_pratico=(
+                    "Investigue as causas (descrição do anúncio, embalagem, "
+                    "transportadora) canal a canal; devolução por arrependimento "
+                    "em 7 dias é direito do consumidor (CDC, art. 49), mas o "
+                    "índice é administrável."
+                ),
+                confianca="calculado",
+            )
+        ]
+
+
+class RegraComissaoDivergente(RegraDeteccao):
+    """Regra 4 — comissão cobrada no extrato diverge da tabela do canal."""
+
+    def avaliar(self, ctx: ContextoDiagnostico) -> list[Achado]:
+        por_canal: dict[str, Decimal] = {}
+        for t in ctx.transacoes:
+            if t.devolvida or t.comissao_cobrada is None:
+                continue
+            esperada = t.valor_bruto * ctx.tabela.comissao_canal.get(
+                t.canal, Decimal("0")
+            )
+            por_canal[t.canal] = por_canal.get(t.canal, Decimal("0")) + (
+                t.comissao_cobrada - esperada
+            )
+        achados = []
+        for canal, divergencia_total in sorted(por_canal.items()):
+            impacto_mensal = _q2(divergencia_total / ctx.meses)
+            if abs(impacto_mensal) < ctx.parametros.tolerancia_comissao:
+                continue
+            pct_tabela = (
+                ctx.tabela.comissao_canal.get(canal, Decimal("0")) * 100
+            ).quantize(Decimal("0.01"))
+            base_legal = ctx.retriever.buscar(
+                "cobrança indevida tarifa restituição cláusula contrato marketplace"
+            )
+            achados.append(
+                Achado(
+                    tipo="contratual",
+                    titulo=f"Comissão cobrada em {canal} diverge da tabela",
+                    impacto_mensal=abs(impacto_mensal),
+                    explicacao=(
+                        f"No canal {canal}, a comissão registrada nos seus "
+                        "extratos diverge da tabela configurada "
+                        f"({pct_tabela}%) em cerca de R$ {abs(impacto_mensal)}/mês "
+                        f"({'cobrança acima' if impacto_mensal > 0 else 'abaixo'} "
+                        "da tabela). Pode ser mudança de plano, tarifa extra por "
+                        "categoria — ou erro de cobrança."
+                    ),
+                    base_legal=tuple(base_legal),
+                    caminho_pratico=(
+                        "Confira o plano contratado e a tabela vigente do canal; "
+                        "havendo cobrança sem previsão contratual, abra "
+                        "contestação formal no canal e guarde os extratos de "
+                        "repasse."
+                    ),
+                    confianca="calculado",
+                )
+            )
+        return achados
+
+
+class MotorDiagnostico:
+    """Orquestra as regras de detecção sobre um conjunto de vendas.
+
+    As regras padrão são as quatro da v1; injete ``regras`` para
+    estender ou substituir (padrão aberto/fechado — o motor não muda).
+    """
+
+    def __init__(
+        self,
+        retriever: Retriever | None = None,
+        parametros: ParametrosDiagnostico | None = None,
+        regras: tuple[RegraDeteccao, ...] | None = None,
+    ):
+        self.retriever = retriever or Retriever()
+        self.parametros = parametros or ParametrosDiagnostico()
+        self.regras = (
+            regras
+            if regras is not None
+            else (
+                RegraAnexoErrado(),
+                RegraAntecipacaoCara(),
+                RegraDevolucoesAltas(),
+                RegraComissaoDivergente(),
+            )
+        )
+
+    def diagnosticar(
+        self,
+        transacoes: list[Transacao],
+        config: ConfigTributaria,
+        tabela: TabelaCustos | None = None,
+    ) -> list[Achado]:
+        """Roda todas as regras e devolve achados por impacto decrescente."""
+        if not transacoes:
+            raise ValueError("`transacoes` não pode ser vazio.")
+        tabela = tabela or TabelaCustos()
+        ctx = ContextoDiagnostico(
+            transacoes=transacoes,
+            config=config,
+            tabela=tabela,
+            parametros=self.parametros,
+            retriever=self.retriever,
+            decomposicao=decompor_margem(transacoes, config, tabela),
+        )
+        achados: list[Achado] = []
+        for regra in self.regras:
+            achados.extend(regra.avaliar(ctx))
+        return sorted(achados, key=lambda a: a.impacto_mensal, reverse=True)
 
 
 def diagnosticar(
@@ -103,231 +370,17 @@ def diagnosticar(
     parametros: ParametrosDiagnostico | None = None,
     retriever: Retriever | None = None,
 ) -> list[Achado]:
-    """Roda as quatro regras de detecção da v1 e devolve os achados.
+    """Atalho funcional para ``MotorDiagnostico(...).diagnosticar(...)``.
 
-    Regras (heurísticas transparentes, sem ML):
+    Regras da v1 (heurísticas transparentes, sem ML):
 
     1. **Anexo do Simples possivelmente errado** dada a atividade declarada;
     2. **Taxa de antecipação acima da mediana** de mercado (editável);
     3. **Devoluções acima do limiar** (% da receita, editável);
     4. **Comissão cobrada divergente** da tabela pública do canal.
-
-    Achados vêm ordenados por impacto mensal decrescente.
     """
-    if not transacoes:
-        raise ValueError("`transacoes` não pode ser vazio.")
-    ctx = _Contexto(
-        transacoes=transacoes,
-        config=config,
-        tabela=tabela or TabelaCustos(),
-        parametros=parametros or ParametrosDiagnostico(),
-        retriever=retriever or Retriever(),
-    )
-    _regra_anexo_errado(ctx)
-    _regra_antecipacao_cara(ctx)
-    _regra_devolucoes_altas(ctx)
-    _regra_comissao_divergente(ctx)
-    return sorted(ctx.achados, key=lambda a: a.impacto_mensal, reverse=True)
-
-
-# ---------------------------------------------------------------------------
-# Regra 1 — anexo do Simples possivelmente errado
-# ---------------------------------------------------------------------------
-
-
-def _regra_anexo_errado(ctx: _Contexto) -> None:
-    if ctx.config.regime != "simples":
-        return
-    esperados = ANEXO_POR_ATIVIDADE[ctx.parametros.atividade]
-    if ctx.config.anexo_simples in esperados:
-        return
-
-    atual = aliquota_efetiva_simples(ctx.config.rbt12, ctx.config.anexo_simples)
-    esperado = esperados[0]
-    correta = aliquota_efetiva_simples(ctx.config.rbt12, esperado)
-    decomposicao = decompor_margem(ctx.transacoes, ctx.config, ctx.tabela)
-    base = decomposicao.receita_bruta - decomposicao.deducao("devolucoes").valor
-    impacto_total = (atual - correta) * base
-    impacto_mensal = _q2(impacto_total / _meses(ctx.transacoes))
-
-    base_legal = ctx.retriever.buscar("anexo errado enquadramento atividade simples")
-    base_legal += ctx.retriever.buscar("restituição imposto pago a maior erro alíquota")
-    if impacto_mensal > 0:
-        explicacao = (
-            f"Sua atividade declarada é {ctx.parametros.atividade!r}, que em regra "
-            f"recolhe pelo Anexo {esperado}, mas a configuração indica o Anexo "
-            f"{ctx.config.anexo_simples}. Com a sua RBT12, a alíquota efetiva atual é "
-            f"{(atual * 100).quantize(Decimal('0.01'))}% contra "
-            f"{(correta * 100).quantize(Decimal('0.01'))}% no anexo esperado — há "
-            "indício de imposto pago a maior."
-        )
-        caminho = (
-            "Leve o enquadramento (CNAE × anexo) ao seu contador. Se o erro se "
-            "confirmar, o art. 165 do CTN garante pedir restituição do que foi "
-            "pago a maior nos últimos 5 anos (art. 168)."
-        )
-    else:
-        explicacao = (
-            f"Sua atividade declarada é {ctx.parametros.atividade!r} (Anexo "
-            f"{esperado}, em regra), mas a configuração indica o Anexo "
-            f"{ctx.config.anexo_simples}, de alíquota MENOR. Se o enquadramento "
-            "estiver errado, há risco de autuação e cobrança retroativa."
-        )
-        caminho = (
-            "Confirme com seu contador se o enquadramento atual tem amparo; "
-            "regularizar antes de fiscalização reduz multa e juros."
-        )
-    ctx.achados.append(
-        Achado(
-            tipo="tributario",
-            titulo="Anexo do Simples possivelmente errado",
-            impacto_mensal=abs(impacto_mensal),
-            explicacao=explicacao,
-            base_legal=tuple(_dedup(base_legal)),
-            caminho_pratico=caminho,
-            confianca="calculado",
-        )
-    )
-
-
-# ---------------------------------------------------------------------------
-# Regra 2 — antecipação acima da mediana de mercado
-# ---------------------------------------------------------------------------
-
-
-def _regra_antecipacao_cara(ctx: _Contexto) -> None:
-    mediana = ctx.parametros.mediana_antecipacao_mensal
-    taxa = ctx.tabela.taxa_antecipacao_mensal
-    if taxa <= mediana:
-        return
-    decomposicao = decompor_margem(ctx.transacoes, ctx.config, ctx.tabela)
-    custo_atual = decomposicao.deducao("antecipacao").valor
-    if custo_atual == 0:
-        return
-    # Custo proporcional à taxa: na mediana, o mesmo volume antecipado
-    # custaria custo_atual × (mediana / taxa).
-    excesso_total = custo_atual * (taxa - mediana) / taxa
-    impacto_mensal = _q2(excesso_total / _meses(ctx.transacoes))
-    base_legal = ctx.retriever.buscar(
-        "antecipação de recebíveis taxa registro negociar maquininha"
-    )
-    ctx.achados.append(
-        Achado(
-            tipo="financeiro",
-            titulo="Taxa de antecipação acima da mediana de mercado",
-            impacto_mensal=impacto_mensal,
-            explicacao=(
-                f"Sua taxa de antecipação é {(taxa * 100).quantize(Decimal('0.01'))}% "
-                f"ao mês; a mediana de referência é "
-                f"{(mediana * 100).quantize(Decimal('0.01'))}% (valor editável — "
-                "calibre com cotações do seu perfil). A diferença custa cerca de "
-                f"R$ {impacto_mensal}/mês no seu volume atual."
-            ),
-            base_legal=tuple(base_legal),
-            caminho_pratico=(
-                "Desde o registro de recebíveis (Resolução CMN 4.734/2019), sua "
-                "agenda de cartão pode ser antecipada por qualquer banco ou "
-                "fintech, não só pela sua maquininha. Cote a taxa em 2–3 "
-                "instituições e negocie."
-            ),
-            confianca="estimado",
-        )
-    )
-
-
-# ---------------------------------------------------------------------------
-# Regra 3 — devoluções acima do limiar
-# ---------------------------------------------------------------------------
-
-
-def _regra_devolucoes_altas(ctx: _Contexto) -> None:
-    decomposicao = decompor_margem(ctx.transacoes, ctx.config, ctx.tabela)
-    devolucoes = decomposicao.deducao("devolucoes").valor
-    limite = decomposicao.receita_bruta * ctx.parametros.limiar_devolucoes
-    if devolucoes <= limite:
-        return
-    excesso = devolucoes - limite
-    impacto_mensal = _q2(excesso / _meses(ctx.transacoes))
-    pct = (
-        (devolucoes / decomposicao.receita_bruta * 100).quantize(Decimal("0.1"))
-        if decomposicao.receita_bruta
-        else Decimal("0")
-    )
-    base_legal = ctx.retriever.buscar(
-        "devolução arrependimento sete dias e-commerce venda cancelada"
-    )
-    ctx.achados.append(
-        Achado(
-            tipo="operacional",
-            titulo="Devoluções acima do esperado",
-            impacto_mensal=impacto_mensal,
-            explicacao=(
-                f"Suas devoluções somam {pct}% da receita — acima do limiar de "
-                f"{(ctx.parametros.limiar_devolucoes * 100).quantize(Decimal('0.1'))}% "
-                "(editável). O excesso corrói a margem em cerca de "
-                f"R$ {impacto_mensal}/mês. Lembre: vendas devolvidas não compõem a "
-                "base do Simples (LC 123/2006, art. 3º, § 1º) — confira se o seu "
-                "contador está excluindo essas vendas da apuração."
-            ),
-            base_legal=tuple(base_legal),
-            caminho_pratico=(
-                "Investigue as causas (descrição do anúncio, embalagem, "
-                "transportadora) canal a canal; devolução por arrependimento em "
-                "7 dias é direito do consumidor (CDC, art. 49), mas o índice é "
-                "administrável."
-            ),
-            confianca="calculado",
-        )
-    )
-
-
-# ---------------------------------------------------------------------------
-# Regra 4 — comissão cobrada divergente da tabela do canal
-# ---------------------------------------------------------------------------
-
-
-def _regra_comissao_divergente(ctx: _Contexto) -> None:
-    meses = _meses(ctx.transacoes)
-    por_canal: dict[str, Decimal] = {}
-    for t in ctx.transacoes:
-        if t.devolvida or t.comissao_cobrada is None:
-            continue
-        esperada = t.valor_bruto * ctx.tabela.comissao_canal.get(t.canal, Decimal("0"))
-        por_canal[t.canal] = por_canal.get(t.canal, Decimal("0")) + (
-            t.comissao_cobrada - esperada
-        )
-    for canal, divergencia_total in sorted(por_canal.items()):
-        impacto_mensal = _q2(divergencia_total / meses)
-        if abs(impacto_mensal) < ctx.parametros.tolerancia_comissao:
-            continue
-        pct_tabela = (
-            ctx.tabela.comissao_canal.get(canal, Decimal("0")) * 100
-        ).quantize(Decimal("0.01"))
-        base_legal = ctx.retriever.buscar(
-            "cobrança indevida tarifa restituição cláusula contrato marketplace"
-        )
-        ctx.achados.append(
-            Achado(
-                tipo="contratual",
-                titulo=f"Comissão cobrada em {canal} diverge da tabela",
-                impacto_mensal=abs(impacto_mensal),
-                explicacao=(
-                    f"No canal {canal}, a comissão registrada nos seus extratos "
-                    f"diverge da tabela configurada ({pct_tabela}%) em cerca de "
-                    f"R$ {abs(impacto_mensal)}/mês "
-                    f"({'cobrança acima' if impacto_mensal > 0 else 'abaixo'} da "
-                    "tabela). Pode ser mudança de plano, tarifa extra por "
-                    "categoria — ou erro de cobrança."
-                ),
-                base_legal=tuple(base_legal),
-                caminho_pratico=(
-                    "Confira o plano contratado e a tabela vigente do canal; "
-                    "havendo cobrança sem previsão contratual, abra contestação "
-                    "formal no canal e guarde os extratos de repasse."
-                ),
-                confianca="calculado",
-            )
-        )
+    motor = MotorDiagnostico(retriever=retriever, parametros=parametros)
+    return motor.diagnosticar(transacoes, config, tabela)
 
 
 def _dedup(dispositivos: list[Dispositivo]) -> list[Dispositivo]:

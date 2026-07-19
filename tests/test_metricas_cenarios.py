@@ -130,11 +130,34 @@ def test_cenario_mudanca_anexo_usa_aliquota_do_novo_anexo():
     assert resultado.impacto_reais == Decimal("-2.95")  # 5,65 → 8,60
 
 
-def test_bateria_padrao_inclui_anexo_so_no_simples():
+def test_cenario_migracao_de_canal_calculado_a_mao():
+    """2 vendas ML de 100; migrar 50%: uma vira loja própria.
+
+    Base: 200 − 11,30 (tributos) − 24 (ML 12%) = 164,70.
+    Cenário: a venda migrada perde a comissão (−12) e ganha adquirência
+    2% (+2) → impacto líquido +10,00 na margem (+5 p.p.).
+    """
+    from carchuna.cenarios import cenario_migracao_canal
+
+    vendas = [_venda("100", 5), _venda("100", 5)]
+    resultado = cenario_migracao_canal(vendas, CONFIG, fracao=Decimal("0.5"))
+    assert resultado.base.deducao("comissoes_canal").valor == Decimal("24.00")
+    assert resultado.cenario.deducao("comissoes_canal").valor == Decimal("12.00")
+    assert resultado.cenario.deducao("adquirencia").valor == Decimal("2.00")
+    assert resultado.impacto_reais == Decimal("10.00")
+    assert resultado.impacto_pp == Decimal("5.00")
+
+    with pytest.raises(ValueError, match="fracao"):
+        cenario_migracao_canal(vendas, CONFIG, fracao=Decimal("1.5"))
+
+
+def test_bateria_padrao_inclui_anexo_so_no_simples_e_migracao_se_ha_ml():
     vendas = [_venda("100", 5)]
-    assert len(rodar_cenarios_padrao(vendas, CONFIG)) == 4
+    assert len(rodar_cenarios_padrao(vendas, CONFIG)) == 5  # inclui migração
+    sem_ml = [_venda("100", 5, canal="fisico")]
+    assert len(rodar_cenarios_padrao(sem_ml, CONFIG)) == 4  # sem migração
     config_mei = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76"))
-    assert len(rodar_cenarios_padrao(vendas, config_mei)) == 3
+    assert len(rodar_cenarios_padrao(vendas, config_mei)) == 4
     with pytest.raises(ValueError, match="Simples"):
         cenario_mudanca_anexo(vendas, config_mei)
 
