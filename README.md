@@ -14,6 +14,8 @@
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green.svg)](LICENSE)
 
+**[🌐 Site do projeto](https://robertochiocca.github.io/carchuna/)** · **[📖 Tutorial para leigos (do zero)](TUTORIAL.md)**
+
 🇧🇷 [Português](#-o-problema) · 🇺🇸 [English](#-english-version)
 
 </div>
@@ -59,6 +61,20 @@ Receita bruta:                 R$ 100,00
 ------------------------------------------
 Margem líquida real:           R$  32,35   (32,35% — não os 60% "anunciados")
 ```
+
+## 🖥️ O app
+
+![Dashboard da Carchuna — aba Margem com o resumo executivo](docs/img/dashboard.png)
+
+![Diagnóstico legal com base citada e fonte oficial](docs/img/diagnostico.png)
+
+Nunca programou? O **[TUTORIAL.md](TUTORIAL.md)** leva do zero absoluto (instalar o Python) até o raio-X com as suas vendas — incluindo como exportar o relatório da Shopee/Mercado Livre e montar o CSV a partir do [modelo pronto](examples/vendas_exemplo.csv).
+
+## 🏝️ Por que "Carchuna"?
+
+Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha família veio — a tradição começou na [⚡ Calahonda](https://github.com/robertochiocca/calahonda), batizada em homenagem a essa origem (*Sitio de Calahonda, Mijas, Málaga*). **Carchuna** continua a linhagem com uma coincidência que parece proposital: na costa de Granada, a praia de Carchuna fica colada em outra praia chamada… *Calahonda*. Os dois nomes são vizinhos no mesmo litoral, como os dois projetos são vizinhos no mesmo portfólio — motores irmãos, um para quem investe, outro para quem vende.
+
+E o nome também é a tese do produto: as águas de Carchuna são transparentes a ponto de se ver o fundo. É exatamente o que a plataforma faz com a margem do PME — **água clara, fundo visível, nenhum número sem prova**.
 
 ## 🧬 DNA da trilogia (inegociável)
 
@@ -106,12 +122,15 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | ✅ ingerido · ⚠️ **revisão humana pendente** (`revisado: false`) |
 | `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | ✅ implementado e testado |
 | `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | ✅ implementado e testado |
+| `conectores/` — interface `Conector` + `ConectorArquivo` (CSV/JSON/XLSX de qualquer canal, com filtro de período) | ✅ implementado e testado |
+| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | ✅ implementado |
+| Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | ⬜ roadmap — mesma interface `Conector` |
+| Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | ⬜ roadmap — mesma interface `Conector` |
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | ✅ implementado e testado |
 | `app.py` — dashboard Streamlit com 5 abas | ✅ implementado (sem teste automatizado de UI) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | ⬜ roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | ⬜ roadmap (depende de ICMS/ISS estaduais/municipais) |
 | RBT12 móvel mês a mês nas séries | ⬜ roadmap |
-| Conectores Mercado Livre / Shopee (APIs oficiais) | ⬜ roadmap |
 | Open Finance via agregador (Pluggy/Belvo) | ⬜ roadmap |
 | MCP server (consultar a Carchuna por assistentes de IA) | ⬜ roadmap |
 | Busca semântica (embeddings/ChromaDB, opt-in) | ⬜ roadmap |
@@ -147,6 +166,11 @@ print(analise.resumo_executivo().frase())
 ```
 
 Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrativa em linguagem natural (API da Anthropic); **sem chave, tudo funciona em modo extrativo** — o cálculo nunca depende de LLM.
+
+### Publicação (site e app no ar)
+
+- **Site** ([robertochiocca.github.io/carchuna](https://robertochiocca.github.io/carchuna/)): o workflow `pages.yml` publica a `index.html` na branch `gh-pages` a cada push na `main`; na primeira vez, ative em *Settings → Pages → Branch: gh-pages*.
+- **App ao vivo** (padrão da Calahonda): grátis no [Streamlit Community Cloud](https://share.streamlit.io) — *New app* → repositório `robertochiocca/carchuna`, branch `main`, arquivo `app.py`. A URL fica `carchuna.streamlit.app`.
 
 ## 🔍 Como cada número ganha lastro
 
