@@ -1,0 +1,26 @@
+name: Deploy GitHub Pages
+
+# Publica a landing page espelhando a main na branch gh-pages (mesmo
+# mecanismo da Calahonda). O GitHub Pages (Settings -> Pages) usa a
+# gh-pages como fonte — a primeira criação da branch ativa o Pages.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publicar na branch gh-pages
+        run: git push --force origin HEAD:gh-pages

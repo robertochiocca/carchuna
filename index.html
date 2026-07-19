@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carchuna — Inteligência de margem para o PME brasileiro</title>
+<meta name="description" content="Carchuna — projeto de portfólio: inteligência de margem verificável para PMEs brasileiras. Decompõe onde o lucro morre, com cálculo testado e base legal citada.">
+<meta name="author" content="Roberto Chiocca">
+<meta property="og:title" content="Carchuna — o raio-X da margem">
+<meta property="og:description" content="Você fatura 400; a Carchuna mostra, com prova, por que sobra 8. Fintech + legaltech, projeto de portfólio.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='14' fill='%230e7c86'/><text y='.9em' font-size='72' x='16' fill='%23e8dcc3'>C</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#06282e; --bg2:#083f47; --panel:#0b4650; --line:#12545f;
+  --mar:#19b3c2; --mar-claro:#7fe3ed; --areia:#e8dcc3; --coral:#e4572e;
+  --alga:#7fb069; --texto:#d7e6e8; --dim:#8fb0b5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--texto);font-family:'IBM Plex Sans',sans-serif;line-height:1.65}
+h1,h2,h3{font-family:'Syne',sans-serif;color:#fff}
+a{color:var(--mar-claro)}
+code,.mono{font-family:'IBM Plex Mono',monospace}
+nav{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding:16px 6vw;position:sticky;top:0;background:rgba(6,40,46,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:10;flex-wrap:wrap}
+.nav-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;color:#fff;text-decoration:none}
+.nav-logo .dot{color:var(--mar)}
+.nav-links{display:flex;gap:20px;flex-wrap:wrap}
+.nav-links a{color:var(--dim);text-decoration:none;font-size:.92rem}
+.nav-links a:hover{color:var(--areia)}
+.nav-pill{background:var(--mar);color:#04252b;font-weight:600;text-decoration:none;
+  padding:8px 16px;border-radius:999px;font-size:.9rem}
+.hero{padding:11vh 6vw 8vh;max-width:1000px}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+  border-radius:999px;padding:6px 14px;font-size:.82rem;color:var(--dim);margin-bottom:26px}
+.hero-badge b{color:var(--areia);font-weight:500}
+h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.12;letter-spacing:-.5px}
+h1 .acc{color:var(--mar-claro)}
+h1 .dim{color:var(--dim);font-weight:600}
+.hero p{margin:26px 0;max-width:640px;color:var(--dim);font-size:1.05rem}
+.hero p strong{color:var(--areia)}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn{padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600;font-size:.95rem}
+.btn-primary{background:var(--mar);color:#04252b}
+.btn-ghost{border:1px solid var(--line);color:var(--texto)}
+.btn:hover{filter:brightness(1.12)}
+section{padding:8vh 6vw;max-width:1100px;margin:0 auto}
+section h2{font-size:clamp(1.5rem,3vw,2.1rem);margin-bottom:8px}
+.sub{color:var(--dim);margin-bottom:36px;max-width:680px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h3{font-size:1.02rem;margin-bottom:8px;color:var(--areia)}
+.card p{font-size:.92rem;color:var(--dim)}
+.card .n{font-family:'Syne',sans-serif;font-weight:800;color:var(--mar);font-size:.85rem}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+.tabela-raio{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:10px 0;max-width:560px;overflow-x:auto}
+.tabela-raio td{padding:7px 22px;border:none}
+.tabela-raio td:last-child{text-align:right;font-family:'IBM Plex Mono',monospace}
+.tabela-raio .neg td{color:var(--coral)}
+.tabela-raio .total td{color:var(--alga);font-weight:600;border-top:1px solid var(--line)}
+.demo-caixa{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;
+  display:grid;grid-template-columns:minmax(240px,330px) 1fr;gap:34px}
+@media(max-width:820px){.demo-caixa{grid-template-columns:1fr}}
+.demo-caixa label{display:block;font-size:.82rem;color:var(--dim);margin:14px 0 4px}
+.demo-caixa input,.demo-caixa select{width:100%;background:var(--bg2);color:var(--texto);
+  border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:.95rem;
+  font-family:'IBM Plex Mono',monospace}
+.barra{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:.85rem}
+.barra .rot{width:150px;color:var(--dim);text-align:right;flex-shrink:0}
+.barra .trilho{flex:1;background:var(--bg2);border-radius:6px;height:22px;overflow:hidden}
+.barra .fill{height:100%;border-radius:6px;background:var(--coral);min-width:2px;
+  transition:width .35s ease}
+.barra.receita .fill{background:var(--mar)}
+.barra.margem .fill{background:var(--alga)}
+.barra .val{width:110px;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
+#demo-frase{margin-top:18px;padding:14px 16px;background:var(--bg2);border-left:3px solid var(--mar);
+  border-radius:8px;font-size:.92rem}
+#demo-frase b{color:var(--areia)}
+.aviso{font-size:.8rem;color:var(--dim);margin-top:14px}
+.fluxo{counter-reset:passo}
+.fluxo .card{position:relative}
+.nome-caixa{background:linear-gradient(140deg,var(--bg2),var(--panel));border:1px solid var(--line);
+  border-radius:16px;padding:34px;max-width:820px}
+.nome-caixa p{margin-bottom:14px;color:var(--texto)}
+.nome-caixa em{color:var(--mar-claro)}
+footer{padding:6vh 6vw;border-top:1px solid var(--line);color:var(--dim);font-size:.88rem;
+  display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
+footer a{color:var(--areia);text-decoration:none}
+.trilogia{display:flex;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#">Car<span class="dot">.</span>chuna</a>
+  <div class="nav-links">
+    <a href="#raiox">O raio-X</a>
+    <a href="#demo">Demo</a>
+    <a href="#fluxo">Como funciona</a>
+    <a href="#nome">O nome</a>
+    <a href="#honesto">Honestidade</a>
+  </div>
+  <a class="nav-pill" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">GitHub ↗</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge"><b>Carchuna</b> · Projeto de portfólio · Fintech + Legaltech · Python</div>
+  <h1>Você fatura 400.<br>Sobra 8. A <span class="acc">Carchuna</span><br><span class="dim">mostra por quê — com prova.</span></h1>
+  <p>Inteligência de margem <strong>verificável</strong> para o PME brasileiro que vende em
+     marketplace, usa maquininha e está no Simples Nacional. Todo número é
+     <strong>calculado por código testado</strong> (78 testes, 96% de cobertura); toda base legal é
+     <strong>citada de fonte oficial</strong>. A IA entra depois do cálculo, nunca antes.</p>
+  <div class="btns">
+    <a class="btn btn-primary" href="#demo">Calcular uma venda nesta página</a>
+    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna/blob/main/TUTORIAL.md" target="_blank" rel="noopener">Tutorial para começar do zero</a>
+    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">Código no GitHub ↗</a>
+  </div>
+</section>
+
+<section id="raiox">
+  <h2>O raio-X de uma venda de R$ 100</h2>
+  <p class="sub">A conta que o lojista faz é "100 − 40 de custo = 60 de lucro". A conta real,
+     dedução a dedução — cada linha com fonte (lei, contrato ou tabela editável):</p>
+  <div class="tabela-raio">
+    <table>
+      <tr><td>Receita bruta</td><td>R$ 100,00</td></tr>
+      <tr class="neg"><td>(−) Tributos — Simples, alíquota efetiva 5,65%*</td><td>R$ 5,65</td></tr>
+      <tr class="neg"><td>(−) Comissão do marketplace (12%)</td><td>R$ 12,00</td></tr>
+      <tr class="neg"><td>(−) Frete</td><td>R$ 10,00</td></tr>
+      <tr class="neg"><td>(−) Custo do produto (CMV)</td><td>R$ 40,00</td></tr>
+      <tr class="total"><td>(=) Margem líquida real — 32,35%, não 60%</td><td>R$ 32,35</td></tr>
+    </table>
+  </div>
+  <p class="aviso">* LC 123/2006, art. 18, § 1º-A: alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12.
+     Caso conferido à mão nos testes do repositório.</p>
+</section>
+
+<section id="demo">
+  <h2>Demo: decomponha uma venda agora</h2>
+  <p class="sub">Mesma lógica do motor Python, reimplementada em JavaScript só para esta página —
+     o cálculo de verdade (e testado) vive no <a href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">repositório</a>.</p>
+  <div class="demo-caixa">
+    <div>
+      <label>Preço de venda (R$)</label><input id="d-preco" type="number" value="100" min="1" step="1">
+      <label>Custo do produto (R$)</label><input id="d-custo" type="number" value="40" min="0" step="1">
+      <label>Frete pago (R$)</label><input id="d-frete" type="number" value="10" min="0" step="1">
+      <label>Canal de venda</label>
+      <select id="d-canal">
+        <option value="0.12" selected>Mercado Livre (~12%)</option>
+        <option value="0.14">Shopee (~14%)</option>
+        <option value="0.15">Amazon (~15%)</option>
+        <option value="0">Loja própria / físico (0%)</option>
+      </select>
+      <label>Anexo do Simples</label>
+      <select id="d-anexo">
+        <option value="I" selected>Anexo I — Comércio</option>
+        <option value="II">Anexo II — Indústria</option>
+        <option value="III">Anexo III — Serviços</option>
+      </select>
+      <label>Faturamento dos últimos 12 meses (RBT12, R$)</label>
+      <input id="d-rbt12" type="number" value="360000" min="1000" step="10000">
+    </div>
+    <div>
+      <div id="d-barras"></div>
+      <div id="demo-frase"></div>
+      <p class="aviso">Comissões são as das tabelas públicas dos canais (editáveis no app).
+         Informação geral, não aconselhamento contábil — confirme com seu contador.</p>
+    </div>
+  </div>
+</section>
+
+<section id="fluxo">
+  <h2>Como funciona</h2>
+  <p class="sub">O fluxo do produto — determinístico primeiro, IA por último:</p>
+  <div class="grid fluxo">
+    <div class="card"><span class="n">1 · IMPORTAÇÃO</span><h3>Suas vendas entram</h3>
+      <p>CSV, JSON ou Excel exportado do painel do marketplace. Conectores de API (Shopee, Mercado Livre) no roadmap — mesma interface, nada muda acima.</p></div>
+    <div class="card"><span class="n">2 · RECONSTRUÇÃO</span><h3>Margem real, venda a venda</h3>
+      <p>Receita → tributos → marketplace → adquirência → antecipação → frete → devoluções → CMV. Em <code>Decimal</code>, nunca float; invariante contábil testado.</p></div>
+    <div class="card"><span class="n">3 · DIAGNÓSTICO</span><h3>Quanto se perdeu, e onde</h3>
+      <p>"R$ 833 mil de margem se perderam; 35% veio de comissões de canal." Quatro regras transparentes detectam vazamentos — sem caixa preta.</p></div>
+    <div class="card"><span class="n">4 · SIMULAÇÃO</span><h3>E se…?</h3>
+      <p>Comissão +2 p.p., Selic sobe, devoluções dobram, migrar 30% do ML para canal próprio — o mesmo motor recalcula e compara.</p></div>
+    <div class="card"><span class="n">5 · EXPLICAÇÃO</span><h3>Base legal citada</h3>
+      <p>LC 123, CTN, CDC, normas do Bacen — recuperadas por busca (BM25 + sinônimos do lojista), com link oficial e aviso em toda resposta. LLM opcional: sem chave, tudo funciona.</p></div>
+  </div>
+</section>
+
+<section id="nome">
+  <h2>Por que "Carchuna"?</h2>
+  <div class="nome-caixa">
+    <p>Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha
+       família veio. O primeiro foi a <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">⚡ Calahonda</a>,
+       batizada em homenagem a essa origem.</p>
+    <p><em>Carchuna</em> continua a tradição — com uma coincidência que parece proposital:
+       na costa de Granada, a praia de Carchuna fica colada em outra praia chamada…
+       <em>Calahonda</em>. Os dois nomes são vizinhos no mesmo litoral, como os dois projetos
+       são vizinhos no mesmo portfólio: motores irmãos, um para quem investe, outro para quem vende.</p>
+    <p>E o nome também é a tese do produto: as águas de Carchuna são transparentes a ponto
+       de se ver o fundo. É o que a plataforma faz com a margem do PME —
+       <em>água clara, fundo visível, nenhum número sem prova</em>.</p>
+  </div>
+</section>
+
+<section id="honesto">
+  <h2>Honestidade técnica</h2>
+  <p class="sub">Padrão da trilogia: separar com clareza o que existe do que é plano.</p>
+  <div class="grid">
+    <div class="card"><h3>✅ Implementado e testado</h3>
+      <p>Motor de margem (Simples/MEI), margem por venda, métricas, 5 cenários, diagnóstico com base legal,
+         corpus com 21 dispositivos, dashboard, PDF, API FastAPI. 78 testes, 96% de cobertura, CI em 3 versões de Python.</p></div>
+    <div class="card"><h3>⬜ Roadmap explícito</h3>
+      <p>Lucro Presumido, conectores de API (Shopee/ML), Open Finance via agregador, MCP server,
+         busca semântica, autenticação e banco na API. Nada disso é prometido como pronto.</p></div>
+    <div class="card"><h3>🚫 Fora de escopo</h3>
+      <p>Não é ERP, não emite nota, não dá parecer jurídico, não promete recuperação tributária,
+         não guarda senha de banco ou marketplace. Conceito de portfólio — não é uma empresa.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div>MIT © 2026 <a href="https://github.com/robertochiocca" target="_blank" rel="noopener">Roberto Chiocca</a> · projeto de portfólio, não é aconselhamento jurídico/contábil</div>
+  <div class="trilogia">
+    <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">⚡ Calahonda</a>
+    <a href="https://github.com/robertochiocca/direitoaberto" target="_blank" rel="noopener">⚖️ DireitoAberto</a>
+    <span>🏖️ Carchuna</span>
+  </div>
+</footer>
+
+<script>
+// Tabelas do Simples (LC 123/2006, redação da LC 155/2016) — valores em
+// centavos para evitar erro binário de float na demo.
+const ANEXOS = {
+  I: [[18000000, 400, 0], [36000000, 730, 594000], [72000000, 950, 1386000],
+      [180000000, 1070, 2250000], [360000000, 1430, 8730000], [480000000, 1900, 37800000]],
+  II: [[18000000, 450, 0], [36000000, 780, 594000], [72000000, 1000, 1386000],
+      [180000000, 1120, 2250000], [360000000, 1470, 8550000], [480000000, 3000, 72000000]],
+  III: [[18000000, 600, 0], [36000000, 1120, 936000], [72000000, 1350, 1764000],
+      [180000000, 1600, 3564000], [360000000, 2100, 12564000], [480000000, 3300, 64800000]],
+};
+// alíquota nominal em pontos-base (400 = 4,00%); PD em centavos.
+
+const brl = c => (c / 100).toLocaleString("pt-BR", {style: "currency", currency: "BRL"});
+
+function aliquotaEfetiva(rbt12Cent, anexo) {
+  for (const [limite, aliqBp, pdCent] of ANEXOS[anexo]) {
+    if (rbt12Cent <= limite) {
+      // (RBT12 × aliq − PD) / RBT12, em base 10000 (pontos-base)
+      return (rbt12Cent * aliqBp - pdCent * 10000) / rbt12Cent;
+    }
+  }
+  return null; // acima do teto do Simples
+}
+
+function calcular() {
+  const preco = Math.round((+document.getElementById("d-preco").value || 0) * 100);
+  const custo = Math.round((+document.getElementById("d-custo").value || 0) * 100);
+  const frete = Math.round((+document.getElementById("d-frete").value || 0) * 100);
+  const pctCanal = +document.getElementById("d-canal").value;
+  const anexo = document.getElementById("d-anexo").value;
+  const rbt12 = Math.round((+document.getElementById("d-rbt12").value || 0) * 100);
+
+  const efetivaBp = aliquotaEfetiva(rbt12, anexo);
+  const frase = document.getElementById("demo-frase");
+  const barras = document.getElementById("d-barras");
+  if (efetivaBp === null || preco <= 0) {
+    barras.innerHTML = "";
+    frase.innerHTML = efetivaBp === null
+      ? "RBT12 acima do teto do Simples (R$ 4,8 milhões) — hipótese de exclusão do regime (LC 123/2006, art. 3º, II)."
+      : "Informe um preço de venda.";
+    return;
+  }
+  const tributos = Math.round(preco * efetivaBp / 10000);
+  const comissao = Math.round(preco * pctCanal);
+  const margem = preco - tributos - comissao - frete - custo;
+
+  const linhas = [
+    ["Receita bruta", preco, "receita"],
+    ["Tributos (Simples)", tributos, "neg"],
+    ["Comissão do canal", comissao, "neg"],
+    ["Frete", frete, "neg"],
+    ["Custo do produto", custo, "neg"],
+    ["Margem líquida", margem, "margem"],
+  ];
+  barras.innerHTML = linhas.map(([rot, v, cls]) => `
+    <div class="barra ${cls}">
+      <div class="rot">${rot}</div>
+      <div class="trilho"><div class="fill" style="width:${Math.max(0, Math.min(100, v / preco * 100))}%"></div></div>
+      <div class="val">${brl(v)}</div>
+    </div>`).join("");
+
+  const anunciadaPct = ((preco - custo) / preco * 100).toFixed(1).replace(".", ",");
+  const realPct = (margem / preco * 100).toFixed(1).replace(".", ",");
+  frase.innerHTML = `Alíquota efetiva do Simples: <b>${(efetivaBp / 100).toFixed(2).replace(".", ",")}%</b>
+    (Anexo ${anexo}, fórmula do art. 18, § 1º-A da LC 123/2006). Margem "anunciada":
+    <b>${anunciadaPct}%</b>. Margem real: <b>${realPct}%</b>${margem < 0 ? " — esta venda dá prejuízo" : ""}.`;
+}
+
+for (const id of ["d-preco", "d-custo", "d-frete", "d-canal", "d-anexo", "d-rbt12"]) {
+  document.getElementById(id).addEventListener("input", calcular);
+}
+calcular();
+</script>
+</body>
+</html>
