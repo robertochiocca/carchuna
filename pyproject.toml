@@ -52,7 +52,7 @@ dev = [
 Repository = "https://github.com/robertochiocca/carchuna"
 
 [tool.setuptools]
-packages = ["carchuna", "carchuna.rag", "carchuna.api"]
+packages = ["carchuna", "carchuna.rag", "carchuna.api", "carchuna.conectores"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
