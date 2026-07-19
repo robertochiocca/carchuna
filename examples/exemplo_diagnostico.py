@@ -1,5 +1,9 @@
 """Exemplo completo da Carchuna, 100% offline com dados sintéticos.
 
+Mostra o fluxo do produto na ordem da review: importar → reconstruir a
+margem (inclusive venda a venda) → resumo executivo → simulação →
+explicação legal. Tudo via fachada :class:`AnalisadorMargem`.
+
 Uso::
 
     python examples/exemplo_diagnostico.py
@@ -11,27 +15,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from carchuna import (
-    ConfigTributaria,
-    ParametrosDiagnostico,
-    TabelaCustos,
-    decompor_margem,
-    diagnosticar,
-    instabilidade_margem,
-    maior_queda_margem,
-    margem_mensal,
-    rodar_cenarios_padrao,
-    serie_margem_pct,
-    transacoes_sinteticas,
-)
+from carchuna import AnalisadorMargem, ConfigTributaria, TabelaCustos
 
 # Lojista típico do público-alvo: fatura ~R$400k/mês no Anexo I, mas foi
 # configurado (de propósito, para o exemplo) com antecipação cara.
-transacoes = transacoes_sinteticas(meses=6)
-config = ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("4200000"))
-tabela = TabelaCustos(taxa_antecipacao_mensal=Decimal("0.029"))
+analise = AnalisadorMargem.demo(
+    meses=6,
+    config=ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+    ),
+    tabela=TabelaCustos(taxa_antecipacao_mensal=Decimal("0.029")),
+)
 
-d = decompor_margem(transacoes, config, tabela)
+d = analise.decomposicao
 print("=== Raio-X da margem (6 meses sintéticos) ===")
 print(f"Receita bruta   : R$ {d.receita_bruta:>14,.2f}")
 for deducao in d.deducoes:
@@ -42,21 +38,32 @@ for deducao in d.deducoes:
 print(f"(=) margem líquida: R$ {d.margem_liquida:>14,.2f}  ({d.margem_pct}%)")
 print(f"Alíquota efetiva do Simples: {(d.aliquota_efetiva * 100):.4f}%")
 
-serie = serie_margem_pct(margem_mensal(transacoes, config, tabela))
-print(f"\nMaior queda de margem : {maior_queda_margem(serie)} p.p.")
-print(f"Instabilidade         : {instabilidade_margem(serie)} p.p.")
+print("\n=== Resumo executivo ===")
+resumo = analise.resumo_executivo()
+print(resumo.frase())
+for fonte in resumo.fontes_perda:
+    print(f"  {fonte.rotulo:<24} R$ {fonte.valor:>12,.2f}  ({fonte.pct_da_perda}%)")
 
-print("\n=== Cenários de stress ===")
-for cenario in rodar_cenarios_padrao(transacoes, config, tabela):
+print("\n=== Margem venda a venda (3 primeiras) ===")
+for venda in analise.margem_por_venda()[:3]:
+    t = venda.transacao
+    print(
+        f"  {t.data} {t.canal:<14} bruto R$ {t.valor_bruto:>7,.2f} → "
+        f"margem R$ {venda.margem_liquida:>7,.2f} ({venda.margem_pct}%)"
+    )
+
+print(f"\nMaior queda de margem : {analise.maior_queda()} p.p.")
+print(f"Instabilidade         : {analise.instabilidade()} p.p.")
+
+print("\n=== Cenários de stress e simulações ===")
+for cenario in analise.cenarios():
     print(
         f"- {cenario.nome}: impacto R$ {cenario.impacto_reais:,.2f} "
         f"({cenario.impacto_pp:+.2f} p.p.)"
     )
 
-print("\n=== Diagnóstico legal ===")
-achados = diagnosticar(
-    transacoes, config, tabela, ParametrosDiagnostico(atividade="comercio")
-)
+print("\n=== Diagnóstico legal (a IA entra depois do cálculo) ===")
+achados = analise.diagnosticar()
 if not achados:
     print("Nenhum vazamento detectado pelas regras da v1.")
 for achado in achados:

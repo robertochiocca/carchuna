@@ -17,22 +17,15 @@ import pandas as pd
 import streamlit as st
 
 from carchuna import (
+    AnalisadorMargem,
     ConfigTributaria,
     ParametrosDiagnostico,
     TabelaCustos,
     carregar_transacoes,
-    decompor_margem,
-    diagnosticar,
-    instabilidade_margem,
-    lucro_acumulado,
-    maior_queda_margem,
-    margem_mensal,
-    rodar_cenarios_padrao,
-    serie_margem_pct,
     transacoes_sinteticas,
 )
 from carchuna.rag.llm import gerar_resposta, resposta_extrativa
-from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
+from carchuna.rag.retrieval import AVISO_LEGAL
 
 st.set_page_config(
     page_title="Carchuna — raio-X da margem", page_icon="🏖️", layout="wide"
@@ -106,9 +99,12 @@ with st.sidebar:
     )
     atividade = st.selectbox("Atividade", ["comercio", "industria", "servicos"])
 
-decomposicao = decompor_margem(transacoes, config, tabela)
-mensal = margem_mensal(transacoes, config, tabela)
-serie = serie_margem_pct(mensal)
+# A fachada OO reúne os quatro motores; resultados caros ficam em cache.
+analise = AnalisadorMargem(
+    transacoes, config, tabela, ParametrosDiagnostico(atividade=atividade)
+)
+decomposicao = analise.decomposicao
+serie = analise.serie
 
 aba_vendas, aba_margem, aba_cenarios, aba_diagnostico, aba_relatorio = st.tabs(
     ["🛒 Vendas", "💧 Margem", "🌊 Cenários", "⚖️ Diagnóstico Legal", "📄 Relatório"]
@@ -138,10 +134,32 @@ with aba_vendas:
     st.subheader("Receita por canal")
     st.bar_chart(frame.groupby("canal")["valor_bruto"].sum())
     st.subheader("Transações")
+    if st.toggle(
+        "Mostrar margem real por venda (decomposta pelo mesmo motor)",
+        value=len(frame) <= 500,
+    ):
+        por_venda = analise.margem_por_venda()
+        frame["margem_liquida"] = [float(v.margem_liquida) for v in por_venda]
+        frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
     st.dataframe(frame, use_container_width=True, height=320)
 
 # ---------------------------------------------------------------------------
 with aba_margem:
+    resumo = analise.resumo_executivo()
+    st.info(resumo.frase(), icon="🔎")
+    col1, col2, col3 = st.columns(3)
+    col1.metric(
+        "Margem anunciada (receita − CMV)",
+        _brl(resumo.margem_anunciada),
+        f"{resumo.margem_anunciada_pct}%",
+    )
+    col2.metric(
+        "Margem real",
+        _brl(resumo.margem_real),
+        f"{resumo.margem_real_pct}%",
+    )
+    col3.metric("Perda de margem no período", _brl(resumo.perda_total))
+
     col1, col2, col3 = st.columns(3)
     col1.metric("Margem líquida", _brl(decomposicao.margem_liquida))
     col2.metric("Margem %", f"{decomposicao.margem_pct}%")
@@ -170,8 +188,8 @@ with aba_margem:
 
     if len(serie) >= 2:
         col_a, col_b = st.columns(2)
-        col_a.metric("Maior queda de margem", f"{maior_queda_margem(serie)} p.p.")
-        col_b.metric("Instabilidade da margem", f"{instabilidade_margem(serie)} p.p.")
+        col_a.metric("Maior queda de margem", f"{analise.maior_queda()} p.p.")
+        col_b.metric("Instabilidade da margem", f"{analise.instabilidade()} p.p.")
     st.subheader("Margem % mês a mês")
     st.line_chart(
         pd.Series({mes: float(m) for mes, m in serie}, name="margem %"),
@@ -179,7 +197,7 @@ with aba_margem:
     st.subheader("Lucro acumulado")
     st.area_chart(
         pd.Series(
-            {mes: float(v) for mes, v in lucro_acumulado(mensal)},
+            {mes: float(v) for mes, v in analise.lucro_acumulado()},
             name="lucro acumulado (R$)",
         )
     )
@@ -190,7 +208,7 @@ with aba_cenarios:
         "Cada cenário reexecuta o mesmo motor de cálculo com o parâmetro "
         "chocado — sem fórmula paralela."
     )
-    for resultado in rodar_cenarios_padrao(transacoes, config, tabela):
+    for resultado in analise.cenarios():
         with st.container(border=True):
             st.markdown(f"**{resultado.nome}**")
             c1, c2, c3 = st.columns(3)
@@ -200,17 +218,11 @@ with aba_cenarios:
 
 # ---------------------------------------------------------------------------
 with aba_diagnostico:
-    retriever = Retriever()
+    retriever = analise.retriever
     st.warning(retriever.aviso_corpus, icon="⚠️")
 
     st.subheader("Vazamentos detectados (heurísticas transparentes)")
-    achados = diagnosticar(
-        transacoes,
-        config,
-        tabela,
-        ParametrosDiagnostico(atividade=atividade),
-        retriever,
-    )
+    achados = analise.diagnosticar()
     if not achados:
         st.success("Nenhum vazamento detectado pelas 4 regras da v1.")
     for achado in achados:
@@ -251,17 +263,8 @@ with aba_relatorio:
         "Números 100% calculados por código testado."
     )
     if st.button("Gerar relatório PDF"):
-        from carchuna.relatorio import gerar_pdf_relatorio
-
         buffer = io.BytesIO()
-        gerar_pdf_relatorio(
-            decomposicao,
-            rodar_cenarios_padrao(transacoes, config, tabela),
-            diagnosticar(
-                transacoes, config, tabela, ParametrosDiagnostico(atividade=atividade)
-            ),
-            buffer,
-        )
+        analise.gerar_pdf(buffer)
         st.download_button(
             "Baixar relatorio_carchuna.pdf",
             data=buffer.getvalue(),
