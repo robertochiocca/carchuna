@@ -526,6 +526,73 @@ def _brl(v: Decimal) -> str:
     return f"R$ {v:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
 
+def _brl_inteiro(v: Decimal) -> str:
+    return f"R$ {v:,.0f}".replace(",", ".")
+
+
+def _grafico_destino(decomposicao, rotulos: dict, t: dict):
+    """Barras horizontais com rótulos completos e valores nas pontas.
+
+    Substitui o gráfico nativo (que trunca rótulos longos): Altair com
+    ``labelLimit=0``, cores calmas — quente-suave para o que foi embora,
+    verde-alga para o que sobrou — e o valor escrito ao fim de cada barra.
+    """
+    import altair as alt
+
+    linhas = [
+        {
+            "rotulo": rotulos.get(d.nome, d.nome),
+            "valor": float(d.valor),
+            "texto": _brl_inteiro(d.valor),
+            "tipo": t["foi_embora"],
+        }
+        for d in decomposicao.deducoes
+    ]
+    linhas.append(
+        {
+            "rotulo": t["sobrou"],
+            "valor": float(decomposicao.margem_liquida),
+            "texto": _brl_inteiro(decomposicao.margem_liquida),
+            "tipo": t["sobrou"],
+        }
+    )
+    dados = pd.DataFrame(linhas)
+    ordem = dados.sort_values("valor", ascending=False)["rotulo"].tolist()
+    base = alt.Chart(dados).encode(
+        y=alt.Y(
+            "rotulo:N",
+            sort=ordem,
+            title=None,
+            axis=alt.Axis(labelLimit=0, labelFontSize=13, labelColor="#d8e7e5"),
+        ),
+        x=alt.X(
+            "valor:Q",
+            title=None,
+            axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
+            scale=alt.Scale(paddingOuter=0.02),
+        ),
+    )
+    barras = base.mark_bar(cornerRadiusEnd=7, height=22).encode(
+        color=alt.Color(
+            "tipo:N",
+            scale=alt.Scale(
+                domain=[t["foi_embora"], t["sobrou"]],
+                range=["#cf8a70", "#8fd694"],
+            ),
+            legend=None,
+        )
+    )
+    textos = base.mark_text(
+        align="left", dx=8, color="#cfe9e6", fontSize=12.5, font="monospace"
+    ).encode(text="texto:N")
+    return (
+        (barras + textos)
+        .properties(height=len(linhas) * 38, padding={"right": 90})
+        .configure(background="rgba(0,0,0,0)")
+        .configure_view(strokeOpacity=0)
+    )
+
+
 st.title(t["titulo"])
 st.caption(t["subtitulo"])
 if t["nota_motor"]:
@@ -671,17 +738,9 @@ with aba_resumo:
     )
 
     st.subheader(t["para_onde"])
-    destino = pd.Series(
-        {
-            **{
-                rotulos.get(d.nome, d.nome): float(d.valor)
-                for d in decomposicao.deducoes
-            },
-            t["sobrou"]: float(decomposicao.margem_liquida),
-        },
-        name="R$",
-    ).sort_values()
-    st.bar_chart(destino, horizontal=True)
+    st.altair_chart(
+        _grafico_destino(decomposicao, rotulos, t), use_container_width=True
+    )
 
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
