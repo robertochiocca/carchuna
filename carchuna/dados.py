@@ -30,7 +30,12 @@ COLUNAS_OBRIGATORIAS = (
     "custo_produto",
     "frete_pago",
 )
-COLUNAS_OPCIONAIS = ("devolvida", "prazo_recebimento_dias", "comissao_cobrada")
+COLUNAS_OPCIONAIS = (
+    "devolvida",
+    "prazo_recebimento_dias",
+    "comissao_cobrada",
+    "produto",
+)
 
 _VERDADEIRO = {"1", "true", "sim", "s", "verdadeiro", "yes"}
 _FALSO = {"", "0", "false", "nao", "não", "n", "falso", "no"}
@@ -77,6 +82,7 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
             if comissao not in (None, "")
             else None
         ),
+        produto=(str(linha.get("produto") or "").strip() or None),
     )
 
 
@@ -104,9 +110,11 @@ def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:
         linhas = _ler_json(source)
     elif extensao == "xlsx":
         linhas = _ler_xlsx(source)
+    elif extensao == "pdf":
+        linhas = _ler_pdf(source)
     else:
         raise ValueError(
-            f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx)."
+            f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx, pdf)."
         )
     transacoes = [_linha_para_transacao(linha, i) for i, linha in enumerate(linhas, 2)]
     if not transacoes:
@@ -162,9 +170,66 @@ def _ler_xlsx(source) -> list[dict]:
     ]
 
 
+def _ler_pdf(source) -> list[dict]:
+    """Extrai vendas de um PDF que contenha uma TABELA com as colunas do modelo.
+
+    Suporte beta e honesto: PDF não é um formato de dados — cada relatório
+    tem um layout. Funciona quando o PDF traz uma tabela (com linhas de
+    grade) cujo cabeçalho usa os mesmos nomes de coluna do modelo da
+    Carchuna (``data, canal, valor_bruto...``). Para qualquer outro
+    layout, exporte como CSV/Excel — todo painel de marketplace oferece.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        raise ImportError(
+            "Importar .pdf requer `pdfplumber` (pip install pdfplumber) — "
+            "ou exporte o relatório como CSV/Excel."
+        ) from None
+    linhas: list[dict] = []
+    cabecalho: list[str] | None = None
+    with pdfplumber.open(source) as pdf:
+        for pagina in pdf.pages:
+            for tabela in pagina.extract_tables():
+                for bruta in tabela:
+                    celulas = [str(c or "").strip() for c in bruta]
+                    normalizadas = [c.lower() for c in celulas]
+                    if "data" in normalizadas and "canal" in normalizadas:
+                        cabecalho = normalizadas
+                        continue
+                    if cabecalho and any(celulas):
+                        linhas.append(dict(zip(cabecalho, celulas, strict=False)))
+    if cabecalho is None:
+        raise ValueError(
+            "Não encontrei no PDF uma tabela com as colunas do modelo "
+            "(data, canal, valor_bruto...). Exporte o relatório como "
+            "CSV/Excel ou use a planilha modelo do tutorial."
+        )
+    return linhas
+
+
 # ---------------------------------------------------------------------------
 # Dados sintéticos (demo/testes offline)
 # ---------------------------------------------------------------------------
+
+# Nomes de produto derivados da faixa de preço, SEM sorteios extras: a
+# sequência aleatória (e portanto todos os números do demo) fica idêntica
+# à das versões anteriores.
+_PRODUTOS_POR_FAIXA = (
+    (Decimal("200"), "Capa de celular"),
+    (Decimal("280"), "Carregador turbo"),
+    (Decimal("360"), "Fone bluetooth"),
+    (Decimal("440"), "Caixa de som"),
+    (Decimal("551"), "Smartwatch"),
+)
+
+
+def _produto_por_faixa(valor: Decimal) -> str:
+    for limite, nome in _PRODUTOS_POR_FAIXA:
+        if valor < limite:
+            return nome
+    return _PRODUTOS_POR_FAIXA[-1][1]
+
 
 # Perfil do lojista-alvo: fatura ~R$400 mil/mês, margem apertada.
 _PERFIL_CANAIS = (
@@ -213,6 +278,7 @@ def transacoes_sinteticas(
                         frete_pago=Decimal(rng.randint(8, 25)),
                         devolvida=rng.random() < 0.03,
                         prazo_recebimento_dias=prazo,
+                        produto=_produto_por_faixa(valor),
                     )
                 )
         dia += timedelta(days=1)

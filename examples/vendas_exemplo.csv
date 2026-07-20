@@ -1,16 +1,16 @@
-data,canal,valor_bruto,custo_produto,frete_pago,devolvida,prazo_recebimento_dias,comissao_cobrada
-2026-05-02,mercado_livre,249.90,140.00,18.50,nao,30,29.99
-2026-05-02,mercado_livre,89.90,45.00,12.00,nao,30,10.79
-2026-05-03,shopee,129.90,70.00,14.00,nao,15,18.19
-2026-05-04,shopee,59.90,28.00,9.90,sim,15,
-2026-05-05,amazon,349.00,190.00,22.00,nao,14,52.35
-2026-05-06,loja_propria,199.00,95.00,16.00,nao,30,
-2026-05-07,loja_propria,449.00,240.00,25.00,nao,30,
-2026-05-08,fisico,89.00,42.00,0,nao,0,
-2026-05-09,mercado_livre,159.90,85.00,15.00,nao,30,19.19
-2026-05-10,shopee,219.90,120.00,16.50,nao,15,30.79
-2026-06-01,mercado_livre,249.90,140.00,18.50,nao,30,29.99
-2026-06-02,shopee,129.90,70.00,14.00,nao,15,18.19
-2026-06-03,amazon,349.00,190.00,22.00,sim,14,
-2026-06-04,loja_propria,199.00,95.00,16.00,nao,30,
-2026-06-05,fisico,89.00,42.00,0,nao,0,
+data,produto,canal,valor_bruto,custo_produto,frete_pago,devolvida,prazo_recebimento_dias,comissao_cobrada
+2026-05-02,Fone bluetooth,mercado_livre,249.90,140.00,18.50,nao,30,29.99
+2026-05-02,Capa de celular,mercado_livre,89.90,45.00,12.00,nao,30,10.79
+2026-05-03,Carregador turbo,shopee,129.90,70.00,14.00,nao,15,18.19
+2026-05-04,Capa de celular,shopee,59.90,28.00,9.90,sim,15,
+2026-05-05,Smartwatch,amazon,349.00,190.00,22.00,nao,14,52.35
+2026-05-06,Caixa de som,loja_propria,199.00,95.00,16.00,nao,30,
+2026-05-07,Smartwatch,loja_propria,449.00,240.00,25.00,nao,30,
+2026-05-08,Capa de celular,fisico,89.00,42.00,0,nao,0,
+2026-05-09,Carregador turbo,mercado_livre,159.90,85.00,15.00,nao,30,19.19
+2026-05-10,Fone bluetooth,shopee,219.90,120.00,16.50,nao,15,30.79
+2026-06-01,Fone bluetooth,mercado_livre,249.90,140.00,18.50,nao,30,29.99
+2026-06-02,Carregador turbo,shopee,129.90,70.00,14.00,nao,15,18.19
+2026-06-03,Smartwatch,amazon,349.00,190.00,22.00,sim,14,
+2026-06-04,Caixa de som,loja_propria,199.00,95.00,16.00,nao,30,
+2026-06-05,Capa de celular,fisico,89.00,42.00,0,nao,0,

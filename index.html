@@ -61,7 +61,7 @@ nav{display:flex;justify-content:space-between;align-items:center;gap:16px;
   transition:transform .15s,box-shadow .15s}
 .nav-pill:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(46,230,214,.35)}
 
-.hero{position:relative;padding:13vh 6vw 12vh;max-width:1060px;overflow:hidden}
+.hero{position:relative;padding:6.5rem 6vw 5.5rem;max-width:1120px;margin:0 auto;overflow:hidden}
 .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
   background:
     radial-gradient(52vw 40vh at 78% 6%, rgba(46,230,214,.14), transparent 60%),
@@ -85,22 +85,23 @@ h1 .dim{color:var(--dim);font-weight:600}
 .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(46,230,214,.35)}
 .btn-ghost{border:1px solid var(--linha);color:var(--texto)}
 .btn-ghost:hover{border-color:var(--agua);transform:translateY(-2px)}
-.hero-metricas{display:flex;gap:40px;margin-top:56px;flex-wrap:wrap}
-.hero-metricas .m b{display:block;font-family:'Syne',sans-serif;font-size:1.6rem;
-  color:var(--agua-suave);font-weight:700}
+.hero-metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px;margin-top:56px;max-width:760px}
+.hero-metricas .m{background:rgba(10,56,64,.45);border:1px solid var(--linha);border-radius:18px;padding:16px 18px}
+.hero-metricas .m b{display:block;font-family:'Syne',sans-serif;font-size:1.35rem;
+  color:var(--agua-suave);font-weight:600;font-variant-numeric:tabular-nums}
 .hero-metricas .m span{font-size:.8rem;color:var(--dim);letter-spacing:.04em;
   text-transform:uppercase}
 
 .onda{display:block;width:100%;height:70px;color:var(--fundo)}
 main{background:var(--fundo)}
-section{padding:9vh 6vw;max-width:1120px;margin:0 auto}
+section{padding:5.5rem 6vw;max-width:1120px;margin:0 auto}
 section h2{font-size:clamp(1.5rem,3vw,2.2rem);margin-bottom:10px;letter-spacing:-.5px}
 .sub{color:var(--dim);margin-bottom:40px;max-width:700px}
 .kicker{font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--agua);
   letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:14px}
 
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:18px}
-.card{background:var(--painel);border:1px solid var(--linha);border-radius:16px;
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:18px;grid-auto-rows:1fr}
+.card{background:var(--painel);border:1px solid var(--linha);border-radius:18px;
   padding:26px;transition:transform .2s,border-color .25s,box-shadow .25s}
 .card:hover{transform:translateY(-4px);border-color:rgba(46,230,214,.45);
   box-shadow:0 14px 34px rgba(2,16,19,.5)}
@@ -109,19 +110,19 @@ section h2{font-size:clamp(1.5rem,3vw,2.2rem);margin-bottom:10px;letter-spacing:
 .card .n{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--agua);
   font-size:.74rem;letter-spacing:.14em;display:block;margin-bottom:12px}
 
-.tabela-raio{background:var(--painel);border:1px solid var(--linha);border-radius:16px;
+.tabela-raio{background:var(--painel);border:1px solid var(--linha);border-radius:18px;
   padding:14px 0;max-width:600px;overflow-x:auto;
   box-shadow:0 20px 50px rgba(2,16,19,.4)}
 .tabela-raio table{width:100%;border-collapse:collapse;font-size:.95rem}
 .tabela-raio td{padding:8px 26px;border:none}
-.tabela-raio td:last-child{text-align:right;font-family:'IBM Plex Mono',monospace}
+.tabela-raio td:last-child{text-align:right;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;color:#cfe9e6}
 .tabela-raio .neg td{color:var(--coral)}
 .tabela-raio .total td{color:var(--alga);font-weight:500;border-top:1px solid var(--linha);
   padding-top:14px}
 .nota{font-size:.8rem;color:var(--dim);margin-top:16px;max-width:640px}
 
 .demo-caixa{background:linear-gradient(150deg,var(--painel-2),var(--painel));
-  border:1px solid var(--linha);border-radius:20px;padding:34px;
+  border:1px solid var(--linha);border-radius:18px;padding:34px;
   display:grid;grid-template-columns:minmax(240px,330px) 1fr;gap:40px;
   box-shadow:0 24px 60px rgba(2,16,19,.45)}
 @media(max-width:840px){.demo-caixa{grid-template-columns:1fr}}
@@ -140,13 +141,13 @@ section h2{font-size:clamp(1.5rem,3vw,2.2rem);margin-bottom:10px;letter-spacing:
 .barra.receita .fill{background:linear-gradient(90deg,#1a9c90,var(--agua))}
 .barra.margem .fill{background:linear-gradient(90deg,#5fae68,var(--alga))}
 .barra .val{width:118px;font-family:'IBM Plex Mono',monospace;flex-shrink:0;
-  color:var(--texto)}
+  color:#cfe9e6;font-variant-numeric:tabular-nums}
 #demo-frase{margin-top:22px;padding:16px 18px;background:rgba(4,30,35,.6);
   border-left:3px solid var(--agua);border-radius:10px;font-size:.92rem;color:var(--dim)}
 #demo-frase b{color:var(--agua-suave);font-weight:500}
 
 .nome-caixa{position:relative;background:linear-gradient(150deg,var(--painel-2),var(--painel));
-  border:1px solid var(--linha);border-radius:20px;padding:40px;max-width:840px;
+  border:1px solid var(--linha);border-radius:18px;padding:40px;max-width:840px;
   overflow:hidden}
 .nome-caixa::after{content:"";position:absolute;right:-80px;bottom:-110px;width:300px;
   height:300px;border-radius:50%;background:radial-gradient(circle,rgba(46,230,214,.12),transparent 70%)}
@@ -162,7 +163,7 @@ section h2{font-size:clamp(1.5rem,3vw,2.2rem);margin-bottom:10px;letter-spacing:
 .g-gelo{background:#9db4ff;box-shadow:0 0 10px rgba(157,180,255,.6)}  /* DireitoAberto */
 .g-agua{background:var(--agua);box-shadow:0 0 10px rgba(46,230,214,.7)} /* Carchuna */
 
-footer{padding:7vh 6vw;border-top:1px solid var(--linha);color:var(--dim);
+footer{padding:4rem 6vw;border-top:1px solid var(--linha);color:var(--dim);
   font-size:.88rem;display:flex;justify-content:space-between;gap:18px;
   flex-wrap:wrap;background:var(--abismo)}
 footer a{color:var(--areia);text-decoration:none}
@@ -306,8 +307,8 @@ footer a:hover{color:var(--agua-suave)}
   <div class="grid">
     <div class="card"><span class="n"><span lang-pt>1 / IMPORTAÇÃO</span><span lang-en>1 / IMPORT</span></span>
       <h3><span lang-pt>Suas vendas entram</span><span lang-en>Your sales come in</span></h3>
-      <p><span lang-pt>CSV, JSON ou Excel exportado do painel do marketplace. Conectores de API (Shopee, Mercado Livre) no roadmap — mesma interface, nada muda acima.</span>
-         <span lang-en>CSV, JSON or Excel exported from the marketplace dashboard. API connectors (Shopee, Mercado Livre) on the roadmap — same interface, nothing above changes.</span></p></div>
+      <p><span lang-pt>CSV, Excel, JSON ou PDF exportado do painel do marketplace — com opção de acompanhar um arquivo em tempo real no app local. Conectores de API (Shopee, Mercado Livre) no roadmap.</span>
+         <span lang-en>CSV, Excel, JSON or PDF exported from the marketplace dashboard — with real-time file watching in the local app. API connectors (Shopee, Mercado Livre) on the roadmap.</span></p></div>
     <div class="card"><span class="n"><span lang-pt>2 / RECONSTRUÇÃO</span><span lang-en>2 / REBUILD</span></span>
       <h3><span lang-pt>Margem real, venda a venda</span><span lang-en>Real margin, sale by sale</span></h3>
       <p><span lang-pt>Receita, tributos, marketplace, adquirência, antecipação, frete, devoluções, CMV. Em <code>Decimal</code>, nunca float; invariante contábil testado.</span>

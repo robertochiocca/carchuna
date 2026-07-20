@@ -73,14 +73,15 @@ O navegador abre sozinho com o painel (se não abrir, acesse
 Prompt/Terminal e aperte `Ctrl+C`.
 
 Na primeira vez, o app já vem carregado com **dados de demonstração** (vendas
-inventadas, mas realistas) — explore as 6 abas antes de colocar os seus dados:
+inventadas, mas realistas) — explore as 7 abas antes de colocar os seus dados:
 
 | Aba | O que mostra |
 |---|---|
-| **Vendas** | suas vendas importadas, receita por canal e a margem real de cada venda |
-| **Margem** | o raio-X: quanto sobrou de verdade e onde a receita morreu, com a fonte de cada dedução |
-| **Cenários** | simulações: "e se a comissão subir 2 pontos?", "e se eu migrar 30% do ML para loja própria?" |
-| **Crescimento** | como faturar mais: o canal onde cada real rende mais, a calculadora de preço e quanto cabe crescer no Simples |
+| **Resumo** | o essencial em uma tela: quanto faturou, quanto sobrou de verdade, para onde foi o dinheiro e as 3 ações mais valiosas |
+| **Vendas e Produtos** | campeões de margem ("venda mais destes"), produtos que dão prejuízo ("reprecifique"), tabela por produto e por canal |
+| **Histórico** | a evolução mês a mês, com comparação do último mês contra o anterior em uma frase simples |
+| **E se…?** | testes de estresse: "e se a comissão subir 2 pontos?", "e se as devoluções dobrarem?" |
+| **Crescer** | como faturar mais: o canal onde cada real rende mais, a calculadora de preço certo e quanto cabe crescer no Simples |
 | **Diagnóstico Legal** | vazamentos detectados com a lei correspondente citada (e link oficial) |
 | **Relatório** | um PDF de 3 páginas para levar ao seu contador |
 
@@ -99,6 +100,7 @@ As colunas (as 5 primeiras são obrigatórias):
 | Coluna | O que é | Exemplo |
 |---|---|---|
 | `data` | dia da venda, formato ano-mês-dia | `2026-05-02` |
+| `produto` | nome do produto (opcional, mas habilita o ranking de campeões e vilões de margem) | `Fone bluetooth` |
 | `canal` | onde vendeu: `mercado_livre`, `shopee`, `amazon`, `loja_propria` ou `fisico` | `shopee` |
 | `valor_bruto` | preço que o cliente pagou | `129,90` |
 | `custo_produto` | quanto o produto custou para você | `70,00` |
@@ -109,7 +111,9 @@ As colunas (as 5 primeiras são obrigatórias):
 
 Pode usar vírgula nos valores (`129,90`) — a Carchuna entende o formato
 brasileiro. Salve como **CSV** (no Excel: *Salvar como → CSV UTF-8*) ou até
-como `.xlsx` mesmo.
+como `.xlsx` mesmo. **PDF** também funciona, desde que o arquivo traga uma
+tabela com essas mesmas colunas (é um suporte beta — se não funcionar com o
+seu relatório, exporte como CSV/Excel).
 
 **De onde tirar os dados?** Todo marketplace exporta relatório de vendas:
 - **Shopee**: Central do Vendedor → Meus Dados → Exportar relatório de pedidos;
@@ -122,8 +126,14 @@ exportação manual, que funciona para qualquer canal.)
 
 ### 2. Importe no app
 
-Na barra lateral esquerda, em **Dados**, clique em **Browse files** e escolha o
-seu arquivo. Pronto — todas as abas passam a usar as suas vendas.
+Na barra lateral esquerda, no passo **1 · Suas vendas**, clique em **Browse
+files** e escolha o seu arquivo. Pronto — todas as abas passam a usar as suas
+vendas.
+
+**Modo tempo real** (app rodando no seu computador): em *Acompanhar um
+arquivo em tempo real*, cole o caminho da sua planilha (ex.:
+`C:\vendas\maio.xlsx`) e ligue a chave. Toda vez que você salvar o arquivo
+no Excel, os números do painel se atualizam sozinhos em poucos segundos.
 
 ### 3. Configure a tributação (pergunte ao contador se tiver dúvida)
 

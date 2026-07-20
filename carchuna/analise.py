@@ -122,6 +122,18 @@ class MargemVenda:
         return self.decomposicao.margem_pct
 
 
+@dataclass(frozen=True)
+class ResumoProduto:
+    """A margem real agregada de um produto (ou canal, na falta do nome)."""
+
+    nome: str
+    vendas: int
+    devolvidas: int
+    receita: Decimal
+    margem: Decimal
+    margem_pct: Decimal
+
+
 class AnalisadorMargem:
     """Fachada dos motores da Carchuna sobre um conjunto de vendas.
 
@@ -205,6 +217,41 @@ class AnalisadorMargem:
             MargemVenda(t, decompor_margem([t], config, self.tabela))
             for t in self.transacoes
         ]
+
+    def margem_por_produto(self) -> list[ResumoProduto]:
+        """Margem real agregada por produto — campeões e vilões do catálogo.
+
+        Agrupa a visão venda a venda pelo campo ``produto`` (quando o
+        arquivo não traz produto, agrupa por canal). Ordenado da maior
+        para a menor margem em reais; produtos com margem negativa são
+        os candidatos a reprecificação.
+        """
+        grupos: dict[str, list[MargemVenda]] = {}
+        for venda in self.margem_por_venda():
+            chave = venda.transacao.produto or venda.transacao.canal
+            grupos.setdefault(chave, []).append(venda)
+        resumos = []
+        for nome, vendas in grupos.items():
+            receita = sum((v.transacao.valor_bruto for v in vendas), Decimal("0"))
+            margem = sum((v.margem_liquida for v in vendas), Decimal("0"))
+            pct = (
+                (margem / receita * 100).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                if receita
+                else Decimal("0")
+            )
+            resumos.append(
+                ResumoProduto(
+                    nome=nome,
+                    vendas=len(vendas),
+                    devolvidas=sum(1 for v in vendas if v.transacao.devolvida),
+                    receita=receita,
+                    margem=margem,
+                    margem_pct=pct,
+                )
+            )
+        return sorted(resumos, key=lambda r: r.margem, reverse=True)
 
     def resumo_executivo(self) -> ResumoExecutivo:
         """Quanto de margem se perdeu no período — e de onde veio a perda."""
