@@ -101,6 +101,69 @@ def test_erros_de_importacao(tmp_path):
         carregar_transacoes(invalido)
 
 
+def test_sugerir_mapeamento_com_cabecalho_de_relatorio_real():
+    """Cabeçalho estilo Shopee/ERP: os palpites acertam o de-para."""
+    from carchuna.dados import sugerir_mapeamento
+
+    colunas = [
+        "Data do pedido",
+        "Título do anúncio",
+        "Preço acordado",
+        "Custo unitário",
+        "Valor do frete",
+        "Tarifa de venda",
+        "Status de devolução",
+    ]
+    mapa = sugerir_mapeamento(colunas)
+    assert mapa["data"] == "Data do pedido"
+    assert mapa["produto"] == "Título do anúncio"
+    assert mapa["valor_bruto"] == "Preço acordado"
+    assert mapa["custo_produto"] == "Custo unitário"
+    assert mapa["frete_pago"] == "Valor do frete"
+    assert mapa["comissao_cobrada"] == "Tarifa de venda"
+    assert mapa["devolvida"] == "Status de devolução"
+    assert mapa["canal"] is None  # relatório de um canal só não tem a coluna
+
+
+def test_transacoes_de_mapa_com_constantes():
+    """De-para + constantes: canal fixo (=shopee) e frete zero (=0)."""
+    from carchuna.dados import transacoes_de_mapa
+
+    linhas = [
+        {"data do pedido": "2026-05-01", "preço": "129,90", "custo un.": "70"},
+        {"data do pedido": "2026-05-02", "preço": "89,90", "custo un.": "45"},
+    ]
+    mapa = {
+        "data": "data do pedido",
+        "canal": "=shopee",
+        "valor_bruto": "preço",
+        "custo_produto": "custo un.",
+        "frete_pago": "=0",
+    }
+    transacoes = transacoes_de_mapa(linhas, mapa)
+    assert len(transacoes) == 2
+    assert transacoes[0].canal == "shopee"
+    assert transacoes[0].valor_bruto == Decimal("129.90")
+    assert transacoes[0].frete_pago == Decimal("0")
+
+    with pytest.raises(ValueError, match="obrigatórias"):
+        transacoes_de_mapa(linhas, {"data": "data do pedido"})
+
+
+def test_canal_normalizado_de_exports_reais(tmp_path):
+    """'Mercado Livre' e 'Físico' viram os canais internos válidos."""
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        "data,canal,valor_bruto,custo_produto,frete_pago\n"
+        "2026-05-01,Mercado Livre,100,40,10\n"
+        "2026-05-02,Físico,80,30,0\n",
+        encoding="utf-8",
+    )
+    transacoes = carregar_transacoes(arquivo)
+    assert transacoes[0].canal == "mercado_livre"
+    assert transacoes[1].canal == "fisico"
+
+
 def test_sintetico_reprodutivel_e_na_escala_do_publico_alvo():
     """Mesma seed → mesmas vendas; receita na casa dos R$ 400 mil/mês."""
     a = transacoes_sinteticas(meses=3, seed=7)

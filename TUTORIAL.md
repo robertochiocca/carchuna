@@ -8,8 +8,12 @@ Este guia é para quem **nunca programou** e quer usar a Carchuna no próprio
 computador. Sem pressa: são uns 20 minutos na primeira vez. Se algo der errado,
 veja a seção [Problemas comuns](#problemas-comuns) no final.
 
-> A Carchuna roda **no seu computador**: suas vendas não são enviadas para
-> nenhum servidor. E lembre — ela informa e calcula, mas **não substitui o seu
+> **Privacidade, com honestidade:** rodando **no seu computador** (este
+> guia), suas vendas não saem dele. Na versão hospedada
+> ([carchuna.streamlit.app](https://carchuna.streamlit.app)), o arquivo é
+> processado no servidor do Streamlit durante a sessão — a Carchuna não o
+> armazena, mas ele trafega até lá. Dados sensíveis? Prefira rodar local.
+> E lembre — a Carchuna informa e calcula, mas **não substitui o seu
 > contador**.
 
 ---
@@ -124,7 +128,7 @@ seu relatório, exporte como CSV/Excel).
 - **Mercado Livre**: Vendas → baixar relatório (Excel);
 - **Amazon**: Seller Central → Relatórios → Pagamentos/Pedidos.
 
-As colunas vêm com outros nomes — copie para o modelo da Carchuna. (Conexão
+As colunas vêm com outros nomes — e não precisa renomear nada: ao enviar o arquivo, a Carchuna abre um **mapeador de colunas** ('sua coluna Preço acordado é o nosso valor_bruto?') com palpites automáticos; você confirma e pronto. Se o relatório é todo de um canal só (ex.: Shopee), dá para marcar isso com um clique. (Conexão
 automática com as APIs dos canais está no roadmap; hoje o caminho é a
 exportação manual, que funciona para qualquer canal.)
 
