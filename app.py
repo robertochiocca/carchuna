@@ -20,6 +20,7 @@ from __future__ import annotations
 import io
 from decimal import Decimal
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -67,6 +68,16 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+AGUA = "#2ee6d6"
+AGUA_TEXTO = "#cfe9e6"
+TEAL_CALMO = "#4fb3c1"
+_SEM_FUNDO = {"background": "rgba(0,0,0,0)"}
+
+
+def _base_config(grafico):
+    return grafico.configure(**_SEM_FUNDO).configure_view(strokeOpacity=0)
+
 
 ROTULOS_EN = {
     "tributos": "Taxes (Simples/MEI)",
@@ -537,8 +548,6 @@ def _grafico_destino(decomposicao, rotulos: dict, t: dict):
     ``labelLimit=0``, cores calmas — quente-suave para o que foi embora,
     verde-alga para o que sobrou — e o valor escrito ao fim de cada barra.
     """
-    import altair as alt
-
     linhas = [
         {
             "rotulo": rotulos.get(d.nome, d.nome),
@@ -585,12 +594,101 @@ def _grafico_destino(decomposicao, rotulos: dict, t: dict):
     textos = base.mark_text(
         align="left", dx=8, color="#cfe9e6", fontSize=12.5, font="monospace"
     ).encode(text="texto:N")
-    return (
-        (barras + textos)
-        .properties(height=len(linhas) * 38, padding={"right": 90})
-        .configure(background="rgba(0,0,0,0)")
-        .configure_view(strokeOpacity=0)
+    return _base_config(
+        (barras + textos).properties(height=len(linhas) * 38, padding={"right": 90})
     )
+
+
+def _grafico_barras_h(linhas: list[dict], cor: str = TEAL_CALMO):
+    """Barras horizontais no estilo da casa: rótulo inteiro, valor na ponta."""
+    dados = pd.DataFrame(linhas)
+    ordem = dados.sort_values("valor", ascending=False)["rotulo"].tolist()
+    base = alt.Chart(dados).encode(
+        y=alt.Y(
+            "rotulo:N",
+            sort=ordem,
+            title=None,
+            axis=alt.Axis(labelLimit=0, labelFontSize=13, labelColor="#d8e7e5"),
+        ),
+        x=alt.X(
+            "valor:Q",
+            title=None,
+            axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
+        ),
+    )
+    barras = base.mark_bar(cornerRadiusEnd=7, height=22, color=cor)
+    textos = base.mark_text(
+        align="left", dx=8, color=AGUA_TEXTO, fontSize=12.5, font="monospace"
+    ).encode(text="texto:N")
+    return _base_config(
+        (barras + textos).properties(height=len(linhas) * 38, padding={"right": 90})
+    )
+
+
+def _grafico_barras_v(linhas: list[dict], cor: str = TEAL_CALMO):
+    """Barras verticais (ex.: meses) com o valor escrito no topo de cada uma."""
+    dados = pd.DataFrame(linhas)
+    base = alt.Chart(dados).encode(
+        x=alt.X(
+            "rotulo:N",
+            sort=dados["rotulo"].tolist(),
+            title=None,
+            axis=alt.Axis(labelAngle=0, labelFontSize=12.5, labelColor="#d8e7e5"),
+        ),
+        y=alt.Y(
+            "valor:Q",
+            title=None,
+            axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
+        ),
+    )
+    barras = base.mark_bar(
+        cornerRadiusTopLeft=7, cornerRadiusTopRight=7, size=44, color=cor
+    )
+    textos = base.mark_text(
+        dy=-10, color=AGUA_TEXTO, fontSize=12, font="monospace"
+    ).encode(text="texto:N")
+    return _base_config((barras + textos).properties(height=280, padding={"top": 16}))
+
+
+def _grafico_serie(linhas: list[dict], modo: str = "linha"):
+    """Linha (ou área) mensal com o valor escrito em cada ponto."""
+    dados = pd.DataFrame(linhas)
+    base = alt.Chart(dados).encode(
+        x=alt.X(
+            "rotulo:N",
+            sort=dados["rotulo"].tolist(),
+            title=None,
+            axis=alt.Axis(labelAngle=0, labelFontSize=12.5, labelColor="#d8e7e5"),
+        ),
+        y=alt.Y(
+            "valor:Q",
+            title=None,
+            scale=alt.Scale(zero=(modo == "area")),
+            axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
+        ),
+    )
+    ponto = alt.OverlayMarkDef(color=AGUA, size=70)
+    if modo == "area":
+        gradiente = alt.Gradient(
+            gradient="linear",
+            stops=[
+                alt.GradientStop(color="rgba(46,230,214,0.02)", offset=0),
+                alt.GradientStop(color="rgba(46,230,214,0.30)", offset=1),
+            ],
+            x1=1,
+            x2=1,
+            y1=1,
+            y2=0,
+        )
+        marca = base.mark_area(
+            line={"color": AGUA, "strokeWidth": 2.5}, color=gradiente, point=ponto
+        )
+    else:
+        marca = base.mark_line(color=AGUA, strokeWidth=2.5, point=ponto)
+    textos = base.mark_text(
+        dy=-15, color=AGUA_TEXTO, fontSize=12, font="monospace"
+    ).encode(text="texto:N")
+    return _base_config((marca + textos).properties(height=280, padding={"top": 18}))
 
 
 st.title(t["titulo"])
@@ -832,7 +930,20 @@ with aba_vendas:
     )
 
     st.subheader(t["receita_por_canal"])
-    st.bar_chart(frame.groupby("canal")["valor_bruto"].sum())
+    por_canal = frame.groupby("canal")["valor_bruto"].sum()
+    st.altair_chart(
+        _grafico_barras_h(
+            [
+                {
+                    "rotulo": canal,
+                    "valor": float(valor),
+                    "texto": _brl_inteiro(Decimal(str(round(valor)))),
+                }
+                for canal, valor in por_canal.items()
+            ]
+        ),
+        use_container_width=True,
+    )
 
     with st.expander(t["todas_vendas"]):
         if st.toggle(t["margem_por_venda"], value=len(frame) <= 500):
@@ -885,23 +996,46 @@ with aba_historico:
         )
         c3.metric(t["delta_pp"], f"{dec_b.margem_pct}%", f"{delta_pp:+.2f}")
 
+        dec = (lambda v: v.replace(".", ",")) if lang == "pt" else (lambda v: v)
         st.subheader(t["hist_receita"])
-        st.bar_chart(
-            pd.Series(
-                {mes: float(d.receita_bruta) for mes, d in mensal.items()},
-                name="R$",
-            )
+        st.altair_chart(
+            _grafico_barras_v(
+                [
+                    {
+                        "rotulo": mes,
+                        "valor": float(d.receita_bruta),
+                        "texto": _brl_inteiro(d.receita_bruta),
+                    }
+                    for mes, d in mensal.items()
+                ]
+            ),
+            use_container_width=True,
         )
         st.subheader(t["hist_margem"])
-        st.line_chart(
-            pd.Series({mes: float(d.margem_pct) for mes, d in mensal.items()}, name="%")
+        st.altair_chart(
+            _grafico_serie(
+                [
+                    {
+                        "rotulo": mes,
+                        "valor": float(d.margem_pct),
+                        "texto": dec(f"{d.margem_pct}%"),
+                    }
+                    for mes, d in mensal.items()
+                ],
+                modo="linha",
+            ),
+            use_container_width=True,
         )
         st.subheader(t["hist_lucro"])
-        st.area_chart(
-            pd.Series(
-                {mes: float(v) for mes, v in analise.lucro_acumulado()},
-                name="R$",
-            )
+        st.altair_chart(
+            _grafico_serie(
+                [
+                    {"rotulo": mes, "valor": float(v), "texto": _brl_inteiro(v)}
+                    for mes, v in analise.lucro_acumulado()
+                ],
+                modo="area",
+            ),
+            use_container_width=True,
         )
 
         st.subheader(t["hist_tabela"])
