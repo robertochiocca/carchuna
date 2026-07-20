@@ -14,7 +14,7 @@
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green.svg)](LICENSE)
 
-**[Site do projeto](https://robertochiocca.github.io/carchuna/)** · **[Tutorial para leigos (do zero)](TUTORIAL.md)**
+**[App ao vivo / Live app](https://carchuna.streamlit.app)** · **[Site do projeto](https://robertochiocca.github.io/carchuna/)** · **[Tutorial para leigos (do zero)](TUTORIAL.md)**
 
 [Português](#o-problema) · [English](#english-version)
 
@@ -67,6 +67,8 @@ Margem líquida real:           R$  32,35   (32,35% — não os 60% "anunciados"
 ```
 
 ## O app
+
+**No ar em [carchuna.streamlit.app](https://carchuna.streamlit.app)** — e o fluxo é um upload só: envie a planilha de vendas (CSV, Excel, JSON ou PDF com tabela) e TODAS as abas se recalculam — margem real, impostos pela LC 123 (a **RBT12 é sugerida automaticamente a partir do próprio arquivo**, editável), produtos campeões e vilões, histórico, cenários, crescimento e diagnóstico legal. O que o arquivo não tem como dizer — seu anexo do Simples e as taxas do seu contrato — fica em dois campos na barra lateral, com explicação de onde encontrar cada um.
 
 ![Dashboard da Carchuna — aba Margem com o resumo executivo](docs/img/dashboard.png)
 
@@ -177,7 +179,7 @@ Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrati
 ### Publicação (site e app no ar)
 
 - **Site** ([robertochiocca.github.io/carchuna](https://robertochiocca.github.io/carchuna/)): o workflow `pages.yml` publica a `index.html` na branch `gh-pages` a cada push na `main`; na primeira vez, ative em *Settings → Pages → Branch: gh-pages*.
-- **App ao vivo** (padrão da Calahonda): grátis no [Streamlit Community Cloud](https://share.streamlit.io) — *New app* → repositório `robertochiocca/carchuna`, branch `main`, arquivo `app.py`. A URL fica `carchuna.streamlit.app`.
+- **App ao vivo**: [carchuna.streamlit.app](https://carchuna.streamlit.app), publicado no Streamlit Community Cloud a partir da `main` — cada mescla atualiza o app sozinho.
 
 ## Como cada número ganha lastro
 
@@ -204,6 +206,8 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 **Carchuna** — verifiable margin intelligence for Brazilian SMBs. It rebuilds a seller's real margin deterministically (taxes, marketplace fees, card acquiring, receivables prepayment, freight, returns, COGS) — for the period, per month and **per sale** — quantifies where profit died ("R$ 833k of margin lost; 35% came from marketplace fees"), simulates alternatives (channel migration, fee shocks, tax bracket changes) and only then uses RAG over official legal sources to explain, with citations. **AI comes after the math, never before.** Third project of an Andalusian trilogy ([Calahonda](https://github.com/robertochiocca/calahonda) → quant, [DireitoAberto](https://github.com/robertochiocca/direitoaberto) → legal RAG).
 
 Core principles: every output is either computed by tested code or cited from an official source with a link; graceful degradation (fully functional without any API key); money is `Decimal`, never `float` (serialized as strings over the API); legal corpus entries ship with `"revisado": false` until human review; object-oriented engines behind stable interfaces (`AnalisadorMargem` facade, `Cenario`/`RegraDeteccao` class hierarchies); honest README separating implemented (tests + CI) from roadmap.
+
+Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project site: [robertochiocca.github.io/carchuna](https://robertochiocca.github.io/carchuna/).
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline

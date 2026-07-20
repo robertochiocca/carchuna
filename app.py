@@ -170,6 +170,10 @@ T = {
         ),
         "das": "Valor mensal do boleto do MEI (R$)",
         "das_ajuda": "O DAS fixo que você paga todo mês.",
+        "rbt12_sugerida": (
+            "Sugerido a partir do seu arquivo (média mensal × 12). "
+            "Confirme com o valor exato do extrato do Simples (PGDAS-D)."
+        ),
         "passo3": "3 · Suas taxas",
         "taxa_adq": "Taxa da maquininha (%)",
         "taxa_adq_ajuda": (
@@ -374,6 +378,10 @@ T = {
         ),
         "das": "Monthly MEI flat payment (R$)",
         "das_ajuda": "The fixed DAS you pay every month.",
+        "rbt12_sugerida": (
+            "Suggested from your file (monthly average × 12). Confirm "
+            "with the exact figure from your Simples statement (PGDAS-D)."
+        ),
         "passo3": "3 · Your fees",
         "taxa_adq": "Card machine fee (%)",
         "taxa_adq_ajuda": (
@@ -732,6 +740,20 @@ with st.sidebar:
         meses_demo = st.slider(t["meses_demo"], 2, 12, 6)
         transacoes = transacoes_sinteticas(meses=meses_demo)
 
+    # Um upload transcreve tudo: com dados reais, a RBT12 é sugerida do
+    # próprio arquivo (média mensal x 12) — editável e para confirmar
+    # com o PGDAS-D; a alíquota do Simples sai dela, pela LC 123.
+    rbt12_sugerida = None
+    if upload is not None or caminho_arquivo:
+        meses_arquivo = len({(tr.data.year, tr.data.month) for tr in transacoes})
+        receita_arquivo = sum((tr.valor_bruto for tr in transacoes), Decimal("0"))
+        rbt12_sugerida = int(
+            min(
+                max(receita_arquivo / meses_arquivo * 12, Decimal("1000")),
+                Decimal("4800000"),
+            )
+        )
+
     st.header(t["passo2"])
     regime = st.selectbox(
         t["regime"],
@@ -747,10 +769,12 @@ with st.sidebar:
             t["rbt12"],
             min_value=1_000,
             max_value=4_800_000,
-            value=4_200_000,
+            value=rbt12_sugerida or 4_200_000,
             step=10_000,
             help=t["rbt12_ajuda"],
         )
+        if rbt12_sugerida:
+            st.caption(t["rbt12_sugerida"])
         config = ConfigTributaria(
             regime="simples", anexo_simples=anexo, rbt12=Decimal(int(rbt12))
         )
