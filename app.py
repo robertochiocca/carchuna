@@ -1,8 +1,10 @@
-"""Dashboard da Carchuna — Streamlit, mesmo esqueleto de abas da Calahonda.
+"""Dashboard da Carchuna — pensado para o lojista, não para o analista.
 
-Abas: Vendas · Margem · Cenários · Crescimento · Diagnóstico Legal ·
-Relatório. Interface bilíngue (PT/EN); roda 100% offline com dados
-sintéticos e aceita upload de CSV/JSON/XLSX.
+Sete abas em linguagem simples: Resumo (o essencial em uma tela),
+Vendas e Produtos (campeões e vilões de margem), Histórico (evolução
+mês a mês), E se…? (testes de estresse), Crescer (como faturar mais),
+Diagnóstico Legal e Relatório. Interface bilíngue (PT/EN); roda 100%
+offline com dados sintéticos e aceita upload de CSV/JSON/XLSX.
 
 As narrativas geradas pelos motores (achados, oportunidades, nomes de
 cenário) são em português — a língua do público-alvo; a interface é que
@@ -36,6 +38,39 @@ from carchuna.rag.retrieval import AVISO_LEGAL
 
 st.set_page_config(page_title="Carchuna", layout="wide")
 
+ROTULOS_EN = {
+    "tributos": "Taxes (Simples/MEI)",
+    "comissoes_canal": "Marketplace commissions",
+    "adquirencia": "Card machine fees",
+    "antecipacao": "Early-payment cost",
+    "frete": "Shipping",
+    "devolucoes": "Returns",
+    "cmv": "Product cost",
+}
+
+ROTULOS_SIMPLES_PT = {
+    "tributos": "Impostos",
+    "comissoes_canal": "Comissões dos marketplaces",
+    "adquirencia": "Taxa da maquininha",
+    "antecipacao": "Custo de antecipar",
+    "frete": "Frete",
+    "devolucoes": "Devoluções",
+    "cmv": "Custo dos produtos",
+}
+
+ATIVIDADES = {
+    "pt": {
+        "comercio": "Comércio (revenda de produtos)",
+        "industria": "Indústria (fabricação própria)",
+        "servicos": "Serviços",
+    },
+    "en": {
+        "comercio": "Commerce (product resale)",
+        "industria": "Industry (own manufacturing)",
+        "servicos": "Services",
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Textos da interface (PT/EN). Saídas dos motores permanecem em PT.
 # ---------------------------------------------------------------------------
@@ -44,220 +79,397 @@ T = {
     "pt": {
         "titulo": "Carchuna — o raio-X da margem",
         "subtitulo": (
-            "Você fatura 400; a Carchuna mostra, com prova, por que sobra 8 — "
-            "e o que a lei permite recuperar. Projeto de portfólio; não é "
-            "aconselhamento jurídico/contábil."
+            "Descubra quanto sobra DE VERDADE de cada venda — e o que fazer "
+            "para sobrar mais. Projeto de portfólio; não é aconselhamento "
+            "jurídico/contábil."
         ),
-        "dados": "Dados",
-        "upload": "Vendas (CSV, JSON ou XLSX)",
+        "nota_motor": "",
+        "passo1": "1 · Suas vendas",
+        "upload": "Planilha de vendas (CSV, JSON ou Excel)",
         "upload_ajuda": (
-            "Colunas: data, canal, valor_bruto, custo_produto, frete_pago "
-            "(+ devolvida, prazo_recebimento_dias, comissao_cobrada opcionais)."
+            "Uma linha por venda. Colunas: data, canal, valor_bruto, "
+            "custo_produto, frete_pago (opcionais: produto, devolvida, "
+            "prazo_recebimento_dias, comissao_cobrada). Há um modelo "
+            "pronto no tutorial do projeto."
         ),
-        "importadas": "transações importadas.",
-        "falha_importacao": "Falha na importação:",
-        "meses_demo": "Meses de dados sintéticos (demo)",
+        "importadas": "vendas importadas.",
+        "falha_importacao": "Não consegui ler o arquivo:",
+        "meses_demo": "Meses de dados de exemplo",
         "aviso_demo": (
-            "Usando dados sintéticos reprodutíveis — envie um arquivo para "
-            "usar os seus."
+            "Você está vendo DADOS DE EXEMPLO. Envie sua planilha na barra "
+            "lateral para ver os seus números."
         ),
-        "tributacao": "Tributação",
-        "regime": "Regime",
+        "passo2": "2 · Seus impostos",
+        "regime": "Regime tributário",
+        "regime_ajuda": (
+            "A maioria das lojas está no Simples Nacional. Se você é "
+            "microempreendedor individual, escolha MEI. Na dúvida, "
+            "pergunte ao seu contador."
+        ),
         "anexo": "Anexo do Simples",
-        "rbt12": "RBT12 — receita bruta 12 meses (R$)",
-        "das": "DAS-MEI mensal vigente (R$)",
-        "custos": "Custos (editáveis)",
-        "taxa_adq": "Taxa de adquirência (%)",
-        "taxa_ant": "Antecipação (% ao mês)",
-        "atividade": "Atividade",
+        "anexo_ajuda": (
+            "Revenda de produtos = Anexo I. Fabricação própria = Anexo II. "
+            "Serviços = III a V. Seu contador sabe o seu."
+        ),
+        "rbt12": "Faturamento dos últimos 12 meses (R$)",
+        "rbt12_ajuda": (
+            "Soma de tudo que a empresa faturou nos últimos 12 meses "
+            "(o 'RBT12'). Está no extrato do Simples (PGDAS-D) que o "
+            "contador emite todo mês. Define a sua alíquota."
+        ),
+        "das": "Valor mensal do boleto do MEI (R$)",
+        "das_ajuda": "O DAS fixo que você paga todo mês.",
+        "passo3": "3 · Suas taxas",
+        "taxa_adq": "Taxa da maquininha (%)",
+        "taxa_adq_ajuda": (
+            "Quanto a maquininha desconta de cada venda na loja própria ou "
+            "física. Está no contrato ou no app da adquirente."
+        ),
+        "taxa_ant": "Taxa para receber antes (% ao mês)",
+        "taxa_ant_ajuda": (
+            "O juro que você paga quando antecipa o dinheiro das vendas a "
+            "prazo em vez de esperar."
+        ),
+        "atividade": "Sua atividade",
         "abas": [
-            "Vendas",
-            "Margem",
-            "Cenários",
-            "Crescimento",
+            "Resumo",
+            "Vendas e Produtos",
+            "Histórico",
+            "E se…?",
+            "Crescer",
             "Diagnóstico Legal",
             "Relatório",
         ],
-        "transacoes": "Transações",
-        "receita_bruta": "Receita bruta",
-        "canais": "Canais",
-        "devolucoes": "Devoluções",
-        "receita_por_canal": "Receita por canal",
-        "margem_por_venda": (
-            "Mostrar margem real por venda (decomposta pelo mesmo motor)"
+        "faturou": "Você faturou",
+        "sobrou": "Sobrou de verdade",
+        "foi_embora": "Foi embora em custos e taxas",
+        "para_onde": "Para onde foi o dinheiro",
+        "acoes_titulo": "As ações mais valiosas agora",
+        "acoes_caption": (
+            "Calculadas dos seus números. Detalhes nas abas Diagnóstico "
+            "Legal e Crescer."
         ),
-        "margem_anunciada": "Margem anunciada (receita − CMV)",
-        "margem_real": "Margem real",
-        "perda_periodo": "Perda de margem no período",
-        "margem_liquida": "Margem líquida",
-        "margem_pct": "Margem %",
-        "aliquota_efetiva": "Alíquota efetiva do Simples",
-        "decomposicao": "Decomposição — onde a receita morre",
-        "maior_queda": "Maior queda de margem",
-        "instabilidade": "Instabilidade da margem",
-        "margem_mensal": "Margem % mês a mês",
-        "lucro_acumulado": "Lucro acumulado",
-        "cenarios_caption": (
-            "Cada cenário reexecuta o mesmo motor de cálculo com o parâmetro "
-            "chocado — sem fórmula paralela."
+        "por_mes": "mês",
+        "como_ler": "Como ler estes números?",
+        "como_ler_texto": (
+            "**Margem 'de cabeça'** é a conta que todo lojista faz: preço "
+            "menos custo do produto. **Margem real** desconta também "
+            "impostos, comissões, maquininha, antecipação, frete e "
+            "devoluções — é o que sobra de verdade. Cada número tem uma "
+            "etiqueta: `calculado` sai dos seus dados e da lei; `estimado` "
+            "usa uma taxa padrão editável na barra lateral — troque pela "
+            "sua taxa real para ficar exato."
+        ),
+        "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
+        "vendas_metricas": ["Vendas", "Faturamento", "Canais", "Devoluções"],
+        "campeoes": "Campeões de margem — venda mais destes",
+        "campeoes_caption": (
+            "Os produtos que mais deixam dinheiro no seu bolso, já " "descontando tudo."
+        ),
+        "cada_100": "de cada R$ 100 vendidos viram lucro",
+        "viloes": "Atenção: estes dão prejuízo a cada venda",
+        "viloes_caption": (
+            "Depois de impostos, comissões e custos, estes produtos saem "
+            "no vermelho. Suba o preço (calculadora na aba Crescer) ou "
+            "tire do catálogo."
+        ),
+        "prejuizo_por_venda": "de prejuízo acumulado",
+        "sem_viloes": "Nenhum produto dando prejuízo. Bom sinal.",
+        "tabela_produtos": "Todos os produtos",
+        "col_produto": "produto",
+        "col_vendas": "vendas",
+        "col_devolvidas": "devolvidas",
+        "col_receita": "faturamento",
+        "col_margem": "margem (R$)",
+        "col_margem_pct": "margem %",
+        "receita_por_canal": "Faturamento por canal",
+        "todas_vendas": "Ver todas as vendas, uma a uma",
+        "margem_por_venda": "Incluir a margem real de cada venda",
+        "hist_caption": (
+            "A evolução do seu negócio, mês a mês — calculada pelo mesmo "
+            "motor das outras abas."
+        ),
+        "hist_um_mes": (
+            "Sua planilha tem um mês só. Envie mais meses para ver a "
+            "evolução e a comparação."
+        ),
+        "hist_receita": "Faturamento por mês",
+        "hist_margem": "Margem % por mês",
+        "hist_lucro": "Lucro acumulado",
+        "hist_comparacao": "Último mês vs. anterior",
+        "hist_frase_melhora": (
+            "De {m1} para {m2}, sua margem foi de {a}% para {b}% "
+            "(subiu {d} p.p.). O que mais mudou: {causa}, que foi de "
+            "{ca}% para {cb}% do faturamento."
+        ),
+        "hist_frase_piora": (
+            "De {m1} para {m2}, sua margem foi de {a}% para {b}% "
+            "(caiu {d} p.p.). O que mais pesou: {causa}, que foi de "
+            "{ca}% para {cb}% do faturamento."
+        ),
+        "hist_tabela": "Tabela mensal",
+        "col_mes": "mês",
+        "col_maior_custo": "maior custo",
+        "baixar_hist": "Baixar histórico (CSV)",
+        "delta_receita": "Faturamento",
+        "delta_margem": "Margem (R$)",
+        "delta_pp": "Margem (p.p.)",
+        "ese_caption": (
+            "Testes de estresse: o que acontece com o seu lucro se algo "
+            "mudar amanhã? Cada caixa mostra a margem recalculada do zero "
+            "pelo mesmo motor."
         ),
         "margem_cenario": "Margem no cenário",
-        "impacto_reais": "Impacto (R$)",
-        "impacto_pp": "Impacto (p.p.)",
+        "impacto_reais": "Diferença (R$)",
+        "impacto_pp": "Diferença (p.p.)",
         "crescimento_caption": (
-            "Como faturar mais — com números dos seus próprios dados, não com "
-            "promessa: onde cada real vendido rende mais, o preço certo por "
-            "canal e quanto cabe crescer dentro do Simples."
+            "Como faturar mais — com os seus números, não com promessa: "
+            "onde cada real vendido rende mais, o preço certo e quanto "
+            "cabe crescer dentro do Simples."
         ),
-        "caminho": "Caminho prático:",
-        "simular_canal": "Simule vender mais em um canal",
+        "caminho": "O que fazer:",
+        "simular_canal": "E se eu vendesse mais em um canal?",
         "canal": "Canal",
-        "crescimento_vendas": "Crescimento das vendas (%)",
-        "margem_hoje": "Margem hoje",
-        "ganho": "Ganho (R$)",
-        "calculadora": "Calculadora de preço (motor de margem invertido)",
-        "custo_produto": "Custo do produto (R$)",
-        "frete": "Frete (R$)",
-        "canal_venda": "Canal de venda",
-        "margem_alvo": "Margem alvo (%)",
-        "preco_equilibrio": "Preço de equilíbrio (margem zero)",
-        "preco_para": "Preço para {pct}% de margem",
-        "vazamentos": "Vazamentos detectados (heurísticas transparentes)",
-        "sem_achados": "Nenhum vazamento detectado pelas 4 regras da v1.",
-        "base_legal": "Base legal (recuperada do corpus):",
+        "crescimento_vendas": "Vender a mais (%)",
+        "margem_hoje": "Sua margem hoje",
+        "ganho": "Você ganharia (R$)",
+        "calculadora": "Descubra o preço certo",
+        "calculadora_caption": (
+            "Diga quanto o produto custa e quanto quer ganhar; a Carchuna "
+            "diz por quanto vender — já contando imposto, comissão e taxas."
+        ),
+        "custo_produto": "Quanto o produto te custa (R$)",
+        "frete": "Frete que você paga (R$)",
+        "canal_venda": "Onde vai vender",
+        "margem_alvo": "Quanto quer ganhar (%)",
+        "preco_equilibrio": "Abaixo deste preço você PERDE dinheiro",
+        "preco_para": "Venda por este preço para ganhar {pct}%",
+        "diag_caption": (
+            "Vazamentos detectados nos seus números, com a lei que "
+            "sustenta cada um — para levar ao seu contador."
+        ),
+        "vazamentos": "O que encontramos",
+        "sem_achados": "Nenhum vazamento detectado. Bom sinal.",
+        "base_legal": "A lei que sustenta isto:",
         "pendente": " · _revisão humana pendente_",
         "fonte_oficial": "fonte oficial",
-        "pergunte": "Pergunte na sua língua",
-        "pergunta_exemplo": "Ex.: 'a taxa da maquininha tá alta demais, posso trocar?'",
+        "pergunte": "Pergunte com suas palavras",
+        "pergunta_exemplo": (
+            "Ex.: 'a taxa da maquininha tá alta demais, posso trocar?'"
+        ),
         "modo_extrativo": (
-            "Modo extrativo (sem chave de API) — configure ANTHROPIC_API_KEY "
-            "para respostas em linguagem natural."
+            "Resposta no modo básico (sem chave de IA) — sempre citando a "
+            "lei e a fonte."
         ),
         "relatorio_caption": (
-            "PDF de 3 páginas: raio-X da margem, cenários e achados legais. "
-            "Números 100% calculados por código testado."
+            "Um PDF de 3 páginas com o raio-X, os cenários e os achados — "
+            "pronto para levar ao contador."
         ),
         "gerar_pdf": "Gerar relatório PDF",
-        "baixar_pdf": "Baixar relatorio_carchuna.pdf",
-        "nota_motor": "",
+        "baixar_pdf": "Baixar o relatório",
     },
     "en": {
         "titulo": "Carchuna — the margin X-ray",
         "subtitulo": (
-            "You bill 400; Carchuna shows, with proof, why only 8 is left — "
-            "and what the law allows you to recover. Portfolio project; not "
-            "legal or accounting advice."
+            "Find out how much of each sale you REALLY keep — and what to "
+            "do to keep more. Portfolio project; not legal or accounting "
+            "advice."
         ),
-        "dados": "Data",
-        "upload": "Sales (CSV, JSON or XLSX)",
+        "nota_motor": (
+            "Engine narratives (findings, opportunities, scenario names) "
+            "are in Portuguese — the audience's language; the interface "
+            "is bilingual."
+        ),
+        "passo1": "1 · Your sales",
+        "upload": "Sales spreadsheet (CSV, JSON or Excel)",
         "upload_ajuda": (
-            "Columns: data, canal, valor_bruto, custo_produto, frete_pago "
-            "(+ optional devolvida, prazo_recebimento_dias, comissao_cobrada)."
+            "One row per sale. Columns: data, canal, valor_bruto, "
+            "custo_produto, frete_pago (optional: produto, devolvida, "
+            "prazo_recebimento_dias, comissao_cobrada)."
         ),
-        "importadas": "transactions imported.",
-        "falha_importacao": "Import failed:",
-        "meses_demo": "Months of synthetic data (demo)",
+        "importadas": "sales imported.",
+        "falha_importacao": "Could not read the file:",
+        "meses_demo": "Months of sample data",
         "aviso_demo": (
-            "Using reproducible synthetic data — upload a file to use your own."
+            "You are looking at SAMPLE DATA. Upload your spreadsheet in "
+            "the sidebar to see your own numbers."
         ),
-        "tributacao": "Taxation",
+        "passo2": "2 · Your taxes",
         "regime": "Tax regime",
-        "anexo": "Simples Nacional annex",
-        "rbt12": "RBT12 — gross revenue, last 12 months (R$)",
-        "das": "Current monthly MEI flat tax (R$)",
-        "custos": "Costs (editable)",
-        "taxa_adq": "Card acquiring fee (%)",
-        "taxa_ant": "Receivables prepayment (%/month)",
-        "atividade": "Activity",
+        "regime_ajuda": (
+            "Most Brazilian small businesses use Simples Nacional. "
+            "Individual micro-entrepreneurs use MEI. Ask your accountant."
+        ),
+        "anexo": "Simples annex",
+        "anexo_ajuda": (
+            "Product resale = Annex I. Own manufacturing = Annex II. "
+            "Services = III to V. Your accountant knows yours."
+        ),
+        "rbt12": "Revenue over the last 12 months (R$)",
+        "rbt12_ajuda": (
+            "Everything the company billed in the last 12 months (the "
+            "'RBT12'). Found in the monthly Simples statement (PGDAS-D). "
+            "It sets your tax rate."
+        ),
+        "das": "Monthly MEI flat payment (R$)",
+        "das_ajuda": "The fixed DAS you pay every month.",
+        "passo3": "3 · Your fees",
+        "taxa_adq": "Card machine fee (%)",
+        "taxa_adq_ajuda": (
+            "What the card machine takes from each sale in your own or "
+            "physical store. It's in your contract or acquirer app."
+        ),
+        "taxa_ant": "Early-payment fee (%/month)",
+        "taxa_ant_ajuda": (
+            "The interest you pay to receive installment money early "
+            "instead of waiting."
+        ),
+        "atividade": "Your activity",
         "abas": [
-            "Sales",
-            "Margin",
-            "Scenarios",
-            "Growth",
+            "Summary",
+            "Sales & Products",
+            "History",
+            "What if…?",
+            "Grow",
             "Legal Diagnosis",
             "Report",
         ],
-        "transacoes": "Transactions",
-        "receita_bruta": "Gross revenue",
-        "canais": "Channels",
-        "devolucoes": "Returns",
+        "faturou": "You billed",
+        "sobrou": "You really kept",
+        "foi_embora": "Went to costs and fees",
+        "para_onde": "Where the money went",
+        "acoes_titulo": "The most valuable actions right now",
+        "acoes_caption": (
+            "Computed from your numbers. Details in the Legal Diagnosis "
+            "and Grow tabs."
+        ),
+        "por_mes": "mo",
+        "como_ler": "How to read these numbers?",
+        "como_ler_texto": (
+            "**'Head math' margin** is what every seller computes: price "
+            "minus product cost. **Real margin** also subtracts taxes, "
+            "commissions, card fees, early-payment costs, shipping and "
+            "returns — what you actually keep. Every number has a label: "
+            "`calculado` comes from your data and the law; `estimado` "
+            "uses an editable default rate — replace it with your real "
+            "one in the sidebar."
+        ),
+        "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
+        "vendas_metricas": ["Sales", "Revenue", "Channels", "Returns"],
+        "campeoes": "Margin champions — sell more of these",
+        "campeoes_caption": (
+            "The products that leave the most money in your pocket after "
+            "everything is discounted."
+        ),
+        "cada_100": "of every R$ 100 sold becomes profit",
+        "viloes": "Warning: these lose money on every sale",
+        "viloes_caption": (
+            "After taxes, commissions and costs, these products are in "
+            "the red. Raise the price (calculator in the Grow tab) or "
+            "drop them."
+        ),
+        "prejuizo_por_venda": "accumulated loss",
+        "sem_viloes": "No product losing money. Good sign.",
+        "tabela_produtos": "All products",
+        "col_produto": "product",
+        "col_vendas": "sales",
+        "col_devolvidas": "returned",
+        "col_receita": "revenue",
+        "col_margem": "margin (R$)",
+        "col_margem_pct": "margin %",
         "receita_por_canal": "Revenue by channel",
-        "margem_por_venda": "Show real margin per sale (decomposed by the same engine)",
-        "margem_anunciada": "Naive margin (revenue − COGS)",
-        "margem_real": "Real margin",
-        "perda_periodo": "Margin lost in the period",
-        "margem_liquida": "Net margin",
-        "margem_pct": "Margin %",
-        "aliquota_efetiva": "Simples effective tax rate",
-        "decomposicao": "Decomposition — where revenue dies",
-        "maior_queda": "Largest margin drop",
-        "instabilidade": "Margin instability",
-        "margem_mensal": "Margin % by month",
-        "lucro_acumulado": "Cumulative profit",
-        "cenarios_caption": (
-            "Each scenario re-runs the same calculation engine with the "
-            "shocked parameter — no parallel formula."
+        "todas_vendas": "See every sale, one by one",
+        "margem_por_venda": "Include the real margin of each sale",
+        "hist_caption": (
+            "Your business over time, month by month — computed by the "
+            "same engine as every other tab."
+        ),
+        "hist_um_mes": (
+            "Your spreadsheet has a single month. Upload more months to "
+            "see the evolution and the comparison."
+        ),
+        "hist_receita": "Revenue by month",
+        "hist_margem": "Margin % by month",
+        "hist_lucro": "Cumulative profit",
+        "hist_comparacao": "Last month vs. previous",
+        "hist_frase_melhora": (
+            "From {m1} to {m2}, your margin went from {a}% to {b}% "
+            "(up {d} p.p.). Biggest change: {causa}, from {ca}% to {cb}% "
+            "of revenue."
+        ),
+        "hist_frase_piora": (
+            "From {m1} to {m2}, your margin went from {a}% to {b}% "
+            "(down {d} p.p.). Biggest weight: {causa}, from {ca}% to "
+            "{cb}% of revenue."
+        ),
+        "hist_tabela": "Monthly table",
+        "col_mes": "month",
+        "col_maior_custo": "largest cost",
+        "baixar_hist": "Download history (CSV)",
+        "delta_receita": "Revenue",
+        "delta_margem": "Margin (R$)",
+        "delta_pp": "Margin (p.p.)",
+        "ese_caption": (
+            "Stress tests: what happens to your profit if something "
+            "changes tomorrow? Each box shows the margin recomputed from "
+            "scratch by the same engine."
         ),
         "margem_cenario": "Margin in scenario",
-        "impacto_reais": "Impact (R$)",
-        "impacto_pp": "Impact (p.p.)",
+        "impacto_reais": "Difference (R$)",
+        "impacto_pp": "Difference (p.p.)",
         "crescimento_caption": (
-            "How to bill more — with numbers from your own data, not "
-            "promises: where each real earns the most, the right price per "
-            "channel and how much room you have inside Simples."
+            "How to bill more — with your numbers, not promises: where "
+            "each real earns the most, the right price and how much room "
+            "you have inside Simples."
         ),
-        "caminho": "Practical next step:",
-        "simular_canal": "Simulate selling more in a channel",
+        "caminho": "What to do:",
+        "simular_canal": "What if I sold more in one channel?",
         "canal": "Channel",
-        "crescimento_vendas": "Sales growth (%)",
-        "margem_hoje": "Margin today",
-        "ganho": "Gain (R$)",
-        "calculadora": "Price calculator (inverted margin engine)",
-        "custo_produto": "Product cost (R$)",
-        "frete": "Shipping (R$)",
-        "canal_venda": "Sales channel",
-        "margem_alvo": "Target margin (%)",
-        "preco_equilibrio": "Break-even price (zero margin)",
-        "preco_para": "Price for a {pct}% margin",
-        "vazamentos": "Detected leaks (transparent heuristics)",
-        "sem_achados": "No leaks detected by the v1 rules.",
-        "base_legal": "Legal basis (retrieved from the corpus):",
+        "crescimento_vendas": "Sell more (%)",
+        "margem_hoje": "Your margin today",
+        "ganho": "You would gain (R$)",
+        "calculadora": "Find the right price",
+        "calculadora_caption": (
+            "Tell it what the product costs and how much you want to "
+            "earn; Carchuna returns the selling price — taxes, commission "
+            "and fees included."
+        ),
+        "custo_produto": "What the product costs you (R$)",
+        "frete": "Shipping you pay (R$)",
+        "canal_venda": "Where you will sell",
+        "margem_alvo": "How much you want to earn (%)",
+        "preco_equilibrio": "Below this price you LOSE money",
+        "preco_para": "Sell at this price to earn {pct}%",
+        "diag_caption": (
+            "Leaks detected in your numbers, with the law behind each one "
+            "— ready to take to your accountant."
+        ),
+        "vazamentos": "What we found",
+        "sem_achados": "No leaks detected. Good sign.",
+        "base_legal": "The law behind this:",
         "pendente": " · _human review pending_",
         "fonte_oficial": "official source",
         "pergunte": "Ask in your own words",
-        "pergunta_exemplo": "E.g.: 'my card machine fee looks too high, can I switch?'",
+        "pergunta_exemplo": (
+            "E.g.: 'my card machine fee looks too high, can I switch?'"
+        ),
         "modo_extrativo": (
-            "Extractive mode (no API key) — set ANTHROPIC_API_KEY for "
-            "natural-language answers."
+            "Basic-mode answer (no AI key) — always citing the law and " "the source."
         ),
         "relatorio_caption": (
-            "3-page PDF: margin X-ray, scenarios and legal findings. Every "
-            "number computed by tested code."
+            "A 3-page PDF with the X-ray, scenarios and findings — ready "
+            "to take to your accountant."
         ),
         "gerar_pdf": "Generate PDF report",
-        "baixar_pdf": "Download relatorio_carchuna.pdf",
-        "nota_motor": (
-            "Engine narratives (findings, opportunities, scenario names) are "
-            "in Portuguese — the audience's language; the interface is "
-            "bilingual."
-        ),
+        "baixar_pdf": "Download the report",
     },
 }
 
-ROTULO_FONTE_EN = {
-    "tributos": "Taxes (Simples/MEI)",
-    "comissoes_canal": "Channel commissions",
-    "adquirencia": "Card acquiring",
-    "antecipacao": "Receivables prepayment",
-    "frete": "Shipping",
-    "devolucoes": "Returns",
-    "cmv": "COGS (product cost)",
-}
-
 with st.sidebar:
-    idioma = st.radio("Idioma / Language", ["PT", "EN"], horizontal=True, key="idioma")
+    idioma = st.radio("Idioma / Language", ["PT", "EN"], horizontal=True)
 lang = "pt" if idioma == "PT" else "en"
 t = T[lang]
+rotulos = ROTULOS_SIMPLES_PT if lang == "pt" else ROTULOS_EN
 
 
 def _brl(v: Decimal) -> str:
@@ -270,11 +482,11 @@ if t["nota_motor"]:
     st.caption(t["nota_motor"])
 
 # ---------------------------------------------------------------------------
-# Barra lateral: dados e configuração tributária
+# Barra lateral: 3 passos simples
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.header(t["dados"])
+    st.header(t["passo1"])
     upload = st.file_uploader(
         t["upload"], type=["csv", "json", "xlsx"], help=t["upload_ajuda"]
     )
@@ -288,50 +500,123 @@ with st.sidebar:
     else:
         meses_demo = st.slider(t["meses_demo"], 2, 12, 6)
         transacoes = transacoes_sinteticas(meses=meses_demo)
-        st.info(t["aviso_demo"])
 
-    st.header(t["tributacao"])
-    regime = st.selectbox(t["regime"], ["simples", "mei"], format_func=str.upper)
+    st.header(t["passo2"])
+    regime = st.selectbox(
+        t["regime"],
+        ["simples", "mei"],
+        format_func=str.upper,
+        help=t["regime_ajuda"],
+    )
     if regime == "simples":
-        anexo = st.selectbox(t["anexo"], ["I", "II", "III", "IV", "V"])
+        anexo = st.selectbox(
+            t["anexo"], ["I", "II", "III", "IV", "V"], help=t["anexo_ajuda"]
+        )
         rbt12 = st.number_input(
             t["rbt12"],
             min_value=1_000,
             max_value=4_800_000,
             value=4_200_000,
             step=10_000,
+            help=t["rbt12_ajuda"],
         )
         config = ConfigTributaria(
             regime="simples", anexo_simples=anexo, rbt12=Decimal(int(rbt12))
         )
     else:
-        das = st.number_input(t["das"], 1, 500, 76)
+        das = st.number_input(t["das"], 1, 500, 76, help=t["das_ajuda"])
         config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal(int(das)))
 
-    st.header(t["custos"])
-    taxa_adq = st.number_input(t["taxa_adq"], 0.0, 10.0, 2.0, 0.1)
-    taxa_ant = st.number_input(t["taxa_ant"], 0.0, 10.0, 1.99, 0.01)
+    st.header(t["passo3"])
+    taxa_adq = st.number_input(
+        t["taxa_adq"], 0.0, 10.0, 2.0, 0.1, help=t["taxa_adq_ajuda"]
+    )
+    taxa_ant = st.number_input(
+        t["taxa_ant"], 0.0, 10.0, 1.99, 0.01, help=t["taxa_ant_ajuda"]
+    )
     tabela = TabelaCustos(
         taxa_adquirencia=Decimal(str(taxa_adq)) / 100,
         taxa_antecipacao_mensal=Decimal(str(taxa_ant)) / 100,
     )
-    atividade = st.selectbox(t["atividade"], ["comercio", "industria", "servicos"])
+    atividade = st.selectbox(
+        t["atividade"],
+        ["comercio", "industria", "servicos"],
+        format_func=lambda a: ATIVIDADES[lang][a],
+    )
 
-# A fachada OO reúne os quatro motores; resultados caros ficam em cache.
+if upload is None:
+    st.warning(t["aviso_demo"])
+
+# A fachada OO reúne os motores; resultados caros ficam em cache.
 analise = AnalisadorMargem(
     transacoes, config, tabela, ParametrosDiagnostico(atividade=atividade)
 )
 decomposicao = analise.decomposicao
-serie = analise.serie
+resumo = analise.resumo_executivo()
 
 (
+    aba_resumo,
     aba_vendas,
-    aba_margem,
-    aba_cenarios,
-    aba_crescimento,
+    aba_historico,
+    aba_ese,
+    aba_crescer,
     aba_diagnostico,
     aba_relatorio,
 ) = st.tabs(t["abas"])
+
+# ---------------------------------------------------------------------------
+with aba_resumo:
+    if lang == "pt":
+        st.info(resumo.frase())
+    else:
+        maior = resumo.maior_fonte
+        st.info(
+            f"Over {resumo.meses} month(s), {_brl(resumo.perda_total)} of "
+            f"margin was lost between the head-math margin "
+            f"({resumo.margem_anunciada_pct}%) and the real one "
+            f"({resumo.margem_real_pct}%); "
+            f"{maior.pct_da_perda.quantize(Decimal('1'))}% of that came "
+            f"from {ROTULOS_EN.get(maior.nome, maior.rotulo)}."
+        )
+    col1, col2, col3 = st.columns(3)
+    col1.metric(t["faturou"], _brl(resumo.receita_bruta))
+    col2.metric(t["sobrou"], _brl(resumo.margem_real), f"{resumo.margem_real_pct}%")
+    col3.metric(
+        t["foi_embora"],
+        _brl(resumo.perda_total + decomposicao.deducao("cmv").valor),
+    )
+
+    st.subheader(t["para_onde"])
+    destino = pd.Series(
+        {
+            **{
+                rotulos.get(d.nome, d.nome): float(d.valor)
+                for d in decomposicao.deducoes
+            },
+            t["sobrou"]: float(decomposicao.margem_liquida),
+        },
+        name="R$",
+    ).sort_values()
+    st.bar_chart(destino, horizontal=True)
+
+    st.subheader(t["acoes_titulo"])
+    st.caption(t["acoes_caption"])
+    acoes = [
+        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in analise.diagnosticar()
+    ] + [
+        (o.ganho_estimado_mensal, o.titulo, o.caminho_pratico)
+        for o in analise.crescimento()
+    ]
+    acoes.sort(key=lambda x: x[0], reverse=True)
+    if not acoes:
+        st.success(t["sem_acoes"])
+    for valor, titulo, caminho in acoes[:3]:
+        with st.container(border=True):
+            st.markdown(f"**{titulo}** — ~{_brl(valor)}/{t['por_mes']}")
+            st.caption(caminho)
+
+    with st.expander(t["como_ler"]):
+        st.markdown(t["como_ler_texto"])
 
 # ---------------------------------------------------------------------------
 with aba_vendas:
@@ -339,96 +624,169 @@ with aba_vendas:
         [
             {
                 "data": tr.data,
+                "produto": tr.produto or "—",
                 "canal": tr.canal,
                 "valor_bruto": float(tr.valor_bruto),
                 "custo_produto": float(tr.custo_produto),
                 "frete_pago": float(tr.frete_pago),
                 "devolvida": tr.devolvida,
-                "prazo_dias": tr.prazo_recebimento_dias,
             }
             for tr in transacoes
         ]
     )
+    m = t["vendas_metricas"]
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(t["transacoes"], len(frame))
-    col2.metric(t["receita_bruta"], _brl(decomposicao.receita_bruta))
-    col3.metric(t["canais"], frame["canal"].nunique())
-    col4.metric(t["devolucoes"], int(frame["devolvida"].sum()))
-    st.subheader(t["receita_por_canal"])
-    st.bar_chart(frame.groupby("canal")["valor_bruto"].sum())
-    st.subheader(t["transacoes"])
-    if st.toggle(t["margem_por_venda"], value=len(frame) <= 500):
-        por_venda = analise.margem_por_venda()
-        frame["margem_liquida"] = [float(v.margem_liquida) for v in por_venda]
-        frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
-    st.dataframe(frame, use_container_width=True, height=320)
+    col1.metric(m[0], len(frame))
+    col2.metric(m[1], _brl(decomposicao.receita_bruta))
+    col3.metric(m[2], frame["canal"].nunique())
+    col4.metric(m[3], int(frame["devolvida"].sum()))
 
-# ---------------------------------------------------------------------------
-with aba_margem:
-    resumo = analise.resumo_executivo()
-    if lang == "pt":
-        st.info(resumo.frase())
+    produtos = analise.margem_por_produto()
+    campeoes = [p for p in produtos if p.margem > 0][:3]
+    viloes = [p for p in produtos if p.margem < 0]
+
+    st.subheader(t["campeoes"])
+    st.caption(t["campeoes_caption"])
+    colunas = st.columns(max(len(campeoes), 1))
+    for coluna, produto in zip(colunas, campeoes, strict=False):
+        with coluna, st.container(border=True):
+            st.markdown(f"**{produto.nome}**")
+            st.metric(
+                t["col_margem_pct"],
+                f"{produto.margem_pct}%",
+                _brl(produto.margem),
+            )
+            st.caption(f"R$ {produto.margem_pct:.0f} {t['cada_100']}")
+
+    st.subheader(t["viloes"])
+    if not viloes:
+        st.success(t["sem_viloes"])
     else:
-        maior = resumo.maior_fonte
-        st.info(
-            f"Over {resumo.meses} month(s), {_brl(resumo.perda_total)} of "
-            f"margin was lost between the naive margin "
-            f"({resumo.margem_anunciada_pct}%) and the real one "
-            f"({resumo.margem_real_pct}%); "
-            f"{maior.pct_da_perda.quantize(Decimal('1'))}% of that loss came "
-            f"from {ROTULO_FONTE_EN.get(maior.nome, maior.rotulo)}."
-        )
-    col1, col2, col3 = st.columns(3)
-    col1.metric(
-        t["margem_anunciada"],
-        _brl(resumo.margem_anunciada),
-        f"{resumo.margem_anunciada_pct}%",
-    )
-    col2.metric(
-        t["margem_real"], _brl(resumo.margem_real), f"{resumo.margem_real_pct}%"
-    )
-    col3.metric(t["perda_periodo"], _brl(resumo.perda_total))
+        st.caption(t["viloes_caption"])
+        for produto in viloes:
+            st.error(
+                f"**{produto.nome}** — {produto.vendas}x · "
+                f"{_brl(produto.margem)} {t['prejuizo_por_venda']} "
+                f"({produto.margem_pct}%)"
+            )
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric(t["margem_liquida"], _brl(decomposicao.margem_liquida))
-    col2.metric(t["margem_pct"], f"{decomposicao.margem_pct}%")
-    if decomposicao.aliquota_efetiva is not None:
-        col3.metric(
-            t["aliquota_efetiva"],
-            f"{(decomposicao.aliquota_efetiva * 100).quantize(Decimal('0.0001'))}%",
-        )
-
-    st.subheader(t["decomposicao"])
+    st.subheader(t["tabela_produtos"])
     st.dataframe(
         pd.DataFrame(
             [
                 {
-                    "deducao": d.nome,
-                    "valor": _brl(d.valor),
-                    "%": f"{d.pct_receita}%",
-                    "confianca": d.confianca,
-                    "fonte": d.fonte,
+                    t["col_produto"]: p.nome,
+                    t["col_vendas"]: p.vendas,
+                    t["col_devolvidas"]: p.devolvidas,
+                    t["col_receita"]: _brl(p.receita),
+                    t["col_margem"]: _brl(p.margem),
+                    t["col_margem_pct"]: f"{p.margem_pct}%",
                 }
-                for d in decomposicao.deducoes
+                for p in produtos
             ]
         ),
         use_container_width=True,
     )
 
-    if len(serie) >= 2:
-        col_a, col_b = st.columns(2)
-        col_a.metric(t["maior_queda"], f"{analise.maior_queda()} p.p.")
-        col_b.metric(t["instabilidade"], f"{analise.instabilidade()} p.p.")
-    st.subheader(t["margem_mensal"])
-    st.line_chart(pd.Series({mes: float(m) for mes, m in serie}, name="%"))
-    st.subheader(t["lucro_acumulado"])
-    st.area_chart(
-        pd.Series({mes: float(v) for mes, v in analise.lucro_acumulado()}, name="R$")
-    )
+    st.subheader(t["receita_por_canal"])
+    st.bar_chart(frame.groupby("canal")["valor_bruto"].sum())
+
+    with st.expander(t["todas_vendas"]):
+        if st.toggle(t["margem_por_venda"], value=len(frame) <= 500):
+            por_venda = analise.margem_por_venda()
+            frame["margem"] = [float(v.margem_liquida) for v in por_venda]
+            frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
+        st.dataframe(frame, use_container_width=True, height=320)
 
 # ---------------------------------------------------------------------------
-with aba_cenarios:
-    st.caption(t["cenarios_caption"])
+with aba_historico:
+    st.caption(t["hist_caption"])
+    mensal = analise.mensal
+    if len(mensal) < 2:
+        st.info(t["hist_um_mes"])
+    else:
+        meses_lst = list(mensal.items())
+        (mes_a, dec_a), (mes_b, dec_b) = meses_lst[-2], meses_lst[-1]
+        delta_pp = dec_b.margem_pct - dec_a.margem_pct
+        difs = {
+            d.nome: (
+                dec_b.deducao(d.nome).pct_receita - dec_a.deducao(d.nome).pct_receita
+            )
+            for d in dec_b.deducoes
+        }
+        causa = max(difs, key=lambda n: abs(difs[n]))
+        modelo = t["hist_frase_melhora"] if delta_pp >= 0 else t["hist_frase_piora"]
+        st.info(
+            modelo.format(
+                m1=mes_a,
+                m2=mes_b,
+                a=dec_a.margem_pct,
+                b=dec_b.margem_pct,
+                d=abs(delta_pp),
+                causa=rotulos.get(causa, causa),
+                ca=dec_a.deducao(causa).pct_receita,
+                cb=dec_b.deducao(causa).pct_receita,
+            )
+        )
+        st.subheader(t["hist_comparacao"])
+        c1, c2, c3 = st.columns(3)
+        c1.metric(
+            t["delta_receita"],
+            _brl(dec_b.receita_bruta),
+            _brl(dec_b.receita_bruta - dec_a.receita_bruta),
+        )
+        c2.metric(
+            t["delta_margem"],
+            _brl(dec_b.margem_liquida),
+            _brl(dec_b.margem_liquida - dec_a.margem_liquida),
+        )
+        c3.metric(t["delta_pp"], f"{dec_b.margem_pct}%", f"{delta_pp:+.2f}")
+
+        st.subheader(t["hist_receita"])
+        st.bar_chart(
+            pd.Series(
+                {mes: float(d.receita_bruta) for mes, d in mensal.items()},
+                name="R$",
+            )
+        )
+        st.subheader(t["hist_margem"])
+        st.line_chart(
+            pd.Series({mes: float(d.margem_pct) for mes, d in mensal.items()}, name="%")
+        )
+        st.subheader(t["hist_lucro"])
+        st.area_chart(
+            pd.Series(
+                {mes: float(v) for mes, v in analise.lucro_acumulado()},
+                name="R$",
+            )
+        )
+
+        st.subheader(t["hist_tabela"])
+        historico = pd.DataFrame(
+            [
+                {
+                    t["col_mes"]: mes,
+                    t["col_receita"]: float(d.receita_bruta),
+                    t["col_margem"]: float(d.margem_liquida),
+                    t["col_margem_pct"]: float(d.margem_pct),
+                    t["col_maior_custo"]: rotulos.get(
+                        max(d.deducoes, key=lambda x: x.valor).nome, ""
+                    ),
+                }
+                for mes, d in mensal.items()
+            ]
+        )
+        st.dataframe(historico, use_container_width=True)
+        st.download_button(
+            t["baixar_hist"],
+            data=historico.to_csv(index=False).encode("utf-8"),
+            file_name="historico_carchuna.csv",
+            mime="text/csv",
+        )
+
+# ---------------------------------------------------------------------------
+with aba_ese:
+    st.caption(t["ese_caption"])
     for resultado in analise.cenarios():
         with st.container(border=True):
             st.markdown(f"**{resultado.nome}**")
@@ -438,15 +796,14 @@ with aba_cenarios:
             c3.metric(t["impacto_pp"], f"{resultado.impacto_pp:+.2f}")
 
 # ---------------------------------------------------------------------------
-with aba_crescimento:
+with aba_crescer:
     st.caption(t["crescimento_caption"])
     for oportunidade in analise.crescimento():
         with st.container(border=True):
             ganho = _brl(oportunidade.ganho_estimado_mensal)
-            mes = "mês" if lang == "pt" else "mo"
             st.markdown(
-                f"**{oportunidade.titulo}** — ~{ganho}/{mes} "
-                f"[{oportunidade.confianca} · {oportunidade.tipo}]"
+                f"**{oportunidade.titulo}** — ~{ganho}/{t['por_mes']} "
+                f"[{oportunidade.confianca}]"
             )
             st.write(oportunidade.explicacao)
             for disp in oportunidade.base_legal:
@@ -474,6 +831,7 @@ with aba_crescimento:
         st.warning(str(erro))
 
     st.subheader(t["calculadora"])
+    st.caption(t["calculadora_caption"])
     col_p1, col_p2, col_p3, col_p4 = st.columns(4)
     calc_custo = col_p1.number_input(t["custo_produto"], 0.01, 100000.0, 40.0)
     calc_frete = col_p2.number_input(t["frete"], 0.0, 10000.0, 10.0)
@@ -505,6 +863,7 @@ with aba_crescimento:
 
 # ---------------------------------------------------------------------------
 with aba_diagnostico:
+    st.caption(t["diag_caption"])
     retriever = analise.retriever
     st.warning(retriever.aviso_corpus)
 
@@ -515,7 +874,7 @@ with aba_diagnostico:
     for achado in achados:
         with st.expander(
             f"{achado.titulo} — ~{_brl(achado.impacto_mensal)}"
-            f"/{'mês' if lang == 'pt' else 'mo'} [{achado.confianca}]"
+            f"/{t['por_mes']} [{achado.confianca}]"
         ):
             st.write(achado.explicacao)
             st.markdown(f"**{t['base_legal']}**")

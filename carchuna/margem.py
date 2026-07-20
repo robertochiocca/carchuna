@@ -140,6 +140,9 @@ class Transacao:
     # Comissão efetivamente cobrada pelo canal nesta venda (do extrato de
     # repasse). ``None`` usa a tabela pública do canal (TabelaCustos).
     comissao_cobrada: Decimal | None = None
+    # Nome do produto (opcional): habilita o ranking de campeões e vilões
+    # de margem por produto no dashboard.
+    produto: str | None = None
 
     def __post_init__(self):
         if self.canal not in CANAIS_VALIDOS:

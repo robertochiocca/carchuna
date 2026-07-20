@@ -30,7 +30,12 @@ COLUNAS_OBRIGATORIAS = (
     "custo_produto",
     "frete_pago",
 )
-COLUNAS_OPCIONAIS = ("devolvida", "prazo_recebimento_dias", "comissao_cobrada")
+COLUNAS_OPCIONAIS = (
+    "devolvida",
+    "prazo_recebimento_dias",
+    "comissao_cobrada",
+    "produto",
+)
 
 _VERDADEIRO = {"1", "true", "sim", "s", "verdadeiro", "yes"}
 _FALSO = {"", "0", "false", "nao", "não", "n", "falso", "no"}
@@ -77,6 +82,7 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
             if comissao not in (None, "")
             else None
         ),
+        produto=(str(linha.get("produto") or "").strip() or None),
     )
 
 
@@ -166,6 +172,25 @@ def _ler_xlsx(source) -> list[dict]:
 # Dados sintéticos (demo/testes offline)
 # ---------------------------------------------------------------------------
 
+# Nomes de produto derivados da faixa de preço, SEM sorteios extras: a
+# sequência aleatória (e portanto todos os números do demo) fica idêntica
+# à das versões anteriores.
+_PRODUTOS_POR_FAIXA = (
+    (Decimal("200"), "Capa de celular"),
+    (Decimal("280"), "Carregador turbo"),
+    (Decimal("360"), "Fone bluetooth"),
+    (Decimal("440"), "Caixa de som"),
+    (Decimal("551"), "Smartwatch"),
+)
+
+
+def _produto_por_faixa(valor: Decimal) -> str:
+    for limite, nome in _PRODUTOS_POR_FAIXA:
+        if valor < limite:
+            return nome
+    return _PRODUTOS_POR_FAIXA[-1][1]
+
+
 # Perfil do lojista-alvo: fatura ~R$400 mil/mês, margem apertada.
 _PERFIL_CANAIS = (
     ("mercado_livre", 45, 30),  # (canal, % das vendas, prazo típico em dias)
@@ -213,6 +238,7 @@ def transacoes_sinteticas(
                         frete_pago=Decimal(rng.randint(8, 25)),
                         devolvida=rng.random() < 0.03,
                         prazo_recebimento_dias=prazo,
+                        produto=_produto_por_faixa(valor),
                     )
                 )
         dia += timedelta(days=1)

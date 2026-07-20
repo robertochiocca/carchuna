@@ -74,6 +74,31 @@ def test_margem_por_venda_no_mei_nao_rateia_o_das():
     assert analise.decomposicao.deducao("tributos").valor == Decimal("76.00")
 
 
+def test_margem_por_produto_ranqueia_campeoes_e_viloes():
+    """Fone (2 vendas boas) no topo; Brinde vendido abaixo do custo no fundo."""
+    vendas = [
+        _venda("100", produto="Fone"),
+        _venda("100", produto="Fone"),
+        _venda("100", produto="Brinde", custo_produto=Decimal("95")),
+    ]
+    analise = AnalisadorMargem(vendas, CONFIG)
+    fone, brinde = analise.margem_por_produto()
+    assert fone.nome == "Fone"
+    assert fone.vendas == 2
+    assert fone.margem == Decimal("64.70")  # 2 × 32,35
+    assert fone.margem_pct == Decimal("32.35")
+    assert brinde.nome == "Brinde"
+    # 100 − 5,65 − 12 − 10 − 95 = −22,65: vilão de margem
+    assert brinde.margem == Decimal("-22.65")
+    assert brinde.margem_pct < 0
+
+
+def test_margem_por_produto_sem_produto_agrupa_por_canal():
+    vendas = [_venda("100"), _venda("100", canal="shopee")]
+    nomes = {r.nome for r in AnalisadorMargem(vendas, CONFIG).margem_por_produto()}
+    assert nomes == {"mercado_livre", "shopee"}
+
+
 def test_fachada_delega_para_os_motores():
     analise = AnalisadorMargem.demo(meses=3)
     assert analise.decomposicao.receita_bruta > 0
