@@ -132,7 +132,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | roadmap — mesma interface `Conector` |
 | Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | roadmap — mesma interface `Conector` |
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | pronto — implementado e testado |
-| `app.py` — dashboard Streamlit com 6 abas (incl. Crescimento) | pronto (sem teste automatizado de UI) |
+| `app.py` — dashboard Streamlit com 6 abas (incl. Crescimento), interface bilíngue PT/EN | pronto (sem teste automatizado de UI) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | roadmap (depende de ICMS/ISS estaduais/municipais) |
 | RBT12 móvel mês a mês nas séries | roadmap |
