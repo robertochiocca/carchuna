@@ -1,5 +1,9 @@
 # Tutorial da Carchuna — do zero absoluto ao seu raio-X de margem
 
+> Prefere imprimir ou mandar por WhatsApp? Este tutorial existe também em
+> **[PDF](docs/TUTORIAL.pdf)** — e quem não quiser instalar nada pode usar o
+> app direto no navegador: **[carchuna.streamlit.app](https://carchuna.streamlit.app)**.
+
 Este guia é para quem **nunca programou** e quer usar a Carchuna no próprio
 computador. Sem pressa: são uns 20 minutos na primeira vez. Se algo der errado,
 veja a seção [Problemas comuns](#problemas-comuns) no final.

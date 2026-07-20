@@ -12,4 +12,5 @@ htmlcov/
 .ruff_cache/
 .streamlit/secrets.toml
 *.pdf
+!docs/TUTORIAL.pdf
 .DS_Store
