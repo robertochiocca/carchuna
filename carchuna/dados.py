@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import random
+import unicodedata
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -67,7 +68,10 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
     faltando = [c for c in COLUNAS_OBRIGATORIAS if linha.get(c) in (None, "")]
     if faltando:
         raise ValueError(f"linha {numero}: colunas obrigatórias vazias: {faltando}.")
-    canal = str(linha["canal"]).strip().lower()
+    canal = str(linha["canal"]).strip().lower().replace(" ", "_")
+    canal = "".join(
+        c for c in unicodedata.normalize("NFKD", canal) if not unicodedata.combining(c)
+    )
     comissao = linha.get("comissao_cobrada")
     return Transacao(
         data=date.fromisoformat(str(linha["data"]).strip()[:10]),
@@ -102,21 +106,104 @@ def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:
         Nome do arquivo, para detectar a extensão quando ``source`` é um
         buffer. ``None`` usa ``source.name``.
     """
+    linhas = ler_linhas_brutas(source, name=name)
+    transacoes = [_linha_para_transacao(linha, i) for i, linha in enumerate(linhas, 2)]
+    if not transacoes:
+        raise ValueError("Arquivo sem nenhuma transação válida.")
+    return transacoes
+
+
+def ler_linhas_brutas(source, name: str | None = None) -> list[dict]:
+    """Lê o arquivo como linhas cruas (chaves = cabeçalho em minúsculas).
+
+    É a matéria-prima do mapeador de colunas do dashboard: quando o
+    arquivo vem com os nomes do relatório do marketplace, o usuário
+    aponta qual coluna é qual e ``transacoes_de_mapa`` faz o resto.
+    """
     filename = (name or getattr(source, "name", str(source))).lower()
     extensao = filename.rsplit(".", 1)[-1]
     if extensao == "csv":
-        linhas = _ler_csv(source)
-    elif extensao == "json":
-        linhas = _ler_json(source)
-    elif extensao == "xlsx":
-        linhas = _ler_xlsx(source)
-    elif extensao == "pdf":
-        linhas = _ler_pdf(source)
-    else:
-        raise ValueError(
-            f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx, pdf)."
-        )
-    transacoes = [_linha_para_transacao(linha, i) for i, linha in enumerate(linhas, 2)]
+        return _ler_csv(source)
+    if extensao == "json":
+        return _ler_json(source)
+    if extensao == "xlsx":
+        return _ler_xlsx(source)
+    if extensao == "pdf":
+        return _ler_pdf(source)
+    raise ValueError(
+        f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx, pdf)."
+    )
+
+
+# Palpites do mapeador: por campo da Carchuna, termos que costumam aparecer
+# nos cabeçalhos dos relatórios reais (Shopee, Mercado Livre, Amazon, ERPs).
+_PALPITES_MAPEAMENTO: dict[str, tuple[str, ...]] = {
+    "data": ("data", "date", "dia"),
+    "produto": ("produto", "item", "titulo", "sku", "anuncio", "product"),
+    "canal": ("canal", "channel", "marketplace", "origem", "loja"),
+    "valor_bruto": ("valor_bruto", "preco", "valor", "price", "total", "bruto"),
+    "custo_produto": ("custo", "cost", "cmv"),
+    "frete_pago": ("frete", "shipping", "envio"),
+    "devolvida": ("devolvid", "devolu", "cancelad", "returned", "estorn"),
+    "prazo_recebimento_dias": ("prazo", "recebimento", "repasse"),
+    "comissao_cobrada": ("comissao", "tarifa", "commission", "fee"),
+}
+
+
+def _normalizar_nome(coluna: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", str(coluna).lower())
+    return "".join(c for c in sem_acento if not unicodedata.combining(c))
+
+
+def sugerir_mapeamento(colunas: list[str]) -> dict[str, str | None]:
+    """Sugere, por palpite, qual coluna do arquivo é qual campo da Carchuna.
+
+    Match exato primeiro, depois por conter o termo; cada coluna do
+    arquivo só é usada uma vez. Campos sem palpite ficam ``None`` — o
+    usuário decide no mapeador.
+    """
+    normalizadas = {c: _normalizar_nome(c) for c in colunas}
+    usadas: set[str] = set()
+    mapa: dict[str, str | None] = {}
+    for campo, termos in _PALPITES_MAPEAMENTO.items():
+        escolhida = None
+        for coluna, norma in normalizadas.items():
+            if coluna not in usadas and norma == campo:
+                escolhida = coluna
+                break
+        if escolhida is None:
+            for termo in termos:
+                for coluna, norma in normalizadas.items():
+                    if coluna not in usadas and termo in norma:
+                        escolhida = coluna
+                        break
+                if escolhida:
+                    break
+        mapa[campo] = escolhida
+        if escolhida:
+            usadas.add(escolhida)
+    return mapa
+
+
+def transacoes_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> list[Transacao]:
+    """Converte linhas cruas em transações usando o de-para do usuário.
+
+    ``mapa`` liga cada campo da Carchuna a uma coluna do arquivo; valores
+    iniciados em ``=`` são constantes para o arquivo inteiro (ex.:
+    ``{"canal": "=shopee"}`` quando o relatório todo veio da Shopee, ou
+    ``{"frete_pago": "=0"}`` quando o arquivo não traz frete).
+    """
+    transacoes = []
+    for numero, linha in enumerate(linhas, 2):
+        convertida: dict = {}
+        for campo, origem in mapa.items():
+            if not origem:
+                continue
+            if origem.startswith("="):
+                convertida[campo] = origem[1:]
+            else:
+                convertida[campo] = linha.get(origem)
+        transacoes.append(_linha_para_transacao(convertida, numero))
     if not transacoes:
         raise ValueError("Arquivo sem nenhuma transação válida.")
     return transacoes

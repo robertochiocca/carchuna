@@ -34,8 +34,14 @@ from carchuna import (
     transacoes_sinteticas,
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO
+from carchuna.dados import (
+    COLUNAS_OBRIGATORIAS,
+    ler_linhas_brutas,
+    sugerir_mapeamento,
+    transacoes_de_mapa,
+)
 from carchuna.rag.llm import gerar_resposta, resposta_extrativa
-from carchuna.rag.retrieval import AVISO_LEGAL
+from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
 
 st.set_page_config(page_title="Carchuna", layout="wide")
 
@@ -132,8 +138,36 @@ T = {
             "custo_produto, frete_pago (opcionais: produto, devolvida, "
             "prazo_recebimento_dias, comissao_cobrada). Há um modelo "
             "pronto no tutorial do projeto. PDF: funciona quando o "
-            "arquivo traz uma tabela com essas mesmas colunas."
+            "arquivo traz uma tabela com essas mesmas colunas. "
+            "Privacidade: no app rodando no seu computador, o arquivo "
+            "não sai dele; na versão hospedada (carchuna.streamlit.app), "
+            "ele é processado no servidor do Streamlit durante a sessão "
+            "e não é armazenado pela Carchuna."
         ),
+        "mapa_sidebar": (
+            "Seu arquivo veio com nomes de coluna diferentes do modelo — "
+            "sem problema: aponte abaixo qual coluna é qual."
+        ),
+        "mapa_caption": (
+            "A Carchuna já chutou o que reconheceu; confira e complete "
+            "os campos com • (obrigatórios)."
+        ),
+        "mapa_incompleto": "Falta apontar: {campos}.",
+        "opcao_nenhuma": "— (não tem no arquivo)",
+        "opcao_zero": "(usar zero para todas)",
+        "opcao_nao": "(nenhuma foi devolvida)",
+        "opcao_fixo": "(tudo veio de:",
+        "mapa_campos": {
+            "data": "Data da venda •",
+            "canal": "Canal de venda •",
+            "valor_bruto": "Preço pago pelo cliente •",
+            "custo_produto": "Custo do produto •",
+            "frete_pago": "Frete pago por você •",
+            "produto": "Nome do produto",
+            "devolvida": "Foi devolvida?",
+            "prazo_recebimento_dias": "Prazo de recebimento (dias)",
+            "comissao_cobrada": "Comissão cobrada pelo canal",
+        },
         "tempo_real": "Acompanhar um arquivo em tempo real",
         "tempo_real_ajuda": (
             "Aponte para um arquivo no SEU computador (funciona com o app "
@@ -341,8 +375,36 @@ T = {
             "One row per sale. Columns: data, canal, valor_bruto, "
             "custo_produto, frete_pago (optional: produto, devolvida, "
             "prazo_recebimento_dias, comissao_cobrada). PDF works when "
-            "the file contains a table with these same columns."
+            "the file contains a table with these same columns. "
+            "Privacy: running on your computer, the file never leaves "
+            "it; on the hosted version (carchuna.streamlit.app) it is "
+            "processed on Streamlit's server during the session and is "
+            "not stored by Carchuna."
         ),
+        "mapa_sidebar": (
+            "Your file has different column names than the template — "
+            "no problem: point out which column is which below."
+        ),
+        "mapa_caption": (
+            "Carchuna guessed what it recognized; review and complete "
+            "the fields marked • (required)."
+        ),
+        "mapa_incompleto": "Still missing: {campos}.",
+        "opcao_nenhuma": "— (not in the file)",
+        "opcao_zero": "(use zero for all)",
+        "opcao_nao": "(none was returned)",
+        "opcao_fixo": "(everything came from:",
+        "mapa_campos": {
+            "data": "Sale date •",
+            "canal": "Sales channel •",
+            "valor_bruto": "Price paid by the customer •",
+            "custo_produto": "Product cost •",
+            "frete_pago": "Shipping you paid •",
+            "produto": "Product name",
+            "devolvida": "Was it returned?",
+            "prazo_recebimento_dias": "Days until payout",
+            "comissao_cobrada": "Commission charged by the channel",
+        },
         "tempo_real": "Watch a file in real time",
         "tempo_real_ajuda": (
             "Point to a file on YOUR computer (works with the app running "
@@ -549,6 +611,60 @@ def _brl_inteiro(v: Decimal) -> str:
     return f"R$ {v:,.0f}".replace(",", ".")
 
 
+_CONSTANTES_MAPA = {
+    "canal": ["=mercado_livre", "=shopee", "=amazon", "=loja_propria", "=fisico"],
+    "custo_produto": ["=0"],
+    "frete_pago": ["=0"],
+    "prazo_recebimento_dias": ["=0"],
+    "devolvida": ["=nao"],
+}
+
+
+def _rotulo_opcao(opcao: str, textos: dict) -> str:
+    if opcao == "":
+        return textos["opcao_nenhuma"]
+    if opcao == "=0":
+        return textos["opcao_zero"]
+    if opcao == "=nao":
+        return textos["opcao_nao"]
+    if opcao.startswith("="):
+        return f"{textos['opcao_fixo']} {opcao[1:]})"
+    return opcao
+
+
+@st.cache_resource(show_spinner=False)
+def _retriever_cacheado() -> Retriever:
+    return Retriever()
+
+
+@st.cache_data(show_spinner=False)
+def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> dict:
+    """Roda os quatro motores uma vez por (dados, config) — não por clique.
+
+    Com bases reais (dezenas de milhares de vendas), decompor venda a
+    venda a cada interação de widget ficaria lento; o cache devolve o
+    conjunto pronto enquanto nada mudar.
+    """
+    analise = AnalisadorMargem(
+        list(transacoes),
+        config,
+        tabela,
+        ParametrosDiagnostico(atividade=atividade),
+        retriever=_retriever_cacheado(),
+    )
+    return {
+        "decomposicao": analise.decomposicao,
+        "resumo": analise.resumo_executivo(),
+        "mensal": analise.mensal,
+        "lucro": analise.lucro_acumulado(),
+        "por_venda": analise.margem_por_venda(),
+        "por_produto": analise.margem_por_produto(),
+        "cenarios": analise.cenarios(),
+        "achados": analise.diagnosticar(),
+        "oportunidades": analise.crescimento(),
+    }
+
+
 def _grafico_destino(decomposicao, rotulos: dict, t: dict):
     """Barras horizontais com rótulos completos e valores nas pontas.
 
@@ -720,13 +836,18 @@ with st.sidebar:
             t["caminho_arquivo"], help=t["tempo_real_ajuda"]
         ).strip()
         monitorar = st.toggle(t["monitorar"], value=bool(caminho_arquivo))
+    linhas_brutas = None
     if upload is not None:
         try:
             transacoes = carregar_transacoes(upload, name=upload.name)
             st.success(f"{len(transacoes)} {t['importadas']}")
         except (ValueError, TypeError) as erro:
-            st.error(f"{t['falha_importacao']} {erro}")
-            st.stop()
+            upload.seek(0)
+            try:
+                linhas_brutas = ler_linhas_brutas(upload, name=upload.name)
+            except (ValueError, TypeError, ImportError):
+                st.error(f"{t['falha_importacao']} {erro}")
+                st.stop()
     elif caminho_arquivo:
         try:
             transacoes = carregar_transacoes(caminho_arquivo)
@@ -739,6 +860,41 @@ with st.sidebar:
     else:
         meses_demo = st.slider(t["meses_demo"], 2, 12, 6)
         transacoes = transacoes_sinteticas(meses=meses_demo)
+
+    if linhas_brutas is not None:
+        # Mapeador de colunas: o relatório real veio com outros nomes —
+        # o usuário aponta o de-para e a análise segue normalmente.
+        st.info(t["mapa_sidebar"])
+        st.caption(t["mapa_caption"])
+        colunas_arquivo = sorted({chave for lin in linhas_brutas for chave in lin})
+        palpites = sugerir_mapeamento(colunas_arquivo)
+        mapa: dict[str, str] = {}
+        for campo, rotulo in t["mapa_campos"].items():
+            opcoes = ["", *colunas_arquivo, *_CONSTANTES_MAPA.get(campo, [])]
+            palpite = palpites.get(campo) or ""
+            mapa[campo] = st.selectbox(
+                rotulo,
+                opcoes,
+                index=opcoes.index(palpite) if palpite in opcoes else 0,
+                key=f"mapa_{campo}",
+                format_func=lambda opcao: _rotulo_opcao(opcao, t),
+            )
+        faltando = [
+            t["mapa_campos"][campo].rstrip(" •")
+            for campo in COLUNAS_OBRIGATORIAS
+            if not mapa.get(campo)
+        ]
+        if faltando:
+            st.warning(t["mapa_incompleto"].format(campos=", ".join(faltando)))
+            st.stop()
+        try:
+            transacoes = transacoes_de_mapa(
+                linhas_brutas, {c: o for c, o in mapa.items() if o}
+            )
+            st.success(f"{len(transacoes)} {t['importadas']}")
+        except (ValueError, TypeError) as erro:
+            st.error(f"{t['falha_importacao']} {erro}")
+            st.stop()
 
     # Um upload transcreve tudo: com dados reais, a RBT12 é sugerida do
     # próprio arquivo (média mensal x 12) — editável e para confirmar
@@ -820,12 +976,18 @@ if monitorar and caminho_arquivo:
 
     _vigiar_arquivo()
 
-# A fachada OO reúne os motores; resultados caros ficam em cache.
+# Motores rodam uma vez por (dados, config) via cache; a fachada fica
+# disponível para as ações sob demanda (simular, preço, PDF, busca legal).
+res = _resultados_cacheados(tuple(transacoes), config, tabela, atividade)
 analise = AnalisadorMargem(
-    transacoes, config, tabela, ParametrosDiagnostico(atividade=atividade)
+    transacoes,
+    config,
+    tabela,
+    ParametrosDiagnostico(atividade=atividade),
+    retriever=_retriever_cacheado(),
 )
-decomposicao = analise.decomposicao
-resumo = analise.resumo_executivo()
+decomposicao = res["decomposicao"]
+resumo = res["resumo"]
 
 (
     aba_resumo,
@@ -867,10 +1029,10 @@ with aba_resumo:
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
     acoes = [
-        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in analise.diagnosticar()
+        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in res["achados"]
     ] + [
         (o.ganho_estimado_mensal, o.titulo, o.caminho_pratico)
-        for o in analise.crescimento()
+        for o in res["oportunidades"]
     ]
     acoes.sort(key=lambda x: x[0], reverse=True)
     if not acoes:
@@ -906,7 +1068,7 @@ with aba_vendas:
     col3.metric(m[2], frame["canal"].nunique())
     col4.metric(m[3], int(frame["devolvida"].sum()))
 
-    produtos = analise.margem_por_produto()
+    produtos = res["por_produto"]
     campeoes = [p for p in produtos if p.margem > 0][:3]
     viloes = [p for p in produtos if p.margem < 0]
 
@@ -971,7 +1133,7 @@ with aba_vendas:
 
     with st.expander(t["todas_vendas"]):
         if st.toggle(t["margem_por_venda"], value=len(frame) <= 500):
-            por_venda = analise.margem_por_venda()
+            por_venda = res["por_venda"]
             frame["margem"] = [float(v.margem_liquida) for v in por_venda]
             frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
         st.dataframe(frame, use_container_width=True, height=320)
@@ -979,7 +1141,7 @@ with aba_vendas:
 # ---------------------------------------------------------------------------
 with aba_historico:
     st.caption(t["hist_caption"])
-    mensal = analise.mensal
+    mensal = res["mensal"]
     if len(mensal) < 2:
         st.info(t["hist_um_mes"])
     else:
@@ -1055,7 +1217,7 @@ with aba_historico:
             _grafico_serie(
                 [
                     {"rotulo": mes, "valor": float(v), "texto": _brl_inteiro(v)}
-                    for mes, v in analise.lucro_acumulado()
+                    for mes, v in res["lucro"]
                 ],
                 modo="area",
             ),
@@ -1088,7 +1250,7 @@ with aba_historico:
 # ---------------------------------------------------------------------------
 with aba_ese:
     st.caption(t["ese_caption"])
-    for resultado in analise.cenarios():
+    for resultado in res["cenarios"]:
         with st.container(border=True):
             st.markdown(f"**{resultado.nome}**")
             c1, c2, c3 = st.columns(3)
@@ -1099,7 +1261,7 @@ with aba_ese:
 # ---------------------------------------------------------------------------
 with aba_crescer:
     st.caption(t["crescimento_caption"])
-    for oportunidade in analise.crescimento():
+    for oportunidade in res["oportunidades"]:
         with st.container(border=True):
             ganho = _brl(oportunidade.ganho_estimado_mensal)
             st.markdown(
@@ -1169,7 +1331,7 @@ with aba_diagnostico:
     st.warning(retriever.aviso_corpus)
 
     st.subheader(t["vazamentos"])
-    achados = analise.diagnosticar()
+    achados = res["achados"]
     if not achados:
         st.success(t["sem_achados"])
     for achado in achados:
