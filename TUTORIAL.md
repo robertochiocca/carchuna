@@ -1,10 +1,10 @@
-# 🏖️ Tutorial da Carchuna — do zero absoluto ao seu raio-X de margem
+# Tutorial da Carchuna — do zero absoluto ao seu raio-X de margem
 
 Este guia é para quem **nunca programou** e quer usar a Carchuna no próprio
 computador. Sem pressa: são uns 20 minutos na primeira vez. Se algo der errado,
-veja a seção [Problemas comuns](#-problemas-comuns) no final.
+veja a seção [Problemas comuns](#problemas-comuns) no final.
 
-> ℹ️ A Carchuna roda **no seu computador**: suas vendas não são enviadas para
+> A Carchuna roda **no seu computador**: suas vendas não são enviadas para
 > nenhum servidor. E lembre — ela informa e calcula, mas **não substitui o seu
 > contador**.
 
@@ -73,15 +73,16 @@ O navegador abre sozinho com o painel (se não abrir, acesse
 Prompt/Terminal e aperte `Ctrl+C`.
 
 Na primeira vez, o app já vem carregado com **dados de demonstração** (vendas
-inventadas, mas realistas) — explore as 5 abas antes de colocar os seus dados:
+inventadas, mas realistas) — explore as 6 abas antes de colocar os seus dados:
 
 | Aba | O que mostra |
 |---|---|
-| 🛒 **Vendas** | suas vendas importadas, receita por canal e a margem real de cada venda |
-| 💧 **Margem** | o raio-X: quanto sobrou de verdade e onde a receita morreu, com a fonte de cada dedução |
-| 🌊 **Cenários** | simulações: "e se a comissão subir 2 pontos?", "e se eu migrar 30% do ML para loja própria?" |
-| ⚖️ **Diagnóstico Legal** | vazamentos detectados com a lei correspondente citada (e link oficial) |
-| 📄 **Relatório** | um PDF de 3 páginas para levar ao seu contador |
+| **Vendas** | suas vendas importadas, receita por canal e a margem real de cada venda |
+| **Margem** | o raio-X: quanto sobrou de verdade e onde a receita morreu, com a fonte de cada dedução |
+| **Cenários** | simulações: "e se a comissão subir 2 pontos?", "e se eu migrar 30% do ML para loja própria?" |
+| **Crescimento** | como faturar mais: o canal onde cada real rende mais, a calculadora de preço e quanto cabe crescer no Simples |
+| **Diagnóstico Legal** | vazamentos detectados com a lei correspondente citada (e link oficial) |
+| **Relatório** | um PDF de 3 páginas para levar ao seu contador |
 
 ---
 
@@ -151,7 +152,7 @@ Também na barra lateral:
 
 ---
 
-## ❓ Problemas comuns
+## Problemas comuns
 
 | Sintoma | Causa provável | Solução |
 |---|---|---|
@@ -168,6 +169,6 @@ apareceu na tela.
 
 ---
 
-> ⚠️ **Aviso**: a Carchuna é um projeto de portfólio e uma ferramenta de
+> **Aviso**: a Carchuna é um projeto de portfólio e uma ferramenta de
 > informação. Nenhum resultado é parecer jurídico ou contábil, nem promessa de
 > recuperação de valores. Confirme com seu contador ou advogado antes de agir.

@@ -206,7 +206,7 @@ def _pagina_achados(plt, pdf, achados: list[Achado]):
             )
             linhas += ["   " + s for s in _quebrar(a.explicacao, 95)]
             for disp in a.base_legal[:3]:
-                linhas.append(f"   ⚖ {disp.lei}, {disp.artigo}")
+                linhas.append(f"   § {disp.lei}, {disp.artigo}")
                 linhas.append(f"      {disp.fonte}")
             linhas += ["   → " + s for s in _quebrar(a.caminho_pratico, 92)]
             linhas.append("")

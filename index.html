@@ -8,89 +8,154 @@
 <meta name="author" content="Roberto Chiocca">
 <meta property="og:title" content="Carchuna — o raio-X da margem">
 <meta property="og:description" content="Você fatura 400; a Carchuna mostra, com prova, por que sobra 8. Fintech + legaltech, projeto de portfólio.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='14' fill='%230e7c86'/><text y='.9em' font-size='72' x='16' fill='%23e8dcc3'>C</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23041e23'/><text y='.9em' font-size='68' x='20' fill='%232ee6d6' font-family='sans-serif' font-weight='bold'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#06282e; --bg2:#083f47; --panel:#0b4650; --line:#12545f;
-  --mar:#19b3c2; --mar-claro:#7fe3ed; --areia:#e8dcc3; --coral:#e4572e;
-  --alga:#7fb069; --texto:#d7e6e8; --dim:#8fb0b5;
+  --abismo:#041e23;         /* fundo mais profundo */
+  --fundo:#06272e;          /* fundo padrão */
+  --painel:#0a3840;         /* cartões */
+  --painel-2:#0d434c;       /* cartões em destaque */
+  --linha:#134d57;          /* bordas */
+  --agua:#2ee6d6;           /* acento principal — o par da lima da Calahonda */
+  --agua-suave:#9ff2e9;     /* acento claro */
+  --areia:#ead9b0;          /* títulos de apoio */
+  --coral:#ff6b52;          /* deduções / negativo */
+  --alga:#8fd694;           /* margem / positivo */
+  --texto:#d8e7e5;
+  --dim:#87a9a8;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--texto);font-family:'IBM Plex Sans',sans-serif;line-height:1.65}
+body{background:var(--abismo);color:var(--texto);
+  font-family:'IBM Plex Sans',sans-serif;line-height:1.7;font-weight:300}
 h1,h2,h3{font-family:'Syne',sans-serif;color:#fff}
-a{color:var(--mar-claro)}
+a{color:var(--agua-suave)}
 code,.mono{font-family:'IBM Plex Mono',monospace}
+::selection{background:var(--agua);color:var(--abismo)}
+
 nav{display:flex;justify-content:space-between;align-items:center;gap:16px;
-  padding:16px 6vw;position:sticky;top:0;background:rgba(6,40,46,.92);
-  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:10;flex-wrap:wrap}
-.nav-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;color:#fff;text-decoration:none}
-.nav-logo .dot{color:var(--mar)}
-.nav-links{display:flex;gap:20px;flex-wrap:wrap}
-.nav-links a{color:var(--dim);text-decoration:none;font-size:.92rem}
-.nav-links a:hover{color:var(--areia)}
-.nav-pill{background:var(--mar);color:#04252b;font-weight:600;text-decoration:none;
-  padding:8px 16px;border-radius:999px;font-size:.9rem}
-.hero{padding:11vh 6vw 8vh;max-width:1000px}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
-  border-radius:999px;padding:6px 14px;font-size:.82rem;color:var(--dim);margin-bottom:26px}
-.hero-badge b{color:var(--areia);font-weight:500}
-h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.12;letter-spacing:-.5px}
-h1 .acc{color:var(--mar-claro)}
+  padding:16px 6vw;position:sticky;top:0;background:rgba(4,30,35,.9);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--linha);z-index:10;flex-wrap:wrap}
+.nav-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;
+  color:#fff;text-decoration:none;letter-spacing:-.3px}
+.nav-logo .dot{color:var(--agua)}
+.nav-links{display:flex;gap:22px;flex-wrap:wrap}
+.nav-links a{color:var(--dim);text-decoration:none;font-size:.9rem;
+  letter-spacing:.02em;transition:color .2s}
+.nav-links a:hover{color:var(--agua-suave)}
+.nav-pill{background:var(--agua);color:var(--abismo);font-weight:600;
+  text-decoration:none;padding:9px 18px;border-radius:999px;font-size:.88rem;
+  transition:transform .15s,box-shadow .15s}
+.nav-pill:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(46,230,214,.35)}
+
+.hero{position:relative;padding:13vh 6vw 12vh;max-width:1060px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(52vw 40vh at 78% 6%, rgba(46,230,214,.14), transparent 60%),
+    radial-gradient(40vw 34vh at 8% 90%, rgba(46,230,214,.07), transparent 65%),
+    linear-gradient(180deg, transparent 55%, rgba(6,39,46,.9));}
+.hero>*{position:relative}
+.hero-badge{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--linha);
+  border-radius:999px;padding:7px 16px;font-size:.8rem;color:var(--dim);
+  margin-bottom:30px;letter-spacing:.05em;text-transform:uppercase}
+.hero-badge-dot{width:8px;height:8px;border-radius:50%;background:var(--agua);
+  box-shadow:0 0 12px var(--agua)}
+h1{font-size:clamp(2.1rem,5.4vw,3.7rem);line-height:1.08;letter-spacing:-1px;font-weight:800}
+h1 .acc{color:var(--agua)}
 h1 .dim{color:var(--dim);font-weight:600}
-.hero p{margin:26px 0;max-width:640px;color:var(--dim);font-size:1.05rem}
-.hero p strong{color:var(--areia)}
+.hero p{margin:30px 0;max-width:660px;color:var(--dim);font-size:1.07rem}
+.hero p strong{color:var(--areia);font-weight:500}
 .btns{display:flex;gap:12px;flex-wrap:wrap}
-.btn{padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600;font-size:.95rem}
-.btn-primary{background:var(--mar);color:#04252b}
-.btn-ghost{border:1px solid var(--line);color:var(--texto)}
-.btn:hover{filter:brightness(1.12)}
-section{padding:8vh 6vw;max-width:1100px;margin:0 auto}
-section h2{font-size:clamp(1.5rem,3vw,2.1rem);margin-bottom:8px}
-.sub{color:var(--dim);margin-bottom:36px;max-width:680px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
-.card h3{font-size:1.02rem;margin-bottom:8px;color:var(--areia)}
+.btn{padding:13px 24px;border-radius:12px;text-decoration:none;font-weight:600;
+  font-size:.94rem;transition:transform .15s,box-shadow .15s,border-color .2s}
+.btn-primary{background:var(--agua);color:var(--abismo)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(46,230,214,.35)}
+.btn-ghost{border:1px solid var(--linha);color:var(--texto)}
+.btn-ghost:hover{border-color:var(--agua);transform:translateY(-2px)}
+.hero-metricas{display:flex;gap:40px;margin-top:56px;flex-wrap:wrap}
+.hero-metricas .m b{display:block;font-family:'Syne',sans-serif;font-size:1.6rem;
+  color:var(--agua-suave);font-weight:700}
+.hero-metricas .m span{font-size:.8rem;color:var(--dim);letter-spacing:.04em;
+  text-transform:uppercase}
+
+.onda{display:block;width:100%;height:70px;color:var(--fundo)}
+main{background:var(--fundo)}
+section{padding:9vh 6vw;max-width:1120px;margin:0 auto}
+section h2{font-size:clamp(1.5rem,3vw,2.2rem);margin-bottom:10px;letter-spacing:-.5px}
+.sub{color:var(--dim);margin-bottom:40px;max-width:700px}
+.kicker{font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--agua);
+  letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:14px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:18px}
+.card{background:var(--painel);border:1px solid var(--linha);border-radius:16px;
+  padding:26px;transition:transform .2s,border-color .25s,box-shadow .25s}
+.card:hover{transform:translateY(-4px);border-color:rgba(46,230,214,.45);
+  box-shadow:0 14px 34px rgba(2,16,19,.5)}
+.card h3{font-size:1.03rem;margin-bottom:10px;color:var(--areia);font-weight:700}
 .card p{font-size:.92rem;color:var(--dim)}
-.card .n{font-family:'Syne',sans-serif;font-weight:800;color:var(--mar);font-size:.85rem}
-table{width:100%;border-collapse:collapse;font-size:.95rem}
-.tabela-raio{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-  padding:10px 0;max-width:560px;overflow-x:auto}
-.tabela-raio td{padding:7px 22px;border:none}
+.card .n{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--agua);
+  font-size:.74rem;letter-spacing:.14em;display:block;margin-bottom:12px}
+
+.tabela-raio{background:var(--painel);border:1px solid var(--linha);border-radius:16px;
+  padding:14px 0;max-width:600px;overflow-x:auto;
+  box-shadow:0 20px 50px rgba(2,16,19,.4)}
+.tabela-raio table{width:100%;border-collapse:collapse;font-size:.95rem}
+.tabela-raio td{padding:8px 26px;border:none}
 .tabela-raio td:last-child{text-align:right;font-family:'IBM Plex Mono',monospace}
 .tabela-raio .neg td{color:var(--coral)}
-.tabela-raio .total td{color:var(--alga);font-weight:600;border-top:1px solid var(--line)}
-.demo-caixa{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;
-  display:grid;grid-template-columns:minmax(240px,330px) 1fr;gap:34px}
-@media(max-width:820px){.demo-caixa{grid-template-columns:1fr}}
-.demo-caixa label{display:block;font-size:.82rem;color:var(--dim);margin:14px 0 4px}
-.demo-caixa input,.demo-caixa select{width:100%;background:var(--bg2);color:var(--texto);
-  border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:.95rem;
-  font-family:'IBM Plex Mono',monospace}
-.barra{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:.85rem}
+.tabela-raio .total td{color:var(--alga);font-weight:500;border-top:1px solid var(--linha);
+  padding-top:14px}
+.nota{font-size:.8rem;color:var(--dim);margin-top:16px;max-width:640px}
+
+.demo-caixa{background:linear-gradient(150deg,var(--painel-2),var(--painel));
+  border:1px solid var(--linha);border-radius:20px;padding:34px;
+  display:grid;grid-template-columns:minmax(240px,330px) 1fr;gap:40px;
+  box-shadow:0 24px 60px rgba(2,16,19,.45)}
+@media(max-width:840px){.demo-caixa{grid-template-columns:1fr}}
+.demo-caixa label{display:block;font-size:.78rem;color:var(--dim);margin:16px 0 5px;
+  letter-spacing:.06em;text-transform:uppercase}
+.demo-caixa input,.demo-caixa select{width:100%;background:var(--abismo);
+  color:var(--agua-suave);border:1px solid var(--linha);border-radius:10px;
+  padding:10px 13px;font-size:.98rem;font-family:'IBM Plex Mono',monospace;
+  transition:border-color .2s}
+.demo-caixa input:focus,.demo-caixa select:focus{outline:none;border-color:var(--agua)}
+.barra{display:flex;align-items:center;gap:12px;margin:8px 0;font-size:.85rem}
 .barra .rot{width:150px;color:var(--dim);text-align:right;flex-shrink:0}
-.barra .trilho{flex:1;background:var(--bg2);border-radius:6px;height:22px;overflow:hidden}
-.barra .fill{height:100%;border-radius:6px;background:var(--coral);min-width:2px;
-  transition:width .35s ease}
-.barra.receita .fill{background:var(--mar)}
-.barra.margem .fill{background:var(--alga)}
-.barra .val{width:110px;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
-#demo-frase{margin-top:18px;padding:14px 16px;background:var(--bg2);border-left:3px solid var(--mar);
-  border-radius:8px;font-size:.92rem}
-#demo-frase b{color:var(--areia)}
-.aviso{font-size:.8rem;color:var(--dim);margin-top:14px}
-.fluxo{counter-reset:passo}
-.fluxo .card{position:relative}
-.nome-caixa{background:linear-gradient(140deg,var(--bg2),var(--panel));border:1px solid var(--line);
-  border-radius:16px;padding:34px;max-width:820px}
-.nome-caixa p{margin-bottom:14px;color:var(--texto)}
-.nome-caixa em{color:var(--mar-claro)}
-footer{padding:6vh 6vw;border-top:1px solid var(--line);color:var(--dim);font-size:.88rem;
-  display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.barra .trilho{flex:1;background:var(--abismo);border-radius:7px;height:24px;overflow:hidden}
+.barra .fill{height:100%;border-radius:7px;background:var(--coral);min-width:2px;
+  transition:width .4s cubic-bezier(.2,.8,.2,1)}
+.barra.receita .fill{background:linear-gradient(90deg,#1a9c90,var(--agua))}
+.barra.margem .fill{background:linear-gradient(90deg,#5fae68,var(--alga))}
+.barra .val{width:118px;font-family:'IBM Plex Mono',monospace;flex-shrink:0;
+  color:var(--texto)}
+#demo-frase{margin-top:22px;padding:16px 18px;background:rgba(4,30,35,.6);
+  border-left:3px solid var(--agua);border-radius:10px;font-size:.92rem;color:var(--dim)}
+#demo-frase b{color:var(--agua-suave);font-weight:500}
+
+.nome-caixa{position:relative;background:linear-gradient(150deg,var(--painel-2),var(--painel));
+  border:1px solid var(--linha);border-radius:20px;padding:40px;max-width:840px;
+  overflow:hidden}
+.nome-caixa::after{content:"";position:absolute;right:-80px;bottom:-110px;width:300px;
+  height:300px;border-radius:50%;background:radial-gradient(circle,rgba(46,230,214,.12),transparent 70%)}
+.nome-caixa p{margin-bottom:16px;color:var(--texto);position:relative}
+.nome-caixa em{color:var(--agua-suave);font-style:normal;font-weight:500}
+.gemas{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap;position:relative}
+.gema{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--linha);
+  border-radius:999px;padding:8px 16px;font-size:.85rem;color:var(--dim);
+  text-decoration:none;transition:border-color .2s}
+.gema:hover{border-color:var(--agua)}
+.gema .g-dot{width:9px;height:9px;border-radius:50%}
+.g-lima{background:#C8F135;box-shadow:0 0 10px rgba(200,241,53,.7)}   /* Calahonda */
+.g-gelo{background:#9db4ff;box-shadow:0 0 10px rgba(157,180,255,.6)}  /* DireitoAberto */
+.g-agua{background:var(--agua);box-shadow:0 0 10px rgba(46,230,214,.7)} /* Carchuna */
+
+footer{padding:7vh 6vw;border-top:1px solid var(--linha);color:var(--dim);
+  font-size:.88rem;display:flex;justify-content:space-between;gap:18px;
+  flex-wrap:wrap;background:var(--abismo)}
 footer a{color:var(--areia);text-decoration:none}
-.trilogia{display:flex;gap:14px;flex-wrap:wrap}
+footer a:hover{color:var(--agua-suave)}
 </style>
 </head>
 <body>
@@ -104,24 +169,36 @@ footer a{color:var(--areia);text-decoration:none}
     <a href="#nome">O nome</a>
     <a href="#honesto">Honestidade</a>
   </div>
-  <a class="nav-pill" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">GitHub ↗</a>
+  <a class="nav-pill" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">GitHub</a>
 </nav>
 
-<section class="hero">
-  <div class="hero-badge"><b>Carchuna</b> · Projeto de portfólio · Fintech + Legaltech · Python</div>
+<header class="hero">
+  <div class="hero-badge"><div class="hero-badge-dot"></div>Carchuna · Projeto de portfólio · Fintech + Legaltech · Python</div>
   <h1>Você fatura 400.<br>Sobra 8. A <span class="acc">Carchuna</span><br><span class="dim">mostra por quê — com prova.</span></h1>
   <p>Inteligência de margem <strong>verificável</strong> para o PME brasileiro que vende em
      marketplace, usa maquininha e está no Simples Nacional. Todo número é
-     <strong>calculado por código testado</strong> (78 testes, 96% de cobertura); toda base legal é
+     <strong>calculado por código testado</strong>; toda base legal é
      <strong>citada de fonte oficial</strong>. A IA entra depois do cálculo, nunca antes.</p>
   <div class="btns">
     <a class="btn btn-primary" href="#demo">Calcular uma venda nesta página</a>
-    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna/blob/main/TUTORIAL.md" target="_blank" rel="noopener">Tutorial para começar do zero</a>
-    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">Código no GitHub ↗</a>
+    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna/blob/main/TUTORIAL.md" target="_blank" rel="noopener">Tutorial do zero</a>
+    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">Código no GitHub</a>
   </div>
-</section>
+  <div class="hero-metricas">
+    <div class="m"><b>94</b><span>testes, todos verdes</span></div>
+    <div class="m"><b>97%</b><span>cobertura de código</span></div>
+    <div class="m"><b>21</b><span>dispositivos legais citados</span></div>
+    <div class="m"><b>0</b><span>floats em campo de dinheiro</span></div>
+  </div>
+</header>
+
+<main>
+<svg class="onda" viewBox="0 0 1440 70" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M0,40 C240,70 480,8 720,32 C960,56 1200,14 1440,42 L1440,70 L0,70 Z" fill="currentColor"/>
+</svg>
 
 <section id="raiox">
+  <span class="kicker">01 — a conta real</span>
   <h2>O raio-X de uma venda de R$ 100</h2>
   <p class="sub">A conta que o lojista faz é "100 − 40 de custo = 60 de lucro". A conta real,
      dedução a dedução — cada linha com fonte (lei, contrato ou tabela editável):</p>
@@ -135,12 +212,13 @@ footer a{color:var(--areia);text-decoration:none}
       <tr class="total"><td>(=) Margem líquida real — 32,35%, não 60%</td><td>R$ 32,35</td></tr>
     </table>
   </div>
-  <p class="aviso">* LC 123/2006, art. 18, § 1º-A: alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12.
+  <p class="nota">* LC 123/2006, art. 18, § 1º-A: alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12.
      Caso conferido à mão nos testes do repositório.</p>
 </section>
 
 <section id="demo">
-  <h2>Demo: decomponha uma venda agora</h2>
+  <span class="kicker">02 — experimente</span>
+  <h2>Decomponha uma venda agora</h2>
   <p class="sub">Mesma lógica do motor Python, reimplementada em JavaScript só para esta página —
      o cálculo de verdade (e testado) vive no <a href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">repositório</a>.</p>
   <div class="demo-caixa">
@@ -161,73 +239,81 @@ footer a{color:var(--areia);text-decoration:none}
         <option value="II">Anexo II — Indústria</option>
         <option value="III">Anexo III — Serviços</option>
       </select>
-      <label>Faturamento dos últimos 12 meses (RBT12, R$)</label>
+      <label>Faturamento 12 meses (RBT12, R$)</label>
       <input id="d-rbt12" type="number" value="360000" min="1000" step="10000">
     </div>
     <div>
       <div id="d-barras"></div>
       <div id="demo-frase"></div>
-      <p class="aviso">Comissões são as das tabelas públicas dos canais (editáveis no app).
+      <p class="nota">Comissões são as das tabelas públicas dos canais (editáveis no app).
          Informação geral, não aconselhamento contábil — confirme com seu contador.</p>
     </div>
   </div>
 </section>
 
 <section id="fluxo">
+  <span class="kicker">03 — o método</span>
   <h2>Como funciona</h2>
   <p class="sub">O fluxo do produto — determinístico primeiro, IA por último:</p>
-  <div class="grid fluxo">
-    <div class="card"><span class="n">1 · IMPORTAÇÃO</span><h3>Suas vendas entram</h3>
+  <div class="grid">
+    <div class="card"><span class="n">1 / IMPORTAÇÃO</span><h3>Suas vendas entram</h3>
       <p>CSV, JSON ou Excel exportado do painel do marketplace. Conectores de API (Shopee, Mercado Livre) no roadmap — mesma interface, nada muda acima.</p></div>
-    <div class="card"><span class="n">2 · RECONSTRUÇÃO</span><h3>Margem real, venda a venda</h3>
-      <p>Receita → tributos → marketplace → adquirência → antecipação → frete → devoluções → CMV. Em <code>Decimal</code>, nunca float; invariante contábil testado.</p></div>
-    <div class="card"><span class="n">3 · DIAGNÓSTICO</span><h3>Quanto se perdeu, e onde</h3>
+    <div class="card"><span class="n">2 / RECONSTRUÇÃO</span><h3>Margem real, venda a venda</h3>
+      <p>Receita, tributos, marketplace, adquirência, antecipação, frete, devoluções, CMV. Em <code>Decimal</code>, nunca float; invariante contábil testado.</p></div>
+    <div class="card"><span class="n">3 / DIAGNÓSTICO</span><h3>Quanto se perdeu, e onde</h3>
       <p>"R$ 833 mil de margem se perderam; 35% veio de comissões de canal." Quatro regras transparentes detectam vazamentos — sem caixa preta.</p></div>
-    <div class="card"><span class="n">4 · SIMULAÇÃO E CRESCIMENTO</span><h3>E se…? E como faturar mais?</h3>
+    <div class="card"><span class="n">4 / SIMULAÇÃO E CRESCIMENTO</span><h3>E se…? E como faturar mais?</h3>
       <p>Comissão +2 p.p., devoluções dobram, migrar ou crescer 20% num canal — o mesmo motor recalcula. E o motor invertido responde: onde cada real rende mais, o preço para a margem alvo e quanto cabe crescer dentro do Simples.</p></div>
-    <div class="card"><span class="n">5 · EXPLICAÇÃO</span><h3>Base legal citada</h3>
-      <p>LC 123, CTN, CDC, normas do Bacen — recuperadas por busca (BM25 + sinônimos do lojista), com link oficial e aviso em toda resposta. LLM opcional: sem chave, tudo funciona.</p></div>
+    <div class="card"><span class="n">5 / EXPLICAÇÃO</span><h3>Base legal citada</h3>
+      <p>LC 123, CTN, CDC, normas do Bacen — recuperadas por busca com sinônimos do lojista, com link oficial e aviso em toda resposta. LLM opcional: sem chave, tudo funciona.</p></div>
   </div>
 </section>
 
 <section id="nome">
+  <span class="kicker">04 — a origem</span>
   <h2>Por que "Carchuna"?</h2>
   <div class="nome-caixa">
     <p>Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha
-       família veio. O primeiro foi a <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">⚡ Calahonda</a>,
+       família veio. O primeiro foi a <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">Calahonda</a>,
        batizada em homenagem a essa origem.</p>
     <p><em>Carchuna</em> continua a tradição — com uma coincidência que parece proposital:
        na costa de Granada, a praia de Carchuna fica colada em outra praia chamada…
        <em>Calahonda</em>. Os dois nomes são vizinhos no mesmo litoral, como os dois projetos
-       são vizinhos no mesmo portfólio: motores irmãos, um para quem investe, outro para quem vende.</p>
+       são vizinhos no mesmo portfólio: motores irmãos, um para quem investe, outro para quem vende.
+       Até as cores conversam: o verde-lima elétrico da Calahonda e o água-turquesa da Carchuna,
+       lado a lado como as duas praias.</p>
     <p>E o nome também é a tese do produto: as águas de Carchuna são transparentes a ponto
        de se ver o fundo. É o que a plataforma faz com a margem do PME —
        <em>água clara, fundo visível, nenhum número sem prova</em>.</p>
+    <div class="gemas">
+      <a class="gema" href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener"><span class="g-dot g-lima"></span>Calahonda — quant</a>
+      <a class="gema" href="https://github.com/robertochiocca/direitoaberto" target="_blank" rel="noopener"><span class="g-dot g-gelo"></span>DireitoAberto — legal</a>
+      <span class="gema"><span class="g-dot g-agua"></span>Carchuna — margem</span>
+    </div>
   </div>
 </section>
 
 <section id="honesto">
+  <span class="kicker">05 — sem promessa vazia</span>
   <h2>Honestidade técnica</h2>
   <p class="sub">Padrão da trilogia: separar com clareza o que existe do que é plano.</p>
   <div class="grid">
-    <div class="card"><h3>✅ Implementado e testado</h3>
-      <p>Motor de margem (Simples/MEI), margem por venda, métricas, 5 cenários, diagnóstico com base legal,
-         corpus com 21 dispositivos, dashboard, PDF, API FastAPI. 78 testes, 96% de cobertura, CI em 3 versões de Python.</p></div>
-    <div class="card"><h3>⬜ Roadmap explícito</h3>
-      <p>Lucro Presumido, conectores de API (Shopee/ML), Open Finance via agregador, MCP server,
-         busca semântica, autenticação e banco na API. Nada disso é prometido como pronto.</p></div>
-    <div class="card"><h3>🚫 Fora de escopo</h3>
-      <p>Não é ERP, não emite nota, não dá parecer jurídico, não promete recuperação tributária,
-         não guarda senha de banco ou marketplace. Conceito de portfólio — não é uma empresa.</p></div>
+    <div class="card"><h3>Implementado e testado</h3>
+      <p>Motor de margem (Simples/MEI), margem por venda, métricas, 6 cenários, motor de crescimento (mix de canais, calculadora de preço, espaço no Simples), diagnóstico com base legal, corpus com 21 dispositivos, dashboard, PDF, API FastAPI. 94 testes, 97% de cobertura, CI em 3 versões de Python.</p></div>
+    <div class="card"><h3>Roadmap explícito</h3>
+      <p>Lucro Presumido, conectores de API (Shopee/ML), Open Finance via agregador, MCP server, busca semântica, autenticação e banco na API. Nada disso é prometido como pronto.</p></div>
+    <div class="card"><h3>Fora de escopo</h3>
+      <p>Não é ERP, não emite nota, não dá parecer jurídico, não promete recuperação tributária, não guarda senha de banco ou marketplace. Conceito de portfólio — não é uma empresa.</p></div>
   </div>
 </section>
+</main>
 
 <footer>
   <div>MIT © 2026 <a href="https://github.com/robertochiocca" target="_blank" rel="noopener">Roberto Chiocca</a> · projeto de portfólio, não é aconselhamento jurídico/contábil</div>
-  <div class="trilogia">
-    <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">⚡ Calahonda</a>
-    <a href="https://github.com/robertochiocca/direitoaberto" target="_blank" rel="noopener">⚖️ DireitoAberto</a>
-    <span>🏖️ Carchuna</span>
+  <div>
+    <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">Calahonda</a> ·
+    <a href="https://github.com/robertochiocca/direitoaberto" target="_blank" rel="noopener">DireitoAberto</a> ·
+    Carchuna
   </div>
 </footer>
 

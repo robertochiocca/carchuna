@@ -27,11 +27,9 @@ from carchuna import (
 from carchuna.rag.llm import gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL
 
-st.set_page_config(
-    page_title="Carchuna — raio-X da margem", page_icon="🏖️", layout="wide"
-)
+st.set_page_config(page_title="Carchuna — raio-X da margem", layout="wide")
 
-st.title("🏖️ Carchuna — o raio-X da margem")
+st.title("Carchuna — o raio-X da margem")
 st.caption(
     "Você fatura 400; a Carchuna mostra, com prova, por que sobra 8 — e o que "
     "a lei permite recuperar. Projeto de portfólio; não é aconselhamento "
@@ -108,12 +106,12 @@ serie = analise.serie
 
 abas = st.tabs(
     [
-        "🛒 Vendas",
-        "💧 Margem",
-        "🌊 Cenários",
-        "🚀 Crescimento",
-        "⚖️ Diagnóstico Legal",
-        "📄 Relatório",
+        "Vendas",
+        "Margem",
+        "Cenários",
+        "Crescimento",
+        "Diagnóstico Legal",
+        "Relatório",
     ]
 )
 (
@@ -161,7 +159,7 @@ with aba_vendas:
 # ---------------------------------------------------------------------------
 with aba_margem:
     resumo = analise.resumo_executivo()
-    st.info(resumo.frase(), icon="🔎")
+    st.info(resumo.frase())
     col1, col2, col3 = st.columns(3)
     col1.metric(
         "Margem anunciada (receita − CMV)",
@@ -306,7 +304,7 @@ with aba_crescimento:
 # ---------------------------------------------------------------------------
 with aba_diagnostico:
     retriever = analise.retriever
-    st.warning(retriever.aviso_corpus, icon="⚠️")
+    st.warning(retriever.aviso_corpus)
 
     st.subheader("Vazamentos detectados (heurísticas transparentes)")
     achados = analise.diagnosticar()

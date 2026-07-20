@@ -1,0 +1,9 @@
+# Tema "águas de Carchuna": petróleo profundo com acento água-turquesa —
+# o par cromático do verde-lima da Calahonda.
+[theme]
+base = "dark"
+primaryColor = "#2EE6D6"
+backgroundColor = "#06272E"
+secondaryBackgroundColor = "#0A3840"
+textColor = "#D8E7E5"
+font = "sans serif"

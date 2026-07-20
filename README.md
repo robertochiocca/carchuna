@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏖️ Carchuna
+# Carchuna
 
 **Inteligência de margem para o PME brasileiro. Você fatura 400; a Carchuna mostra, com prova, por que sobra 8 — e onde está o caminho para sobrar (e faturar) mais.**
 
@@ -8,29 +8,29 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-78%2F78-brightgreen.svg)](tests/)
-[![Cobertura](https://img.shields.io/badge/cobertura-96%25-brightgreen.svg)](.github/workflows/ci.yml)
+[![Testes](https://img.shields.io/badge/testes-94%2F94-2ee6d6.svg)](tests/)
+[![Cobertura](https://img.shields.io/badge/cobertura-97%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green.svg)](LICENSE)
 
-**[🌐 Site do projeto](https://robertochiocca.github.io/carchuna/)** · **[📖 Tutorial para leigos (do zero)](TUTORIAL.md)**
+**[Site do projeto](https://robertochiocca.github.io/carchuna/)** · **[Tutorial para leigos (do zero)](TUTORIAL.md)**
 
-🇧🇷 [Português](#-o-problema) · 🇺🇸 [English](#-english-version)
+[Português](#o-problema) · [English](#english-version)
 
 </div>
 
-> ℹ️ **Conceito / projeto de portfólio — não é uma empresa nem aconselhamento jurídico/contábil.** Este repositório estuda como uma plataforma de inteligência de margem para PMEs brasileiras *poderia* funcionar. O que está implementado tem teste e CI; o que não está é roadmap explicitamente sinalizado.
+> **Conceito / projeto de portfólio — não é uma empresa nem aconselhamento jurídico/contábil.** Este repositório estuda como uma plataforma de inteligência de margem para PMEs brasileiras *poderia* funcionar. O que está implementado tem teste e CI; o que não está é roadmap explicitamente sinalizado.
 
 ---
 
-## 🎯 O problema
+## O problema
 
 O lojista faz a conta ingênua — **receita − custo do produto = "lucro"** — mas o lucro morre no caminho: impostos, comissão de marketplace, taxa da maquininha, antecipação de recebíveis, frete, devoluções. O CNPJ típico deste estudo fatura **~R$ 400 mil/mês e lucra ~2%**, vende no Mercado Livre/Shopee/Amazon, está no Simples Nacional e **não sabe exatamente onde a margem morre**. Não pode pagar CFO (R$ 15–30 mil/mês) nem tributarista por hora.
 
 A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot — todo número sai de um motor determinístico testado, e **a IA entra depois do cálculo, nunca antes**.
 
-## 🔄 O fluxo do produto
+## O fluxo do produto
 
 ```
 1. Importação      CSV / JSON / XLSX de vendas (conectores de API no roadmap)
@@ -64,23 +64,25 @@ Receita bruta:                 R$ 100,00
 Margem líquida real:           R$  32,35   (32,35% — não os 60% "anunciados")
 ```
 
-## 🖥️ O app
+## O app
 
 ![Dashboard da Carchuna — aba Margem com o resumo executivo](docs/img/dashboard.png)
+
+![Aba Crescimento — como faturar mais, com números dos próprios dados](docs/img/crescimento.png)
 
 ![Diagnóstico legal com base citada e fonte oficial](docs/img/diagnostico.png)
 
 Nunca programou? O **[TUTORIAL.md](TUTORIAL.md)** leva do zero absoluto (instalar o Python) até o raio-X com as suas vendas — incluindo como exportar o relatório da Shopee/Mercado Livre e montar o CSV a partir do [modelo pronto](examples/vendas_exemplo.csv).
 
-## 🏝️ Por que "Carchuna"?
+## Por que "Carchuna"?
 
-Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha família veio — a tradição começou na [⚡ Calahonda](https://github.com/robertochiocca/calahonda), batizada em homenagem a essa origem (*Sitio de Calahonda, Mijas, Málaga*). **Carchuna** continua a linhagem com uma coincidência que parece proposital: na costa de Granada, a praia de Carchuna fica colada em outra praia chamada… *Calahonda*. Os dois nomes são vizinhos no mesmo litoral, como os dois projetos são vizinhos no mesmo portfólio — motores irmãos, um para quem investe, outro para quem vende.
+Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha família veio — a tradição começou na [Calahonda](https://github.com/robertochiocca/calahonda), batizada em homenagem a essa origem (*Sitio de Calahonda, Mijas, Málaga*). **Carchuna** continua a linhagem com uma coincidência que parece proposital: na costa de Granada, a praia de Carchuna fica colada em outra praia chamada… *Calahonda*. Os dois nomes são vizinhos no mesmo litoral, como os dois projetos são vizinhos no mesmo portfólio — motores irmãos, um para quem investe, outro para quem vende.
 
 E o nome também é a tese do produto: as águas de Carchuna são transparentes a ponto de se ver o fundo. É exatamente o que a plataforma faz com a margem do PME — **água clara, fundo visível, nenhum número sem prova**.
 
-## 🧬 DNA da trilogia (inegociável)
+## DNA da trilogia (inegociável)
 
-Terceira plataforma de uma trilogia andaluza: ⚡ [Calahonda](https://github.com/robertochiocca/calahonda) (quant para gestoras) · ⚖️ [DireitoAberto](https://github.com/robertochiocca/direitoaberto) (legal RAG para o cidadão) · 🏖️ **Carchuna** (os dois motores, casados, para o PME).
+Terceira plataforma de uma trilogia andaluza: [Calahonda](https://github.com/robertochiocca/calahonda) (quant para gestoras) · [DireitoAberto](https://github.com/robertochiocca/direitoaberto) (legal RAG para o cidadão) · **Carchuna** (os dois motores, casados, para o PME).
 
 1. **Nenhuma afirmação sem lastro** — toda saída ou é calculada por código testado, ou é citada de fonte oficial com link. A IA nunca inventa.
 2. **Degradação graciosa** — funciona de ponta a ponta **sem chave de API**: cálculo local + modo extrativo.
@@ -89,7 +91,7 @@ Terceira plataforma de uma trilogia andaluza: ⚡ [Calahonda](https://github.com
 5. **Camadas trocáveis** — motores atrás de interfaces estáveis (padrão `Retriever` do DireitoAberto).
 6. **Dinheiro é `Decimal`** — `float` em campo monetário é rejeitado com `TypeError`; na API, dinheiro trafega como *string* no JSON.
 
-## 🏛️ Arquitetura (orientada a objetos, camadas trocáveis)
+## Arquitetura (orientada a objetos, camadas trocáveis)
 
 ```
 AnalisadorMargem (fachada)          ← analise.py: um objeto, os quatro motores
@@ -111,37 +113,37 @@ AnalisadorMargem (fachada)          ← analise.py: um objeto, os quatro motores
 
 O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e FastAPI são cascas opcionais em volta do mesmo motor. A parte determinística é 100% testável sem LLM; a parte generativa nunca calcula.
 
-## 📊 Status honesto (o que existe vs. roadmap)
+## Status honesto (o que existe vs. roadmap)
 
 | Módulo | Status |
 |---|---|
-| `margem.py` — decomposição com alíquota efetiva do Simples (LC 123/2006, art. 18, § 1º-A; Anexos I–V) | ✅ implementado e testado |
-| `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio") e **margem venda a venda** | ✅ implementado e testado |
-| `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + dados sintéticos reprodutíveis | ✅ implementado e testado |
-| `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | ✅ implementado e testado |
-| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | ✅ implementado e testado |
-| `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | ✅ implementado e testado |
-| `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | ✅ implementado e testado |
-| `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | ✅ ingerido · ⚠️ **revisão humana pendente** (`revisado: false`) |
-| `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | ✅ implementado e testado |
-| `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | ✅ implementado e testado |
-| `conectores/` — interface `Conector` + `ConectorArquivo` (CSV/JSON/XLSX de qualquer canal, com filtro de período) | ✅ implementado e testado |
-| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | ✅ implementado |
-| Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | ⬜ roadmap — mesma interface `Conector` |
-| Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | ⬜ roadmap — mesma interface `Conector` |
-| `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | ✅ implementado e testado |
-| `app.py` — dashboard Streamlit com 6 abas (incl. 🚀 Crescimento) | ✅ implementado (sem teste automatizado de UI) |
-| Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | ⬜ roadmap — quando houver piloto multiusuário |
-| Regime **Lucro Presumido** | ⬜ roadmap (depende de ICMS/ISS estaduais/municipais) |
-| RBT12 móvel mês a mês nas séries | ⬜ roadmap |
-| Open Finance via agregador (Pluggy/Belvo) | ⬜ roadmap |
-| MCP server (consultar a Carchuna por assistentes de IA) | ⬜ roadmap |
-| Busca semântica (embeddings/ChromaDB, opt-in) | ⬜ roadmap |
-| ML preditivo (previsão de vendas) | ⬜ roadmap — heurísticas transparentes primeiro |
+| `margem.py` — decomposição com alíquota efetiva do Simples (LC 123/2006, art. 18, § 1º-A; Anexos I–V) | pronto — implementado e testado |
+| `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio") e **margem venda a venda** | pronto — implementado e testado |
+| `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + dados sintéticos reprodutíveis | pronto — implementado e testado |
+| `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | pronto — implementado e testado |
+| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
+| `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
+| `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
+| `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | ingerido — **revisão humana pendente** (`revisado: false`) |
+| `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | pronto — implementado e testado |
+| `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | pronto — implementado e testado |
+| `conectores/` — interface `Conector` + `ConectorArquivo` (CSV/JSON/XLSX de qualquer canal, com filtro de período) | pronto — implementado e testado |
+| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | pronto |
+| Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | roadmap — mesma interface `Conector` |
+| Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | roadmap — mesma interface `Conector` |
+| `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | pronto — implementado e testado |
+| `app.py` — dashboard Streamlit com 6 abas (incl. Crescimento) | pronto (sem teste automatizado de UI) |
+| Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
+| Regime **Lucro Presumido** | roadmap (depende de ICMS/ISS estaduais/municipais) |
+| RBT12 móvel mês a mês nas séries | roadmap |
+| Open Finance via agregador (Pluggy/Belvo) | roadmap |
+| MCP server (consultar a Carchuna por assistentes de IA) | roadmap |
+| Busca semântica (embeddings/ChromaDB, opt-in) | roadmap |
+| ML preditivo (previsão de vendas) | roadmap — heurísticas transparentes primeiro |
 
 **Meta antes de qualquer conector:** 1 lojista piloto usando com CSV real.
 
-## 🚀 Como rodar
+## Como rodar
 
 ```bash
 git clone https://github.com/robertochiocca/carchuna.git
@@ -149,7 +151,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 78 testes
+pip install pytest && pytest          # 94 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -175,7 +177,7 @@ Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrati
 - **Site** ([robertochiocca.github.io/carchuna](https://robertochiocca.github.io/carchuna/)): o workflow `pages.yml` publica a `index.html` na branch `gh-pages` a cada push na `main`; na primeira vez, ative em *Settings → Pages → Branch: gh-pages*.
 - **App ao vivo** (padrão da Calahonda): grátis no [Streamlit Community Cloud](https://share.streamlit.io) — *New app* → repositório `robertochiocca/carchuna`, branch `main`, arquivo `app.py`. A URL fica `carchuna.streamlit.app`.
 
-## 🔍 Como cada número ganha lastro
+## Como cada número ganha lastro
 
 - **Tributos**: fórmula oficial da alíquota efetiva (LC 123/2006, art. 18, § 1º-A) com os Anexos I–V na redação da LC 155/2016, validada por testes calculados à mão — inclusive o degrau da 6ª faixa, em que o ICMS/ISS saem da guia pelo sublimite (arts. 19 e 20). A conferência automática no Planalto foi tentada em 19/07/2026 (portal retornou HTTP 503 a robôs); a data e a ressalva estão documentadas em `carchuna/margem.py`.
 - **Comissões/adquirência/antecipação**: tabelas **editáveis pelo usuário**, com defaults documentados com fonte e marcados `estimado` — o seu contrato prevalece.
@@ -183,33 +185,33 @@ Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrati
 - **Base legal dos achados**: apenas o que o `Retriever` recuperou do corpus versionado — com link oficial e status de revisão em cada citação. Fluxo: pergunta → busca no corpus → recuperação dos trechos → LLM interpreta (opcional) → cita fonte → aviso.
 - **Excel**: células numéricas chegam como `float` do openpyxl; a conversão passa por `str()` e esta é a única exceção documentada à regra do `Decimal` — prefira CSV.
 
-## 🚫 O que a Carchuna **não** é (anti-escopo)
+## O que a Carchuna **não** é (anti-escopo)
 
 Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídico nem promete recuperação tributária** ("você tem direito a R$ X de volta" — nunca; esse mercado é infestado de golpes de "teses"); não é a Calahonda (sem VaR/carteira); não importa o corpus B2C do DireitoAberto; sem ML preditivo, score de crédito ou decisão financeira automatizada na v1; sem armazenar credenciais bancárias; sem scraping de portais que bloqueiam robôs.
 
-## 🧪 Qualidade
+## Qualidade
 
-`pytest` (78 testes, cobertura 96%, mínimo 85% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (94 testes, cobertura 97%, mínimo 85% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
 ---
 
-## 🇺🇸 English version
+## English version
 
 **Carchuna** — verifiable margin intelligence for Brazilian SMBs. It rebuilds a seller's real margin deterministically (taxes, marketplace fees, card acquiring, receivables prepayment, freight, returns, COGS) — for the period, per month and **per sale** — quantifies where profit died ("R$ 833k of margin lost; 35% came from marketplace fees"), simulates alternatives (channel migration, fee shocks, tax bracket changes) and only then uses RAG over official legal sources to explain, with citations. **AI comes after the math, never before.** Third project of an Andalusian trilogy ([Calahonda](https://github.com/robertochiocca/calahonda) → quant, [DireitoAberto](https://github.com/robertochiocca/direitoaberto) → legal RAG).
 
-Core principles: every output is either computed by tested code or cited from an official source with a link; graceful degradation (fully functional without any API key); money is `Decimal`, never `float` (serialized as strings over the API); legal corpus entries ship with `"revisado": false` until human review; object-oriented engines behind stable interfaces (`AnalisadorMargem` facade, `Cenario`/`RegraDeteccao` class hierarchies); honest README separating implemented (✅ tests + CI) from roadmap (⬜).
+Core principles: every output is either computed by tested code or cited from an official source with a link; graceful degradation (fully functional without any API key); money is `Decimal`, never `float` (serialized as strings over the API); legal corpus entries ship with `"revisado": false` until human review; object-oriented engines behind stable interfaces (`AnalisadorMargem` facade, `Cenario`/`RegraDeteccao` class hierarchies); honest README separating implemented (tests + CI) from roadmap.
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 78 tests, 96% coverage
+pytest                                        # 94 tests, 97% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```
 
-> ℹ️ Concept / portfolio project — not a company, not legal or accounting advice.
+> Concept / portfolio project — not a company, not legal or accounting advice.
 
-## 📄 Licença
+## Licença
 
 [MIT](LICENSE) — © 2026 Roberto Chiocca
