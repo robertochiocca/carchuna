@@ -27,13 +27,18 @@ from carchuna.api.schemas import (
     AnaliseRequest,
     BuscaLegalResponse,
     CenarioOut,
+    CrescimentoResponse,
     DecomposicaoOut,
     DiagnosticoResponse,
     DispositivoOut,
     FontePerdaOut,
     MargemResponse,
+    OportunidadeOut,
+    PrecoAlvoRequest,
+    PrecoAlvoResponse,
     ResumoExecutivoOut,
 )
+from carchuna.crescimento import AVISO_CRESCIMENTO, preco_para_margem
 from carchuna.diagnostico import ParametrosDiagnostico
 from carchuna.rag.llm import gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
@@ -127,6 +132,51 @@ def diagnostico(corpo: AnaliseRequest) -> DiagnosticoResponse:
             for achado in analise.diagnosticar()
         ],
         aviso_corpus=_retriever.aviso_corpus,
+    )
+
+
+@app.post("/api/v1/crescimento", response_model=CrescimentoResponse)
+def crescimento(corpo: AnaliseRequest) -> CrescimentoResponse:
+    """Como faturar mais: mix de canais, preço e espaço no Simples."""
+    analise = _analisador(corpo)
+    return CrescimentoResponse(
+        oportunidades=[
+            OportunidadeOut(
+                **{
+                    **asdict(o),
+                    "base_legal": [DispositivoOut(**asdict(d)) for d in o.base_legal],
+                }
+            )
+            for o in analise.crescimento()
+        ],
+        aviso=AVISO_CRESCIMENTO,
+    )
+
+
+@app.post("/api/v1/preco-alvo", response_model=PrecoAlvoResponse)
+def preco_alvo(corpo: PrecoAlvoRequest) -> PrecoAlvoResponse:
+    """Preço de equilíbrio e preço para a margem alvo (motor invertido)."""
+    try:
+        config = corpo.config.para_dominio()
+        tabela = corpo.tabela.para_dominio() if corpo.tabela else None
+        equilibrio = preco_para_margem(
+            corpo.custo_produto, corpo.frete, corpo.canal, config, tabela
+        )
+        alvo = preco_para_margem(
+            corpo.custo_produto,
+            corpo.frete,
+            corpo.canal,
+            config,
+            tabela,
+            corpo.margem_alvo,
+        )
+    except (ValueError, TypeError) as erro:
+        raise HTTPException(status_code=422, detail=str(erro)) from erro
+    return PrecoAlvoResponse(
+        canal=corpo.canal,
+        preco_equilibrio=equilibrio,
+        preco_alvo=alvo,
+        margem_alvo=corpo.margem_alvo,
     )
 
 

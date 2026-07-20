@@ -283,6 +283,29 @@ class AnalisadorMargem:
         motor = MotorDiagnostico(retriever=self.retriever, parametros=self.parametros)
         return motor.diagnosticar(self.transacoes, self.config, self.tabela)
 
+    # -- crescimento: como faturar mais, com prova ---------------------------
+
+    def crescimento(self) -> list:
+        """Oportunidades de faturar mais (mix de canais, preço, espaço fiscal)."""
+        from carchuna.crescimento import MotorCrescimento
+
+        motor = MotorCrescimento(retriever=self.retriever)
+        return motor.sugerir(self.transacoes, self.config, self.tabela)
+
+    def preco_sugerido(
+        self,
+        custo_produto,
+        frete,
+        canal: str,
+        margem_alvo: Decimal = Decimal("0.10"),
+    ) -> Decimal:
+        """Preço que entrega a margem alvo neste canal (motor invertido)."""
+        from carchuna.crescimento import preco_para_margem
+
+        return preco_para_margem(
+            custo_produto, frete, canal, self.config, self.tabela, margem_alvo
+        )
+
     # -- relatório -----------------------------------------------------------
 
     def gerar_pdf(self, output, narrativa: str | None = None):

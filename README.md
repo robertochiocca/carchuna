@@ -2,7 +2,7 @@
 
 # 🏖️ Carchuna
 
-**Inteligência de margem para o PME brasileiro. Você fatura 400; a Carchuna mostra, com prova, por que sobra 8.**
+**Inteligência de margem para o PME brasileiro. Você fatura 400; a Carchuna mostra, com prova, por que sobra 8 — e onde está o caminho para sobrar (e faturar) mais.**
 
 *(Como a praia de Carchuna, na costa de Granada: águas transparentes onde se vê o fundo.)*
 
@@ -43,8 +43,10 @@ A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot
                     perderam entre a margem anunciada (41,90%) e a real
                     (13,36%); 35% dessa perda veio de Comissões de canal."
         ↓
-4. Simulação       "Migração de 30% das vendas de mercado_livre para
-                    loja_propria: impacto R$ +26.313,31 (+0,90 p.p.)"
+4. Simulação e     "Migração de 30% das vendas de mercado_livre para
+   crescimento      loja_propria: impacto R$ +26.313,31 (+0,90 p.p.)"
+                   "Onde crescer rende mais · preço para a margem alvo ·
+                    quanto cabe faturar dentro da sua faixa do Simples"
         ↓
 5. Explicação      base legal citada com fonte oficial (LC 123, CTN, CDC,
    legal/IA        Bacen…) — depois do cálculo, com aviso em toda resposta
@@ -117,7 +119,8 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio") e **margem venda a venda** | ✅ implementado e testado |
 | `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + dados sintéticos reprodutíveis | ✅ implementado e testado |
 | `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | ✅ implementado e testado |
-| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal** | ✅ implementado e testado |
+| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | ✅ implementado e testado |
+| `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | ✅ implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | ✅ implementado e testado |
 | `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | ✅ ingerido · ⚠️ **revisão humana pendente** (`revisado: false`) |
 | `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | ✅ implementado e testado |
@@ -127,7 +130,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | ⬜ roadmap — mesma interface `Conector` |
 | Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | ⬜ roadmap — mesma interface `Conector` |
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | ✅ implementado e testado |
-| `app.py` — dashboard Streamlit com 5 abas | ✅ implementado (sem teste automatizado de UI) |
+| `app.py` — dashboard Streamlit com 6 abas (incl. 🚀 Crescimento) | ✅ implementado (sem teste automatizado de UI) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | ⬜ roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | ⬜ roadmap (depende de ICMS/ISS estaduais/municipais) |
 | RBT12 móvel mês a mês nas séries | ⬜ roadmap |

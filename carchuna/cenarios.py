@@ -252,6 +252,46 @@ class CenarioMigracaoCanal(Cenario):
         return novas, config, tabela
 
 
+class CenarioCrescimentoCanal(Cenario):
+    """Vendas de um canal crescem ``fracao`` (ex.: +20% na loja própria).
+
+    A pergunta de crescimento: "se eu vender X% a mais no canal Y,
+    quanto sobra?". Determinístico e transparente: replica vendas
+    existentes do canal (em ordem de data) até somar a fração pedida do
+    valor bruto — o crescimento herda o mix real de produtos, custos e
+    prazos do canal, em vez de inventar vendas médias. Premissa, não
+    previsão: a demanda extra é hipótese do usuário.
+    """
+
+    def __init__(self, canal: str = "loja_propria", fracao: Decimal = Decimal("0.20")):
+        if not Decimal("0") < fracao <= Decimal("1"):
+            raise ValueError(f"`fracao` deve estar em (0, 1], recebeu {fracao}.")
+        self.canal = canal
+        self.fracao = fracao
+
+    @property
+    def nome(self) -> str:
+        pct = (self.fracao * 100).quantize(Decimal("1"))
+        return f"Vender {pct}% a mais em {self.canal}"
+
+    def transformar(self, transacoes, config, tabela) -> _Entradas:
+        do_canal = sorted(
+            (t for t in transacoes if t.canal == self.canal and not t.devolvida),
+            key=lambda t: (t.data, t.valor_bruto),
+        )
+        if not do_canal:
+            raise ValueError(f"não há vendas efetivas no canal {self.canal!r}.")
+        alvo = sum((t.valor_bruto for t in do_canal), Decimal("0")) * self.fracao
+        extras: list[Transacao] = []
+        adicionado = Decimal("0")
+        for t in do_canal:
+            if adicionado >= alvo:
+                break
+            extras.append(t)
+            adicionado += t.valor_bruto
+        return list(transacoes) + extras, config, tabela
+
+
 CENARIOS_PADRAO: tuple[type[Cenario], ...] = (
     CenarioComissao,
     CenarioAntecipacao,

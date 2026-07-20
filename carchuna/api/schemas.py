@@ -144,3 +144,37 @@ class BuscaLegalResponse(BaseModel):
     dispositivos: list[DispositivoOut]
     resposta: str
     aviso: str
+
+
+class OportunidadeOut(BaseModel):
+    tipo: str
+    titulo: str
+    ganho_estimado_mensal: Dinheiro
+    explicacao: str
+    base_legal: list[DispositivoOut]
+    caminho_pratico: str
+    confianca: str
+    aviso: str
+
+
+class CrescimentoResponse(BaseModel):
+    oportunidades: list[OportunidadeOut]
+    aviso: str
+
+
+class PrecoAlvoRequest(BaseModel):
+    """Calculadora de preço: quanto cobrar para entregar a margem alvo."""
+
+    config: ConfigTributariaIn
+    tabela: TabelaCustosIn | None = None
+    custo_produto: Dinheiro
+    frete: Dinheiro = Decimal("0")
+    canal: Canal
+    margem_alvo: Dinheiro = Decimal("0.10")  # fração (0.10 = 10%)
+
+
+class PrecoAlvoResponse(BaseModel):
+    canal: str
+    preco_equilibrio: Dinheiro  # abaixo disso, prejuízo
+    preco_alvo: Dinheiro  # entrega a margem alvo
+    margem_alvo: Dinheiro

@@ -106,9 +106,24 @@ analise = AnalisadorMargem(
 decomposicao = analise.decomposicao
 serie = analise.serie
 
-aba_vendas, aba_margem, aba_cenarios, aba_diagnostico, aba_relatorio = st.tabs(
-    ["🛒 Vendas", "💧 Margem", "🌊 Cenários", "⚖️ Diagnóstico Legal", "📄 Relatório"]
+abas = st.tabs(
+    [
+        "🛒 Vendas",
+        "💧 Margem",
+        "🌊 Cenários",
+        "🚀 Crescimento",
+        "⚖️ Diagnóstico Legal",
+        "📄 Relatório",
+    ]
 )
+(
+    aba_vendas,
+    aba_margem,
+    aba_cenarios,
+    aba_crescimento,
+    aba_diagnostico,
+    aba_relatorio,
+) = abas
 
 # ---------------------------------------------------------------------------
 with aba_vendas:
@@ -215,6 +230,78 @@ with aba_cenarios:
             c1.metric("Margem no cenário", _brl(resultado.cenario.margem_liquida))
             c2.metric("Impacto (R$)", _brl(resultado.impacto_reais))
             c3.metric("Impacto (p.p.)", f"{resultado.impacto_pp:+.2f}")
+
+# ---------------------------------------------------------------------------
+with aba_crescimento:
+    from carchuna import CenarioCrescimentoCanal
+    from carchuna.crescimento import AVISO_CRESCIMENTO
+
+    st.caption(
+        "Como faturar mais — com números dos seus próprios dados, não com "
+        "promessa: onde cada real vendido rende mais, o preço certo por canal "
+        "e quanto cabe crescer dentro do Simples."
+    )
+    for oportunidade in analise.crescimento():
+        with st.container(border=True):
+            ganho = _brl(oportunidade.ganho_estimado_mensal)
+            st.markdown(
+                f"**{oportunidade.titulo}** — ~{ganho}/mês "
+                f"[{oportunidade.confianca} · {oportunidade.tipo}]"
+            )
+            st.write(oportunidade.explicacao)
+            for disp in oportunidade.base_legal:
+                st.markdown(
+                    f"- **{disp.lei}, {disp.artigo}** — {disp.resumo} "
+                    f"[[fonte oficial]({disp.fonte})]"
+                )
+            st.markdown(f"**Caminho prático:** {oportunidade.caminho_pratico}")
+
+    st.subheader("Simule vender mais em um canal")
+    col_c1, col_c2 = st.columns(2)
+    canal_cresc = col_c1.selectbox(
+        "Canal", sorted({t.canal for t in transacoes}), key="canal_cresc"
+    )
+    pct_cresc = col_c2.slider("Crescimento das vendas (%)", 5, 100, 20, 5)
+    try:
+        simulacao = analise.simular(
+            CenarioCrescimentoCanal(canal_cresc, Decimal(pct_cresc) / 100)
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Margem hoje", _brl(simulacao.base.margem_liquida))
+        c2.metric("Margem no cenário", _brl(simulacao.cenario.margem_liquida))
+        c3.metric("Ganho (R$)", _brl(simulacao.impacto_reais))
+    except ValueError as erro:
+        st.warning(str(erro))
+
+    st.subheader("Calculadora de preço (motor de margem invertido)")
+    col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+    calc_custo = col_p1.number_input("Custo do produto (R$)", 0.01, 100000.0, 40.0)
+    calc_frete = col_p2.number_input("Frete (R$)", 0.0, 10000.0, 10.0)
+    calc_canal = col_p3.selectbox(
+        "Canal de venda",
+        ["mercado_livre", "shopee", "amazon", "loja_propria", "fisico"],
+        key="calc_canal",
+    )
+    calc_margem = col_p4.number_input("Margem alvo (%)", 0.0, 60.0, 10.0, 1.0)
+    try:
+        equilibrio = analise.preco_sugerido(
+            Decimal(str(calc_custo)),
+            Decimal(str(calc_frete)),
+            calc_canal,
+            Decimal("0"),
+        )
+        alvo = analise.preco_sugerido(
+            Decimal(str(calc_custo)),
+            Decimal(str(calc_frete)),
+            calc_canal,
+            Decimal(str(calc_margem)) / 100,
+        )
+        col_r1, col_r2 = st.columns(2)
+        col_r1.metric("Preço de equilíbrio (margem zero)", _brl(equilibrio))
+        col_r2.metric(f"Preço para {calc_margem:.0f}% de margem", _brl(alvo))
+    except ValueError as erro:
+        st.error(str(erro))
+    st.caption(AVISO_CRESCIMENTO)
 
 # ---------------------------------------------------------------------------
 with aba_diagnostico:

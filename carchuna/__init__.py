@@ -14,6 +14,7 @@ from carchuna.cenarios import (
     Cenario,
     CenarioAntecipacao,
     CenarioComissao,
+    CenarioCrescimentoCanal,
     CenarioDevolucoesDobram,
     CenarioMigracaoCanal,
     CenarioMudancaAnexo,
@@ -24,6 +25,12 @@ from carchuna.cenarios import (
     cenario_migracao_canal,
     cenario_mudanca_anexo,
     rodar_cenarios_padrao,
+)
+from carchuna.crescimento import (
+    MotorCrescimento,
+    Oportunidade,
+    ParametrosCrescimento,
+    preco_para_margem,
 )
 from carchuna.dados import carregar_transacoes, transacoes_sinteticas
 from carchuna.diagnostico import (
@@ -62,6 +69,7 @@ __all__ = [
     "Cenario",
     "CenarioAntecipacao",
     "CenarioComissao",
+    "CenarioCrescimentoCanal",
     "CenarioDevolucoesDobram",
     "CenarioMigracaoCanal",
     "CenarioMudancaAnexo",
@@ -70,7 +78,10 @@ __all__ = [
     "Deducao",
     "FontePerda",
     "MargemVenda",
+    "MotorCrescimento",
     "MotorDiagnostico",
+    "Oportunidade",
+    "ParametrosCrescimento",
     "ParametrosDiagnostico",
     "RegraDeteccao",
     "ResultadoCenario",
@@ -90,6 +101,7 @@ __all__ = [
     "lucro_acumulado",
     "maior_queda_margem",
     "margem_mensal",
+    "preco_para_margem",
     "rodar_cenarios_padrao",
     "serie_margem_pct",
     "transacoes_sinteticas",

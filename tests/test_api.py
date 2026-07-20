@@ -91,6 +91,41 @@ def test_busca_legal_na_lingua_do_lojista(monkeypatch):
     assert "contador" in dados["aviso"]
 
 
+def test_crescimento_devolve_oportunidades_com_aviso():
+    corpo = {
+        "transacoes": [
+            VENDA_100,
+            {**VENDA_100, "canal": "loja_propria"},
+        ],
+        "config": CORPO["config"],
+    }
+    resposta = CLIENTE.post("/api/v1/crescimento", json=corpo)
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert "garantia" in dados["aviso"]
+    tipos = {o["tipo"] for o in dados["oportunidades"]}
+    assert "espaco_tributario" in tipos
+    assert "mix_canais" in tipos
+
+
+def test_preco_alvo_conferido_a_mao():
+    corpo = {
+        "config": CORPO["config"],
+        "custo_produto": "40",
+        "frete": "10",
+        "canal": "mercado_livre",
+        "margem_alvo": "0.10",
+    }
+    resposta = CLIENTE.post("/api/v1/preco-alvo", json=corpo)
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert dados["preco_equilibrio"] == "60.72"  # 50/0,8235
+    assert dados["preco_alvo"] == "69.11"  # 50/0,7235
+
+    impossivel = {**corpo, "margem_alvo": "0.95"}
+    assert CLIENTE.post("/api/v1/preco-alvo", json=impossivel).status_code == 422
+
+
 def test_entrada_invalida_vira_422_com_explicacao():
     corpo = {
         "transacoes": [VENDA_100],

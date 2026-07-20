@@ -62,6 +62,17 @@ for cenario in analise.cenarios():
         f"({cenario.impacto_pp:+.2f} p.p.)"
     )
 
+print("\n=== Crescimento: como faturar mais, com prova ===")
+for oportunidade in analise.crescimento():
+    print(f"\n[{oportunidade.tipo} · {oportunidade.confianca}] {oportunidade.titulo}")
+    print(f"  ganho estimado ~R$ {oportunidade.ganho_estimado_mensal:,.2f}/mês")
+    print(f"  {oportunidade.explicacao}")
+    print(f"  caminho: {oportunidade.caminho_pratico}")
+preco = analise.preco_sugerido(Decimal("40"), Decimal("10"), "mercado_livre")
+print(
+    f"\nCalculadora de preço: custo 40 + frete 10 no ML → R$ {preco} p/ 10% de margem"
+)
+
 print("\n=== Diagnóstico legal (a IA entra depois do cálculo) ===")
 achados = analise.diagnosticar()
 if not achados:
