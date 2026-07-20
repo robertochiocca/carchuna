@@ -111,7 +111,9 @@ As colunas (as 5 primeiras são obrigatórias):
 
 Pode usar vírgula nos valores (`129,90`) — a Carchuna entende o formato
 brasileiro. Salve como **CSV** (no Excel: *Salvar como → CSV UTF-8*) ou até
-como `.xlsx` mesmo.
+como `.xlsx` mesmo. **PDF** também funciona, desde que o arquivo traga uma
+tabela com essas mesmas colunas (é um suporte beta — se não funcionar com o
+seu relatório, exporte como CSV/Excel).
 
 **De onde tirar os dados?** Todo marketplace exporta relatório de vendas:
 - **Shopee**: Central do Vendedor → Meus Dados → Exportar relatório de pedidos;
@@ -124,8 +126,14 @@ exportação manual, que funciona para qualquer canal.)
 
 ### 2. Importe no app
 
-Na barra lateral esquerda, em **Dados**, clique em **Browse files** e escolha o
-seu arquivo. Pronto — todas as abas passam a usar as suas vendas.
+Na barra lateral esquerda, no passo **1 · Suas vendas**, clique em **Browse
+files** e escolha o seu arquivo. Pronto — todas as abas passam a usar as suas
+vendas.
+
+**Modo tempo real** (app rodando no seu computador): em *Acompanhar um
+arquivo em tempo real*, cole o caminho da sua planilha (ex.:
+`C:\vendas\maio.xlsx`) e ligue a chave. Toda vez que você salvar o arquivo
+no Excel, os números do painel se atualizam sozinhos em poucos segundos.
 
 ### 3. Configure a tributação (pergunte ao contador se tiver dúvida)
 

@@ -110,9 +110,11 @@ def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:
         linhas = _ler_json(source)
     elif extensao == "xlsx":
         linhas = _ler_xlsx(source)
+    elif extensao == "pdf":
+        linhas = _ler_pdf(source)
     else:
         raise ValueError(
-            f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx)."
+            f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx, pdf)."
         )
     transacoes = [_linha_para_transacao(linha, i) for i, linha in enumerate(linhas, 2)]
     if not transacoes:
@@ -166,6 +168,44 @@ def _ler_xlsx(source) -> list[dict]:
         for linha in linhas_iter
         if any(v not in (None, "") for v in linha)
     ]
+
+
+def _ler_pdf(source) -> list[dict]:
+    """Extrai vendas de um PDF que contenha uma TABELA com as colunas do modelo.
+
+    Suporte beta e honesto: PDF não é um formato de dados — cada relatório
+    tem um layout. Funciona quando o PDF traz uma tabela (com linhas de
+    grade) cujo cabeçalho usa os mesmos nomes de coluna do modelo da
+    Carchuna (``data, canal, valor_bruto...``). Para qualquer outro
+    layout, exporte como CSV/Excel — todo painel de marketplace oferece.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        raise ImportError(
+            "Importar .pdf requer `pdfplumber` (pip install pdfplumber) — "
+            "ou exporte o relatório como CSV/Excel."
+        ) from None
+    linhas: list[dict] = []
+    cabecalho: list[str] | None = None
+    with pdfplumber.open(source) as pdf:
+        for pagina in pdf.pages:
+            for tabela in pagina.extract_tables():
+                for bruta in tabela:
+                    celulas = [str(c or "").strip() for c in bruta]
+                    normalizadas = [c.lower() for c in celulas]
+                    if "data" in normalizadas and "canal" in normalizadas:
+                        cabecalho = normalizadas
+                        continue
+                    if cabecalho and any(celulas):
+                        linhas.append(dict(zip(cabecalho, celulas, strict=False)))
+    if cabecalho is None:
+        raise ValueError(
+            "Não encontrei no PDF uma tabela com as colunas do modelo "
+            "(data, canal, valor_bruto...). Exporte o relatório como "
+            "CSV/Excel ou use a planilha modelo do tutorial."
+        )
+    return linhas
 
 
 # ---------------------------------------------------------------------------

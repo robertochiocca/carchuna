@@ -38,6 +38,36 @@ from carchuna.rag.retrieval import AVISO_LEGAL
 
 st.set_page_config(page_title="Carchuna", layout="wide")
 
+# Tipografia dos números: serenos, tabulares, em água-clara — e métricas
+# como cartões uniformes, para a simetria entre as colunas.
+st.markdown(
+    """
+    <style>
+    [data-testid="stMetric"] {
+        background: rgba(10, 56, 64, 0.55);
+        border: 1px solid #134d57;
+        border-radius: 14px;
+        padding: 14px 18px;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: #9ff2e9;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
+    }
+    [data-testid="stMetricLabel"] { color: #87a9a8; }
+    [data-testid="stMetricDelta"] { font-size: 0.85rem; }
+    [data-testid="stTable"], [data-testid="stDataFrame"] {
+        font-variant-numeric: tabular-nums;
+    }
+    h1 { letter-spacing: -0.5px; }
+    h2, h3 { letter-spacing: -0.3px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 ROTULOS_EN = {
     "tributos": "Taxes (Simples/MEI)",
     "comissoes_canal": "Marketplace commissions",
@@ -85,13 +115,23 @@ T = {
         ),
         "nota_motor": "",
         "passo1": "1 · Suas vendas",
-        "upload": "Planilha de vendas (CSV, JSON ou Excel)",
+        "upload": "Planilha de vendas (CSV, Excel, JSON ou PDF)",
         "upload_ajuda": (
             "Uma linha por venda. Colunas: data, canal, valor_bruto, "
             "custo_produto, frete_pago (opcionais: produto, devolvida, "
             "prazo_recebimento_dias, comissao_cobrada). Há um modelo "
-            "pronto no tutorial do projeto."
+            "pronto no tutorial do projeto. PDF: funciona quando o "
+            "arquivo traz uma tabela com essas mesmas colunas."
         ),
+        "tempo_real": "Acompanhar um arquivo em tempo real",
+        "tempo_real_ajuda": (
+            "Aponte para um arquivo no SEU computador (funciona com o app "
+            "rodando localmente). Toda vez que você salvar a planilha, os "
+            "números daqui se atualizam sozinhos em alguns segundos."
+        ),
+        "caminho_arquivo": "Caminho do arquivo (ex.: C:\\vendas\\maio.xlsx)",
+        "monitorar": "Atualizar sozinho quando o arquivo mudar",
+        "monitorando": "Acompanhando o arquivo — salve a planilha e veja aqui.",
         "importadas": "vendas importadas.",
         "falha_importacao": "Não consegui ler o arquivo:",
         "meses_demo": "Meses de dados de exemplo",
@@ -281,12 +321,22 @@ T = {
             "is bilingual."
         ),
         "passo1": "1 · Your sales",
-        "upload": "Sales spreadsheet (CSV, JSON or Excel)",
+        "upload": "Sales spreadsheet (CSV, Excel, JSON or PDF)",
         "upload_ajuda": (
             "One row per sale. Columns: data, canal, valor_bruto, "
             "custo_produto, frete_pago (optional: produto, devolvida, "
-            "prazo_recebimento_dias, comissao_cobrada)."
+            "prazo_recebimento_dias, comissao_cobrada). PDF works when "
+            "the file contains a table with these same columns."
         ),
+        "tempo_real": "Watch a file in real time",
+        "tempo_real_ajuda": (
+            "Point to a file on YOUR computer (works with the app running "
+            "locally). Every time you save the spreadsheet, the numbers "
+            "here refresh by themselves within seconds."
+        ),
+        "caminho_arquivo": "File path (e.g.: C:\\sales\\may.xlsx)",
+        "monitorar": "Refresh automatically when the file changes",
+        "monitorando": "Watching the file — save the spreadsheet and see it here.",
         "importadas": "sales imported.",
         "falha_importacao": "Could not read the file:",
         "meses_demo": "Months of sample data",
@@ -488,13 +538,29 @@ if t["nota_motor"]:
 with st.sidebar:
     st.header(t["passo1"])
     upload = st.file_uploader(
-        t["upload"], type=["csv", "json", "xlsx"], help=t["upload_ajuda"]
+        t["upload"], type=["csv", "json", "xlsx", "pdf"], help=t["upload_ajuda"]
     )
+    caminho_arquivo = ""
+    monitorar = False
+    with st.expander(t["tempo_real"]):
+        caminho_arquivo = st.text_input(
+            t["caminho_arquivo"], help=t["tempo_real_ajuda"]
+        ).strip()
+        monitorar = st.toggle(t["monitorar"], value=bool(caminho_arquivo))
     if upload is not None:
         try:
             transacoes = carregar_transacoes(upload, name=upload.name)
             st.success(f"{len(transacoes)} {t['importadas']}")
         except (ValueError, TypeError) as erro:
+            st.error(f"{t['falha_importacao']} {erro}")
+            st.stop()
+    elif caminho_arquivo:
+        try:
+            transacoes = carregar_transacoes(caminho_arquivo)
+            st.success(f"{len(transacoes)} {t['importadas']}")
+            if monitorar:
+                st.info(t["monitorando"])
+        except (ValueError, TypeError, OSError, ImportError) as erro:
             st.error(f"{t['falha_importacao']} {erro}")
             st.stop()
     else:
@@ -544,8 +610,26 @@ with st.sidebar:
         format_func=lambda a: ATIVIDADES[lang][a],
     )
 
-if upload is None:
+if upload is None and not caminho_arquivo:
     st.warning(t["aviso_demo"])
+
+if monitorar and caminho_arquivo:
+    # Vigia o arquivo apontado: quando o mtime muda (a pessoa salvou a
+    # planilha), dispara um rerun completo — os números se atualizam
+    # sozinhos. Roda como fragment para custar quase nada entre reruns.
+    @st.fragment(run_every="3s")
+    def _vigiar_arquivo():
+        from pathlib import Path
+
+        try:
+            mtime = Path(caminho_arquivo).stat().st_mtime
+        except OSError:
+            return
+        if st.session_state.get("_mtime_arquivo") != mtime:
+            st.session_state["_mtime_arquivo"] = mtime
+            st.rerun(scope="app")
+
+    _vigiar_arquivo()
 
 # A fachada OO reúne os motores; resultados caros ficam em cache.
 analise = AnalisadorMargem(

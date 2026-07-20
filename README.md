@@ -33,7 +33,9 @@ A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot
 ## O fluxo do produto
 
 ```
-1. Importação      CSV / JSON / XLSX de vendas (conectores de API no roadmap)
+1. Importação      CSV / Excel / JSON / PDF de vendas, com modo de
+                   acompanhamento em tempo real no app local
+                   (conectores de API no roadmap)
         ↓
 2. Reconstrução    receita → impostos → marketplace → adquirência →
    da margem       antecipação → frete → devoluções → CMV → margem real
@@ -119,7 +121,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 |---|---|
 | `margem.py` — decomposição com alíquota efetiva do Simples (LC 123/2006, art. 18, § 1º-A; Anexos I–V) | pronto — implementado e testado |
 | `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio"), **margem venda a venda** e **margem por produto** (campeões e vilões do catálogo) | pronto — implementado e testado |
-| `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + dados sintéticos reprodutíveis | pronto — implementado e testado |
+| `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + **PDF com tabela no layout do modelo** (beta) + dados sintéticos reprodutíveis | pronto — implementado e testado |
 | `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | pronto — implementado e testado |
 | `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
