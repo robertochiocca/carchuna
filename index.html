@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carchuna — Inteligência de margem para o PME brasileiro</title>
-<meta name="description" content="Carchuna — projeto de portfólio: inteligência de margem verificável para PMEs brasileiras. Decompõe onde o lucro morre, com cálculo testado e base legal citada.">
+<meta name="description" content="Carchuna — projeto de portfólio: inteligência de margem verificável para PMEs brasileiras. Decompõe onde o lucro morre, com cálculo testado e base legal citada. / Verifiable margin intelligence for Brazilian SMBs.">
 <meta name="author" content="Roberto Chiocca">
 <meta property="og:title" content="Carchuna — o raio-X da margem">
 <meta property="og:description" content="Você fatura 400; a Carchuna mostra, com prova, por que sobra 8. Fintech + legaltech, projeto de portfólio.">
@@ -35,6 +35,11 @@ a{color:var(--agua-suave)}
 code,.mono{font-family:'IBM Plex Mono',monospace}
 ::selection{background:var(--agua);color:var(--abismo)}
 
+/* idioma: PT é o padrão; html[data-lang="en"] alterna os pares de texto */
+[lang-en]{display:none}
+html[data-lang="en"] [lang-pt]{display:none}
+html[data-lang="en"] [lang-en]{display:revert}
+
 nav{display:flex;justify-content:space-between;align-items:center;gap:16px;
   padding:16px 6vw;position:sticky;top:0;background:rgba(4,30,35,.9);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--linha);z-index:10;flex-wrap:wrap}
@@ -45,6 +50,12 @@ nav{display:flex;justify-content:space-between;align-items:center;gap:16px;
 .nav-links a{color:var(--dim);text-decoration:none;font-size:.9rem;
   letter-spacing:.02em;transition:color .2s}
 .nav-links a:hover{color:var(--agua-suave)}
+.nav-right{display:flex;gap:12px;align-items:center}
+.lang-toggle{display:flex;border:1px solid var(--linha);border-radius:999px;overflow:hidden}
+.lang-btn{background:none;border:none;color:var(--dim);padding:7px 13px;
+  font-size:.8rem;font-family:'IBM Plex Mono',monospace;cursor:pointer;
+  transition:background .2s,color .2s}
+.lang-btn.ativo{background:var(--agua);color:var(--abismo);font-weight:600}
 .nav-pill{background:var(--agua);color:var(--abismo);font-weight:600;
   text-decoration:none;padding:9px 18px;border-radius:999px;font-size:.88rem;
   transition:transform .15s,box-shadow .15s}
@@ -163,32 +174,50 @@ footer a:hover{color:var(--agua-suave)}
 <nav>
   <a class="nav-logo" href="#">Car<span class="dot">.</span>chuna</a>
   <div class="nav-links">
-    <a href="#raiox">O raio-X</a>
+    <a href="#raiox"><span lang-pt>O raio-X</span><span lang-en>The X-ray</span></a>
     <a href="#demo">Demo</a>
-    <a href="#fluxo">Como funciona</a>
-    <a href="#nome">O nome</a>
-    <a href="#honesto">Honestidade</a>
+    <a href="#fluxo"><span lang-pt>Como funciona</span><span lang-en>How it works</span></a>
+    <a href="#nome"><span lang-pt>O nome</span><span lang-en>The name</span></a>
+    <a href="#honesto"><span lang-pt>Honestidade</span><span lang-en>Honesty</span></a>
   </div>
-  <a class="nav-pill" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">GitHub</a>
+  <div class="nav-right">
+    <div class="lang-toggle">
+      <button class="lang-btn ativo" id="btn-pt" onclick="setLang('pt')">PT</button>
+      <button class="lang-btn" id="btn-en" onclick="setLang('en')">EN</button>
+    </div>
+    <a class="nav-pill" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">GitHub</a>
+  </div>
 </nav>
 
 <header class="hero">
-  <div class="hero-badge"><div class="hero-badge-dot"></div>Carchuna · Projeto de portfólio · Fintech + Legaltech · Python</div>
-  <h1>Você fatura 400.<br>Sobra 8. A <span class="acc">Carchuna</span><br><span class="dim">mostra por quê — com prova.</span></h1>
-  <p>Inteligência de margem <strong>verificável</strong> para o PME brasileiro que vende em
+  <div class="hero-badge"><div class="hero-badge-dot"></div>
+    <span lang-pt>Carchuna · Projeto de portfólio · Fintech + Legaltech · Python</span>
+    <span lang-en>Carchuna · Portfolio project · Fintech + Legaltech · Python</span>
+  </div>
+  <h1>
+    <span lang-pt>Você fatura 400.<br>Sobra 8. A <span class="acc">Carchuna</span><br><span class="dim">mostra por quê — com prova.</span></span>
+    <span lang-en>You bill 400.<br>8 is left. <span class="acc">Carchuna</span><br><span class="dim">shows why — with proof.</span></span>
+  </h1>
+  <p>
+    <span lang-pt>Inteligência de margem <strong>verificável</strong> para o PME brasileiro que vende em
      marketplace, usa maquininha e está no Simples Nacional. Todo número é
      <strong>calculado por código testado</strong>; toda base legal é
-     <strong>citada de fonte oficial</strong>. A IA entra depois do cálculo, nunca antes.</p>
+     <strong>citada de fonte oficial</strong>. A IA entra depois do cálculo, nunca antes.</span>
+    <span lang-en><strong>Verifiable</strong> margin intelligence for Brazilian SMBs selling on
+     marketplaces, using card machines, taxed under Simples Nacional. Every number is
+     <strong>computed by tested code</strong>; every legal claim is
+     <strong>cited from an official source</strong>. AI comes after the math, never before.</span>
+  </p>
   <div class="btns">
-    <a class="btn btn-primary" href="#demo">Calcular uma venda nesta página</a>
-    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna/blob/main/TUTORIAL.md" target="_blank" rel="noopener">Tutorial do zero</a>
-    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">Código no GitHub</a>
+    <a class="btn btn-primary" href="#demo"><span lang-pt>Calcular uma venda nesta página</span><span lang-en>Decompose a sale on this page</span></a>
+    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna/blob/main/TUTORIAL.md" target="_blank" rel="noopener"><span lang-pt>Tutorial do zero</span><span lang-en>Beginner tutorial</span></a>
+    <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener"><span lang-pt>Código no GitHub</span><span lang-en>Code on GitHub</span></a>
   </div>
   <div class="hero-metricas">
-    <div class="m"><b>94</b><span>testes, todos verdes</span></div>
-    <div class="m"><b>97%</b><span>cobertura de código</span></div>
-    <div class="m"><b>21</b><span>dispositivos legais citados</span></div>
-    <div class="m"><b>0</b><span>floats em campo de dinheiro</span></div>
+    <div class="m"><b>94</b><span lang-pt>testes, todos verdes</span><span lang-en>tests, all green</span></div>
+    <div class="m"><b>97%</b><span lang-pt>cobertura de código</span><span lang-en>code coverage</span></div>
+    <div class="m"><b>21</b><span lang-pt>dispositivos legais citados</span><span lang-en>cited legal provisions</span></div>
+    <div class="m"><b>0</b><span lang-pt>floats em campo de dinheiro</span><span lang-en>floats in money fields</span></div>
   </div>
 </header>
 
@@ -198,118 +227,163 @@ footer a:hover{color:var(--agua-suave)}
 </svg>
 
 <section id="raiox">
-  <span class="kicker">01 — a conta real</span>
-  <h2>O raio-X de uma venda de R$ 100</h2>
-  <p class="sub">A conta que o lojista faz é "100 − 40 de custo = 60 de lucro". A conta real,
-     dedução a dedução — cada linha com fonte (lei, contrato ou tabela editável):</p>
+  <span class="kicker"><span lang-pt>01 — a conta real</span><span lang-en>01 — the real math</span></span>
+  <h2><span lang-pt>O raio-X de uma venda de R$ 100</span><span lang-en>The X-ray of a R$ 100 sale</span></h2>
+  <p class="sub">
+    <span lang-pt>A conta que o lojista faz é "100 − 40 de custo = 60 de lucro". A conta real,
+     dedução a dedução — cada linha com fonte (lei, contrato ou tabela editável):</span>
+    <span lang-en>The seller's mental math is "100 − 40 cost = 60 profit". The real math,
+     deduction by deduction — each line with a source (law, contract or editable table):</span>
+  </p>
   <div class="tabela-raio">
     <table>
-      <tr><td>Receita bruta</td><td>R$ 100,00</td></tr>
-      <tr class="neg"><td>(−) Tributos — Simples, alíquota efetiva 5,65%*</td><td>R$ 5,65</td></tr>
-      <tr class="neg"><td>(−) Comissão do marketplace (12%)</td><td>R$ 12,00</td></tr>
-      <tr class="neg"><td>(−) Frete</td><td>R$ 10,00</td></tr>
-      <tr class="neg"><td>(−) Custo do produto (CMV)</td><td>R$ 40,00</td></tr>
-      <tr class="total"><td>(=) Margem líquida real — 32,35%, não 60%</td><td>R$ 32,35</td></tr>
+      <tr><td><span lang-pt>Receita bruta</span><span lang-en>Gross revenue</span></td><td>R$ 100,00</td></tr>
+      <tr class="neg"><td><span lang-pt>(−) Tributos — Simples, alíquota efetiva 5,65%*</span><span lang-en>(−) Taxes — Simples, 5.65% effective rate*</span></td><td>R$ 5,65</td></tr>
+      <tr class="neg"><td><span lang-pt>(−) Comissão do marketplace (12%)</span><span lang-en>(−) Marketplace commission (12%)</span></td><td>R$ 12,00</td></tr>
+      <tr class="neg"><td><span lang-pt>(−) Frete</span><span lang-en>(−) Shipping</span></td><td>R$ 10,00</td></tr>
+      <tr class="neg"><td><span lang-pt>(−) Custo do produto (CMV)</span><span lang-en>(−) Product cost (COGS)</span></td><td>R$ 40,00</td></tr>
+      <tr class="total"><td><span lang-pt>(=) Margem líquida real — 32,35%, não 60%</span><span lang-en>(=) Real net margin — 32.35%, not 60%</span></td><td>R$ 32,35</td></tr>
     </table>
   </div>
-  <p class="nota">* LC 123/2006, art. 18, § 1º-A: alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12.
-     Caso conferido à mão nos testes do repositório.</p>
+  <p class="nota">
+    <span lang-pt>* LC 123/2006, art. 18, § 1º-A: alíquota efetiva = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12.
+     Caso conferido à mão nos testes do repositório.</span>
+    <span lang-en>* Law LC 123/2006, art. 18, § 1º-A: effective rate = (RBT12 × nominal rate − deductible share) ÷ RBT12.
+     Hand-checked case in the repository's tests.</span>
+  </p>
 </section>
 
 <section id="demo">
-  <span class="kicker">02 — experimente</span>
-  <h2>Decomponha uma venda agora</h2>
-  <p class="sub">Mesma lógica do motor Python, reimplementada em JavaScript só para esta página —
-     o cálculo de verdade (e testado) vive no <a href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">repositório</a>.</p>
+  <span class="kicker"><span lang-pt>02 — experimente</span><span lang-en>02 — try it</span></span>
+  <h2><span lang-pt>Decomponha uma venda agora</span><span lang-en>Decompose a sale now</span></h2>
+  <p class="sub">
+    <span lang-pt>Mesma lógica do motor Python, reimplementada em JavaScript só para esta página —
+     o cálculo de verdade (e testado) vive no <a href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">repositório</a>.</span>
+    <span lang-en>Same logic as the Python engine, reimplemented in JavaScript just for this page —
+     the real (and tested) calculation lives in the <a href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener">repository</a>.</span>
+  </p>
   <div class="demo-caixa">
     <div>
-      <label>Preço de venda (R$)</label><input id="d-preco" type="number" value="100" min="1" step="1">
-      <label>Custo do produto (R$)</label><input id="d-custo" type="number" value="40" min="0" step="1">
-      <label>Frete pago (R$)</label><input id="d-frete" type="number" value="10" min="0" step="1">
-      <label>Canal de venda</label>
+      <label><span lang-pt>Preço de venda (R$)</span><span lang-en>Sale price (R$)</span></label>
+      <input id="d-preco" type="number" value="100" min="1" step="1">
+      <label><span lang-pt>Custo do produto (R$)</span><span lang-en>Product cost (R$)</span></label>
+      <input id="d-custo" type="number" value="40" min="0" step="1">
+      <label><span lang-pt>Frete pago (R$)</span><span lang-en>Shipping paid (R$)</span></label>
+      <input id="d-frete" type="number" value="10" min="0" step="1">
+      <label><span lang-pt>Canal de venda</span><span lang-en>Sales channel</span></label>
       <select id="d-canal">
         <option value="0.12" selected>Mercado Livre (~12%)</option>
         <option value="0.14">Shopee (~14%)</option>
         <option value="0.15">Amazon (~15%)</option>
-        <option value="0">Loja própria / físico (0%)</option>
+        <option value="0" data-pt="Loja própria / físico (0%)" data-en="Own store / brick-and-mortar (0%)">Loja própria / físico (0%)</option>
       </select>
-      <label>Anexo do Simples</label>
+      <label><span lang-pt>Anexo do Simples</span><span lang-en>Simples annex</span></label>
       <select id="d-anexo">
-        <option value="I" selected>Anexo I — Comércio</option>
-        <option value="II">Anexo II — Indústria</option>
-        <option value="III">Anexo III — Serviços</option>
+        <option value="I" selected data-pt="Anexo I — Comércio" data-en="Annex I — Commerce">Anexo I — Comércio</option>
+        <option value="II" data-pt="Anexo II — Indústria" data-en="Annex II — Industry">Anexo II — Indústria</option>
+        <option value="III" data-pt="Anexo III — Serviços" data-en="Annex III — Services">Anexo III — Serviços</option>
       </select>
-      <label>Faturamento 12 meses (RBT12, R$)</label>
+      <label><span lang-pt>Faturamento 12 meses (RBT12, R$)</span><span lang-en>12-month revenue (RBT12, R$)</span></label>
       <input id="d-rbt12" type="number" value="360000" min="1000" step="10000">
     </div>
     <div>
       <div id="d-barras"></div>
       <div id="demo-frase"></div>
-      <p class="nota">Comissões são as das tabelas públicas dos canais (editáveis no app).
-         Informação geral, não aconselhamento contábil — confirme com seu contador.</p>
+      <p class="nota">
+        <span lang-pt>Comissões são as das tabelas públicas dos canais (editáveis no app).
+         Informação geral, não aconselhamento contábil — confirme com seu contador.</span>
+        <span lang-en>Commissions follow the channels' public fee tables (editable in the app).
+         General information, not accounting advice — confirm with your accountant.</span>
+      </p>
     </div>
   </div>
 </section>
 
 <section id="fluxo">
-  <span class="kicker">03 — o método</span>
-  <h2>Como funciona</h2>
-  <p class="sub">O fluxo do produto — determinístico primeiro, IA por último:</p>
+  <span class="kicker"><span lang-pt>03 — o método</span><span lang-en>03 — the method</span></span>
+  <h2><span lang-pt>Como funciona</span><span lang-en>How it works</span></h2>
+  <p class="sub"><span lang-pt>O fluxo do produto — determinístico primeiro, IA por último:</span><span lang-en>The product flow — deterministic first, AI last:</span></p>
   <div class="grid">
-    <div class="card"><span class="n">1 / IMPORTAÇÃO</span><h3>Suas vendas entram</h3>
-      <p>CSV, JSON ou Excel exportado do painel do marketplace. Conectores de API (Shopee, Mercado Livre) no roadmap — mesma interface, nada muda acima.</p></div>
-    <div class="card"><span class="n">2 / RECONSTRUÇÃO</span><h3>Margem real, venda a venda</h3>
-      <p>Receita, tributos, marketplace, adquirência, antecipação, frete, devoluções, CMV. Em <code>Decimal</code>, nunca float; invariante contábil testado.</p></div>
-    <div class="card"><span class="n">3 / DIAGNÓSTICO</span><h3>Quanto se perdeu, e onde</h3>
-      <p>"R$ 833 mil de margem se perderam; 35% veio de comissões de canal." Quatro regras transparentes detectam vazamentos — sem caixa preta.</p></div>
-    <div class="card"><span class="n">4 / SIMULAÇÃO E CRESCIMENTO</span><h3>E se…? E como faturar mais?</h3>
-      <p>Comissão +2 p.p., devoluções dobram, migrar ou crescer 20% num canal — o mesmo motor recalcula. E o motor invertido responde: onde cada real rende mais, o preço para a margem alvo e quanto cabe crescer dentro do Simples.</p></div>
-    <div class="card"><span class="n">5 / EXPLICAÇÃO</span><h3>Base legal citada</h3>
-      <p>LC 123, CTN, CDC, normas do Bacen — recuperadas por busca com sinônimos do lojista, com link oficial e aviso em toda resposta. LLM opcional: sem chave, tudo funciona.</p></div>
+    <div class="card"><span class="n"><span lang-pt>1 / IMPORTAÇÃO</span><span lang-en>1 / IMPORT</span></span>
+      <h3><span lang-pt>Suas vendas entram</span><span lang-en>Your sales come in</span></h3>
+      <p><span lang-pt>CSV, JSON ou Excel exportado do painel do marketplace. Conectores de API (Shopee, Mercado Livre) no roadmap — mesma interface, nada muda acima.</span>
+         <span lang-en>CSV, JSON or Excel exported from the marketplace dashboard. API connectors (Shopee, Mercado Livre) on the roadmap — same interface, nothing above changes.</span></p></div>
+    <div class="card"><span class="n"><span lang-pt>2 / RECONSTRUÇÃO</span><span lang-en>2 / REBUILD</span></span>
+      <h3><span lang-pt>Margem real, venda a venda</span><span lang-en>Real margin, sale by sale</span></h3>
+      <p><span lang-pt>Receita, tributos, marketplace, adquirência, antecipação, frete, devoluções, CMV. Em <code>Decimal</code>, nunca float; invariante contábil testado.</span>
+         <span lang-en>Revenue, taxes, marketplace, card acquiring, prepayment, shipping, returns, COGS. In <code>Decimal</code>, never float; accounting invariant under test.</span></p></div>
+    <div class="card"><span class="n"><span lang-pt>3 / DIAGNÓSTICO</span><span lang-en>3 / DIAGNOSIS</span></span>
+      <h3><span lang-pt>Quanto se perdeu, e onde</span><span lang-en>How much was lost, and where</span></h3>
+      <p><span lang-pt>"R$ 833 mil de margem se perderam; 35% veio de comissões de canal." Quatro regras transparentes detectam vazamentos — sem caixa preta.</span>
+         <span lang-en>"R$ 833k of margin was lost; 35% came from channel commissions." Four transparent rules detect leaks — no black box.</span></p></div>
+    <div class="card"><span class="n"><span lang-pt>4 / SIMULAÇÃO E CRESCIMENTO</span><span lang-en>4 / SIMULATION & GROWTH</span></span>
+      <h3><span lang-pt>E se…? E como faturar mais?</span><span lang-en>What if…? And how to bill more?</span></h3>
+      <p><span lang-pt>Comissão +2 p.p., devoluções dobram, migrar ou crescer 20% num canal — o mesmo motor recalcula. E o motor invertido responde: onde cada real rende mais, o preço para a margem alvo e quanto cabe crescer dentro do Simples.</span>
+         <span lang-en>Commission +2 p.p., returns double, migrate or grow 20% in a channel — the same engine recalculates. And the inverted engine answers: where each real earns the most, the price for a target margin and how much room you have inside Simples.</span></p></div>
+    <div class="card"><span class="n"><span lang-pt>5 / EXPLICAÇÃO</span><span lang-en>5 / EXPLANATION</span></span>
+      <h3><span lang-pt>Base legal citada</span><span lang-en>Cited legal basis</span></h3>
+      <p><span lang-pt>LC 123, CTN, CDC, normas do Bacen — recuperadas por busca com sinônimos do lojista, com link oficial e aviso em toda resposta. LLM opcional: sem chave, tudo funciona.</span>
+         <span lang-en>LC 123, tax code, consumer code, Central Bank rules — retrieved with seller-vocabulary synonyms, with official links and a disclaimer in every answer. Optional LLM: no key, everything still works.</span></p></div>
   </div>
 </section>
 
 <section id="nome">
-  <span class="kicker">04 — a origem</span>
-  <h2>Por que "Carchuna"?</h2>
+  <span class="kicker"><span lang-pt>04 — a origem</span><span lang-en>04 — the origin</span></span>
+  <h2><span lang-pt>Por que "Carchuna"?</span><span lang-en>Why "Carchuna"?</span></h2>
   <div class="nome-caixa">
-    <p>Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha
+    <p><span lang-pt>Os projetos desta trilogia carregam nomes da costa da Andaluzia, de onde a minha
        família veio. O primeiro foi a <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">Calahonda</a>,
-       batizada em homenagem a essa origem.</p>
-    <p><em>Carchuna</em> continua a tradição — com uma coincidência que parece proposital:
+       batizada em homenagem a essa origem.</span>
+       <span lang-en>The projects in this trilogy carry names from the Andalusian coast my family
+       came from. The first was <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">Calahonda</a>,
+       named in honor of that origin.</span></p>
+    <p><span lang-pt><em>Carchuna</em> continua a tradição — com uma coincidência que parece proposital:
        na costa de Granada, a praia de Carchuna fica colada em outra praia chamada…
        <em>Calahonda</em>. Os dois nomes são vizinhos no mesmo litoral, como os dois projetos
        são vizinhos no mesmo portfólio: motores irmãos, um para quem investe, outro para quem vende.
        Até as cores conversam: o verde-lima elétrico da Calahonda e o água-turquesa da Carchuna,
-       lado a lado como as duas praias.</p>
-    <p>E o nome também é a tese do produto: as águas de Carchuna são transparentes a ponto
+       lado a lado como as duas praias.</span>
+       <span lang-en><em>Carchuna</em> continues the tradition — with a coincidence that feels deliberate:
+       on the Granada coast, Carchuna beach sits right next to another beach called…
+       <em>Calahonda</em>. The two names are neighbors on the same shore, just as the two projects
+       are neighbors in the same portfolio: sibling engines, one for investors, one for sellers.
+       Even the colors talk to each other: Calahonda's electric lime and Carchuna's aqua turquoise,
+       side by side like the two beaches.</span></p>
+    <p><span lang-pt>E o nome também é a tese do produto: as águas de Carchuna são transparentes a ponto
        de se ver o fundo. É o que a plataforma faz com a margem do PME —
-       <em>água clara, fundo visível, nenhum número sem prova</em>.</p>
+       <em>água clara, fundo visível, nenhum número sem prova</em>.</span>
+       <span lang-en>The name is also the product thesis: Carchuna's waters are so clear you can see
+       the bottom. That is what the platform does to an SMB's margin —
+       <em>clear water, visible bottom, no number without proof</em>.</span></p>
     <div class="gemas">
       <a class="gema" href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener"><span class="g-dot g-lima"></span>Calahonda — quant</a>
       <a class="gema" href="https://github.com/robertochiocca/direitoaberto" target="_blank" rel="noopener"><span class="g-dot g-gelo"></span>DireitoAberto — legal</a>
-      <span class="gema"><span class="g-dot g-agua"></span>Carchuna — margem</span>
+      <span class="gema"><span class="g-dot g-agua"></span><span lang-pt>Carchuna — margem</span><span lang-en>Carchuna — margin</span></span>
     </div>
   </div>
 </section>
 
 <section id="honesto">
-  <span class="kicker">05 — sem promessa vazia</span>
-  <h2>Honestidade técnica</h2>
-  <p class="sub">Padrão da trilogia: separar com clareza o que existe do que é plano.</p>
+  <span class="kicker"><span lang-pt>05 — sem promessa vazia</span><span lang-en>05 — no empty promises</span></span>
+  <h2><span lang-pt>Honestidade técnica</span><span lang-en>Technical honesty</span></h2>
+  <p class="sub"><span lang-pt>Padrão da trilogia: separar com clareza o que existe do que é plano.</span><span lang-en>The trilogy's standard: clearly separating what exists from what is a plan.</span></p>
   <div class="grid">
-    <div class="card"><h3>Implementado e testado</h3>
-      <p>Motor de margem (Simples/MEI), margem por venda, métricas, 6 cenários, motor de crescimento (mix de canais, calculadora de preço, espaço no Simples), diagnóstico com base legal, corpus com 21 dispositivos, dashboard, PDF, API FastAPI. 94 testes, 97% de cobertura, CI em 3 versões de Python.</p></div>
-    <div class="card"><h3>Roadmap explícito</h3>
-      <p>Lucro Presumido, conectores de API (Shopee/ML), Open Finance via agregador, MCP server, busca semântica, autenticação e banco na API. Nada disso é prometido como pronto.</p></div>
-    <div class="card"><h3>Fora de escopo</h3>
-      <p>Não é ERP, não emite nota, não dá parecer jurídico, não promete recuperação tributária, não guarda senha de banco ou marketplace. Conceito de portfólio — não é uma empresa.</p></div>
+    <div class="card"><h3><span lang-pt>Implementado e testado</span><span lang-en>Implemented and tested</span></h3>
+      <p><span lang-pt>Motor de margem (Simples/MEI), margem por venda, métricas, 6 cenários, motor de crescimento (mix de canais, calculadora de preço, espaço no Simples), diagnóstico com base legal, corpus com 21 dispositivos, dashboard, PDF, API FastAPI. 94 testes, 97% de cobertura, CI em 3 versões de Python.</span>
+         <span lang-en>Margin engine (Simples/MEI), per-sale margin, metrics, 6 scenarios, growth engine (channel mix, price calculator, Simples headroom), diagnosis with cited legal basis, 21-provision corpus, dashboard, PDF, FastAPI. 94 tests, 97% coverage, CI on 3 Python versions.</span></p></div>
+    <div class="card"><h3><span lang-pt>Roadmap explícito</span><span lang-en>Explicit roadmap</span></h3>
+      <p><span lang-pt>Lucro Presumido, conectores de API (Shopee/ML), Open Finance via agregador, MCP server, busca semântica, autenticação e banco na API. Nada disso é prometido como pronto.</span>
+         <span lang-en>Presumed-profit regime, API connectors (Shopee/ML), Open Finance via aggregator, MCP server, semantic search, API auth and database. None of it is promised as done.</span></p></div>
+    <div class="card"><h3><span lang-pt>Fora de escopo</span><span lang-en>Out of scope</span></h3>
+      <p><span lang-pt>Não é ERP, não emite nota, não dá parecer jurídico, não promete recuperação tributária, não guarda senha de banco ou marketplace. Conceito de portfólio — não é uma empresa.</span>
+         <span lang-en>Not an ERP, issues no invoices, gives no legal opinion, promises no tax recovery, stores no bank or marketplace passwords. A portfolio concept — not a company.</span></p></div>
   </div>
 </section>
 </main>
 
 <footer>
-  <div>MIT © 2026 <a href="https://github.com/robertochiocca" target="_blank" rel="noopener">Roberto Chiocca</a> · projeto de portfólio, não é aconselhamento jurídico/contábil</div>
+  <div><span lang-pt>MIT © 2026 <a href="https://github.com/robertochiocca" target="_blank" rel="noopener">Roberto Chiocca</a> · projeto de portfólio, não é aconselhamento jurídico/contábil</span>
+       <span lang-en>MIT © 2026 <a href="https://github.com/robertochiocca" target="_blank" rel="noopener">Roberto Chiocca</a> · portfolio project, not legal or accounting advice</span></div>
   <div>
     <a href="https://github.com/robertochiocca/calahonda" target="_blank" rel="noopener">Calahonda</a> ·
     <a href="https://github.com/robertochiocca/direitoaberto" target="_blank" rel="noopener">DireitoAberto</a> ·
@@ -330,7 +404,48 @@ const ANEXOS = {
 };
 // alíquota nominal em pontos-base (400 = 4,00%); PD em centavos.
 
-const brl = c => (c / 100).toLocaleString("pt-BR", {style: "currency", currency: "BRL"});
+const TEXTOS = {
+  pt: {
+    receita: "Receita bruta", tributos: "Tributos (Simples)",
+    comissao: "Comissão do canal", frete: "Frete", custo: "Custo do produto",
+    margem: "Margem líquida",
+    teto: "RBT12 acima do teto do Simples (R$ 4,8 milhões) — hipótese de exclusão do regime (LC 123/2006, art. 3º, II).",
+    informe: "Informe um preço de venda.",
+    frase: (aliq, anexo, anunciada, real, prejuizo) =>
+      `Alíquota efetiva do Simples: <b>${aliq}%</b> (Anexo ${anexo}, fórmula do art. 18, § 1º-A da LC 123/2006). ` +
+      `Margem "anunciada": <b>${anunciada}%</b>. Margem real: <b>${real}%</b>${prejuizo ? " — esta venda dá prejuízo" : ""}.`,
+  },
+  en: {
+    receita: "Gross revenue", tributos: "Taxes (Simples)",
+    comissao: "Channel commission", frete: "Shipping", custo: "Product cost",
+    margem: "Net margin",
+    teto: "RBT12 above the Simples ceiling (R$ 4.8 million) — grounds for exclusion from the regime (LC 123/2006, art. 3, II).",
+    informe: "Enter a sale price.",
+    frase: (aliq, anexo, anunciada, real, prejuizo) =>
+      `Simples effective tax rate: <b>${aliq}%</b> (Annex ${anexo}, formula in art. 18, § 1º-A of LC 123/2006). ` +
+      `"Naive" margin: <b>${anunciada}%</b>. Real margin: <b>${real}%</b>${prejuizo ? " — this sale loses money" : ""}.`,
+  },
+};
+
+let LANG = localStorage.getItem("carchuna-lang") || "pt";
+
+function setLang(l) {
+  LANG = l;
+  localStorage.setItem("carchuna-lang", l);
+  document.documentElement.dataset.lang = l;
+  document.documentElement.lang = l === "pt" ? "pt-BR" : "en";
+  document.getElementById("btn-pt").classList.toggle("ativo", l === "pt");
+  document.getElementById("btn-en").classList.toggle("ativo", l === "en");
+  for (const select of document.querySelectorAll("#d-canal, #d-anexo")) {
+    for (const opt of select.options) {
+      if (opt.dataset[l]) opt.textContent = opt.dataset[l];
+    }
+  }
+  calcular();
+}
+
+const brl = c => (c / 100).toLocaleString(LANG === "pt" ? "pt-BR" : "en-US",
+  {style: "currency", currency: "BRL"});
 
 function aliquotaEfetiva(rbt12Cent, anexo) {
   for (const [limite, aliqBp, pdCent] of ANEXOS[anexo]) {
@@ -343,6 +458,7 @@ function aliquotaEfetiva(rbt12Cent, anexo) {
 }
 
 function calcular() {
+  const tx = TEXTOS[LANG];
   const preco = Math.round((+document.getElementById("d-preco").value || 0) * 100);
   const custo = Math.round((+document.getElementById("d-custo").value || 0) * 100);
   const frete = Math.round((+document.getElementById("d-frete").value || 0) * 100);
@@ -355,9 +471,7 @@ function calcular() {
   const barras = document.getElementById("d-barras");
   if (efetivaBp === null || preco <= 0) {
     barras.innerHTML = "";
-    frase.innerHTML = efetivaBp === null
-      ? "RBT12 acima do teto do Simples (R$ 4,8 milhões) — hipótese de exclusão do regime (LC 123/2006, art. 3º, II)."
-      : "Informe um preço de venda.";
+    frase.innerHTML = efetivaBp === null ? tx.teto : tx.informe;
     return;
   }
   const tributos = Math.round(preco * efetivaBp / 10000);
@@ -365,12 +479,12 @@ function calcular() {
   const margem = preco - tributos - comissao - frete - custo;
 
   const linhas = [
-    ["Receita bruta", preco, "receita"],
-    ["Tributos (Simples)", tributos, "neg"],
-    ["Comissão do canal", comissao, "neg"],
-    ["Frete", frete, "neg"],
-    ["Custo do produto", custo, "neg"],
-    ["Margem líquida", margem, "margem"],
+    [tx.receita, preco, "receita"],
+    [tx.tributos, tributos, "neg"],
+    [tx.comissao, comissao, "neg"],
+    [tx.frete, frete, "neg"],
+    [tx.custo, custo, "neg"],
+    [tx.margem, margem, "margem"],
   ];
   barras.innerHTML = linhas.map(([rot, v, cls]) => `
     <div class="barra ${cls}">
@@ -379,17 +493,17 @@ function calcular() {
       <div class="val">${brl(v)}</div>
     </div>`).join("");
 
-  const anunciadaPct = ((preco - custo) / preco * 100).toFixed(1).replace(".", ",");
-  const realPct = (margem / preco * 100).toFixed(1).replace(".", ",");
-  frase.innerHTML = `Alíquota efetiva do Simples: <b>${(efetivaBp / 100).toFixed(2).replace(".", ",")}%</b>
-    (Anexo ${anexo}, fórmula do art. 18, § 1º-A da LC 123/2006). Margem "anunciada":
-    <b>${anunciadaPct}%</b>. Margem real: <b>${realPct}%</b>${margem < 0 ? " — esta venda dá prejuízo" : ""}.`;
+  const dec = LANG === "pt" ? v => v.replace(".", ",") : v => v;
+  const anunciada = dec(((preco - custo) / preco * 100).toFixed(1));
+  const real = dec((margem / preco * 100).toFixed(1));
+  const aliq = dec((efetivaBp / 100).toFixed(2));
+  frase.innerHTML = tx.frase(aliq, anexo, anunciada, real, margem < 0);
 }
 
 for (const id of ["d-preco", "d-custo", "d-frete", "d-canal", "d-anexo", "d-rbt12"]) {
   document.getElementById(id).addEventListener("input", calcular);
 }
-calcular();
+setLang(LANG);
 </script>
 </body>
 </html>
