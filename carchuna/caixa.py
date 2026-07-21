@@ -98,6 +98,121 @@ class ProjecaoCaixa:
         return (self.dia_negativo - self.hoje).days
 
 
+@dataclass(frozen=True)
+class JanelaCaixa:
+    """Uma janela da projeção (30/60/90 dias): entradas, saídas e saldo."""
+
+    dias: int
+    entradas: Decimal  # calculado — agenda das vendas já feitas
+    saidas: Decimal  # estimado — informado pelo usuário
+    saldo_final: Decimal  # saldo projetado no fim da janela
+
+
+@dataclass(frozen=True)
+class InteligenciaCaixa:
+    """Riscos de liquidez da projeção, cada alerta com a origem explicada.
+
+    - **janelas** 30/60/90 dias, no formato "+entradas −saídas → saldo";
+    - **concentração de recebíveis**: fatia do maior dia (e a data) — um
+      atraso ali derruba o caixa de uma vez;
+    - **descasamento**: quantos dias de saídas correm antes do primeiro
+      repasse cair;
+    - **alertas** em texto, cada um dizendo DE ONDE o risco vem.
+    """
+
+    janelas: tuple[JanelaCaixa, ...]
+    concentracao_pct: Decimal  # maior dia de recebimento / total (%)
+    dia_concentracao: date | None
+    dias_ate_primeiro_recebimento: int | None  # None = nada a receber
+    alertas: tuple[str, ...]
+
+
+def analisar_caixa(
+    projecao: ProjecaoCaixa,
+    agenda: list[tuple[date, Decimal]],
+) -> InteligenciaCaixa:
+    """Extrai janelas, concentração, descasamento e alertas da projeção.
+
+    ``agenda`` é a saída de :func:`agenda_recebimentos` para as mesmas
+    transações — nada é recalculado, só lido e explicado.
+    """
+    curva = dict(projecao.curva)
+    saida_diaria = projecao.saidas_no_horizonte / projecao.horizonte_dias
+    janelas = []
+    for dias in (30, 60, 90):
+        if dias > projecao.horizonte_dias:
+            continue
+        limite = projecao.hoje + timedelta(days=dias)
+        entradas = sum(
+            (v for d, v in agenda if projecao.hoje < d <= limite), Decimal("0")
+        )
+        janelas.append(
+            JanelaCaixa(
+                dias=dias,
+                entradas=_q2(entradas),
+                saidas=_q2(saida_diaria * dias),
+                saldo_final=curva[limite],
+            )
+        )
+
+    no_horizonte = [
+        (d, v)
+        for d, v in agenda
+        if projecao.hoje < d <= projecao.hoje + timedelta(days=projecao.horizonte_dias)
+    ]
+    total = sum((v for _, v in no_horizonte), Decimal("0"))
+    if no_horizonte and total > 0:
+        dia_maior, valor_maior = max(no_horizonte, key=lambda item: item[1])
+        concentracao = (valor_maior / total * 100).quantize(
+            Decimal("0.1"), rounding=ROUND_HALF_UP
+        )
+        dias_ate_primeiro = (min(d for d, _ in no_horizonte) - projecao.hoje).days
+    else:
+        dia_maior, concentracao, dias_ate_primeiro = None, Decimal("0"), None
+
+    alertas: list[str] = []
+    for j in janelas:
+        if j.saldo_final < 0:
+            alertas.append(
+                f"Déficit projetado de R$ {abs(j.saldo_final)} em {j.dias} dias: "
+                f"entram R$ {j.entradas} (agenda das vendas já feitas) contra "
+                f"R$ {j.saidas} de saídas informadas."
+            )
+            break  # o primeiro déficit é o que importa; os demais derivam dele
+    # Limiar de 50%: um único dia carregando metade dos recebíveis é
+    # ponto único de falha; abaixo disso (ex.: 3 repasses uniformes de
+    # 33%) é distribuição normal de agenda, não risco.
+    if concentracao > 50 and dia_maior is not None:
+        alertas.append(
+            f"Concentração de recebíveis: {concentracao}% do que há para "
+            f"receber cai num único dia ({dia_maior.strftime('%d/%m')}). Um "
+            "atraso nesse repasse derruba o caixa de uma vez."
+        )
+    if (
+        dias_ate_primeiro is not None
+        and projecao.dias_de_folego is not None
+        and dias_ate_primeiro > projecao.dias_de_folego
+    ):
+        alertas.append(
+            f"Descasamento: o caixa aguenta {projecao.dias_de_folego} dia(s) "
+            f"de saídas, mas o primeiro repasse só cai em "
+            f"{dias_ate_primeiro} dia(s). Antecipar recebíveis ou adiar "
+            "saídas cobre o vão."
+        )
+    if dias_ate_primeiro is None and projecao.saidas_no_horizonte > 0:
+        alertas.append(
+            "Nada a receber no horizonte: a projeção só enxerga as vendas "
+            "do arquivo — sem vendas novas, o caixa só desce."
+        )
+    return InteligenciaCaixa(
+        janelas=tuple(janelas),
+        concentracao_pct=concentracao,
+        dia_concentracao=dia_maior,
+        dias_ate_primeiro_recebimento=dias_ate_primeiro,
+        alertas=tuple(alertas),
+    )
+
+
 def projetar_caixa(
     transacoes: list[Transacao],
     tabela: TabelaCustos | None = None,

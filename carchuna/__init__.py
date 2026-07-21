@@ -10,9 +10,14 @@ from carchuna.analise import (
     MargemVenda,
     ResumoExecutivo,
 )
+from carchuna.anomalias import Anomalia, MotorAnomalias, ParametrosAnomalias
+from carchuna.benchmarks import Benchmark, comparar_benchmarks
 from carchuna.caixa import (
+    InteligenciaCaixa,
+    JanelaCaixa,
     ProjecaoCaixa,
     agenda_recebimentos,
+    analisar_caixa,
     projetar_caixa,
     valor_liquido_recebivel,
 )
@@ -39,7 +44,10 @@ from carchuna.crescimento import (
     ParametrosCrescimento,
     preco_para_margem,
 )
+from carchuna.confianca import NotaConfianca, avaliar_confianca
+from carchuna.copiloto import Copiloto, RespostaCopiloto, explicar_variacao
 from carchuna.dados import carregar_transacoes, transacoes_sinteticas
+from carchuna.decisao import MotorDecisao, Recomendacao, recomendar
 from carchuna.diagnostico import (
     Achado,
     MotorDiagnostico,
@@ -48,6 +56,7 @@ from carchuna.diagnostico import (
     diagnosticar,
 )
 from carchuna.insights import Insight, MotorInsights, ParametrosInsights
+from carchuna.linhagem import Linhagem
 from carchuna.margem import (
     ANEXOS_SIMPLES,
     ROTULOS_DEDUCOES,
@@ -58,6 +67,12 @@ from carchuna.margem import (
     Transacao,
     aliquota_efetiva_simples,
     decompor_margem,
+)
+from carchuna.otimizacao import (
+    MotorOtimizacao,
+    ParametrosOtimizacao,
+    Restricoes,
+    ResultadoOtimizacao,
 )
 from carchuna.metricas import (
     instabilidade_margem,
@@ -74,6 +89,22 @@ __all__ = [
     "ROTULOS_DEDUCOES",
     "Achado",
     "AnalisadorMargem",
+    "Anomalia",
+    "Benchmark",
+    "Copiloto",
+    "InteligenciaCaixa",
+    "JanelaCaixa",
+    "Linhagem",
+    "MotorAnomalias",
+    "MotorDecisao",
+    "MotorOtimizacao",
+    "NotaConfianca",
+    "ParametrosAnomalias",
+    "ParametrosOtimizacao",
+    "Recomendacao",
+    "RespostaCopiloto",
+    "Restricoes",
+    "ResultadoOtimizacao",
     "Cenario",
     "CenarioAntecipacao",
     "CenarioComissao",
@@ -103,7 +134,12 @@ __all__ = [
     "Transacao",
     "agenda_recebimentos",
     "aliquota_efetiva_simples",
+    "analisar_caixa",
+    "avaliar_confianca",
     "carregar_transacoes",
+    "comparar_benchmarks",
+    "explicar_variacao",
+    "recomendar",
     "cenario_antecipacao",
     "cenario_comissao",
     "cenario_devolucoes_dobram",

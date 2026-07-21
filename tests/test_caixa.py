@@ -134,5 +134,78 @@ def test_projecao_sem_saidas_nunca_fica_negativa():
     assert proj.curva[-1][1] == Decimal("138.00")  # 50 + 88
 
 
+# ---------------------------------------------------------------------------
+# Inteligência de caixa (janelas, concentração, descasamento)
+# ---------------------------------------------------------------------------
+
+
+def test_janelas_concentracao_e_descasamento_conferidos_a_mao():
+    # Venda ML 3.000 (líquido 2.640) com prazo 45 → repasse em 25/07.
+    # Caixa 1.000, saídas 3.000/mês (100/dia):
+    #   30 dias: entra 0, sai 3.000 → saldo −2.000 (déficit!)
+    #   60 dias: entra 2.640, sai 6.000 → saldo −2.360
+    #   90 dias: entra 2.640, sai 9.000 → saldo −5.360
+    # Fôlego: 11 dias (dia 11 fica −100+... = −100? não: 1.000 − 100×10 = 0
+    # no dia 10; dia 11 = −100). Primeiro repasse só no dia 45 →
+    # descasamento. 100% dos recebíveis num único dia → concentração.
+    from carchuna.caixa import analisar_caixa
+
+    hoje = date(2026, 6, 10)
+    vendas = [_venda("3000", hoje, prazo_recebimento_dias=45)]
+    proj = projetar_caixa(
+        vendas,
+        TABELA,
+        caixa_inicial=Decimal("1000"),
+        saidas_mensais=Decimal("3000"),
+    )
+    intel = analisar_caixa(proj, agenda_recebimentos(vendas, TABELA))
+    j30, j60, j90 = intel.janelas
+    assert (j30.entradas, j30.saidas, j30.saldo_final) == (
+        Decimal("0.00"),
+        Decimal("3000.00"),
+        Decimal("-2000.00"),
+    )
+    assert (j60.entradas, j60.saldo_final) == (Decimal("2640.00"), Decimal("-2360.00"))
+    assert j90.saldo_final == Decimal("-5360.00")
+    assert intel.concentracao_pct == Decimal("100.0")
+    assert intel.dia_concentracao == date(2026, 7, 25)
+    assert intel.dias_ate_primeiro_recebimento == 45
+    assert proj.dias_de_folego == 11
+    assert len(intel.alertas) == 3  # déficit + concentração + descasamento
+    assert "Déficit projetado de R$ 2000.00 em 30 dias" in intel.alertas[0]
+    assert "100.0%" in intel.alertas[1] and "25/07" in intel.alertas[1]
+    assert "aguenta 11 dia(s)" in intel.alertas[2]
+
+
+def test_sem_recebiveis_futuros_o_alerta_explica_a_origem():
+    from carchuna.caixa import analisar_caixa
+
+    hoje = date(2026, 6, 10)
+    vendas = [_venda("100", hoje)]  # prazo 0: já caiu no caixa inicial
+    proj = projetar_caixa(
+        vendas, TABELA, caixa_inicial=Decimal("500"), saidas_mensais=Decimal("300")
+    )
+    intel = analisar_caixa(proj, agenda_recebimentos(vendas, TABELA))
+    assert intel.dias_ate_primeiro_recebimento is None
+    assert any("Nada a receber" in a for a in intel.alertas)
+
+
+def test_caixa_saudavel_nao_gera_alerta():
+    from carchuna.caixa import analisar_caixa
+
+    hoje = date(2026, 6, 10)
+    vendas = [
+        _venda("1000", hoje, prazo_recebimento_dias=7),
+        _venda("1000", hoje, prazo_recebimento_dias=14),
+        _venda("1000", hoje, prazo_recebimento_dias=21),
+    ]
+    proj = projetar_caixa(
+        vendas, TABELA, caixa_inicial=Decimal("5000"), saidas_mensais=Decimal("600")
+    )
+    intel = analisar_caixa(proj, agenda_recebimentos(vendas, TABELA))
+    assert intel.alertas == ()
+    assert intel.concentracao_pct == Decimal("33.3")  # 880 de 2.640
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
