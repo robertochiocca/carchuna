@@ -49,6 +49,9 @@ class Insight:
     explicacao: str
     caminho_pratico: str
     confianca: str  # "calculado" | "estimado"
+    # Qual análise gerou o sinal — usada pelo motor de decisão para achar
+    # o perfil da ação no catálogo (decisao.CATALOGO_ACOES).
+    categoria: str = ""
     aviso: str = AVISO_INSIGHTS
 
 
@@ -125,6 +128,7 @@ class TendenciaCustos(AnaliseInsight):
                         "alta antes de renegociar ou reprecificar."
                     ),
                     confianca="calculado",
+                    categoria="tendencia_custos",
                 )
             )
         return insights
@@ -190,6 +194,7 @@ class ProdutosMargemMagra(AnaliseInsight):
                     "venda primeiro."
                 ),
                 confianca="calculado",
+                categoria="margem_magra",
             )
         ]
 
@@ -232,6 +237,7 @@ class MesForaDoPadrao(AnaliseInsight):
                     "aponta qual dedução mais mudou."
                 ),
                 confianca="estimado",
+                categoria="mes_fora_padrao",
             )
         ]
 
