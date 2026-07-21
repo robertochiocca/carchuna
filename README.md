@@ -70,6 +70,8 @@ Margem líquida real:           R$  32,35   (32,35% — não os 60% "anunciados"
 
 **No ar em [carchuna.streamlit.app](https://carchuna.streamlit.app)** — e o fluxo é um upload só: envie a planilha de vendas (CSV, Excel, JSON ou PDF com tabela) e TODAS as abas se recalculam — margem real, impostos pela LC 123 (a **RBT12 é sugerida automaticamente a partir do próprio arquivo**, editável), produtos campeões e vilões, histórico, cenários, crescimento e diagnóstico legal. O que o arquivo não tem como dizer — seu anexo do Simples e as taxas do seu contrato — fica em dois campos na barra lateral, com explicação de onde encontrar cada um.
 
+No Resumo, a **cachoeira da margem** mostra o dinheiro descendo do faturamento ao que sobrou — e cada barra de custo é clicável: abre a composição por canal e por mês. Logo abaixo, o **Radar do CFO** aponta sozinho o que merece atenção (uma dedução subindo entre os meses, produtos vendendo com margem magra, um mês fora do padrão), cada sinal com severidade e impacto em R$/mês calculado pelo motor. E a aba **Caixa** projeta o fôlego financeiro: a agenda do que as vendas já feitas vão depositar, contra as contas do mês — sem prever venda futura, porque agenda não é bola de cristal.
+
 ![Dashboard da Carchuna — aba Margem com o resumo executivo](docs/img/dashboard.png)
 
 ![Aba Crescimento — como faturar mais, com números dos próprios dados](docs/img/crescimento.png)
@@ -107,10 +109,14 @@ AnalisadorMargem (fachada)          ← analise.py: um objeto, os quatro motores
 │     ├── CenarioAntecipacao        │  a base reexecuta o motor testado e
 │     ├── CenarioDevolucoesDobram   │  compara antes/depois
 │     ├── CenarioMudancaAnexo       │
-│     └── CenarioMigracaoCanal      ← "e se 30% do ML virasse canal próprio?"
+│     ├── CenarioMigracaoCanal      ← "e se 30% do ML virasse canal próprio?"
+│     └── CenarioPreco              ← "e se eu subisse os preços 5%?"
 ├── MotorDiagnostico                ← diagnostico.py: orquestra as regras
 │     └── RegraDeteccao (ABC)       ← 4 heurísticas transparentes; estender =
 │                                      herdar e registrar (aberto/fechado)
+├── MotorInsights                   ← insights.py: o Radar do CFO
+│     └── AnaliseInsight (ABC)      ← severidade + impacto R$/mês, sem ML
+├── caixa.py                        ← agenda de recebíveis + fôlego de caixa
 ├── Retriever (BM25 + sinônimos)    ← rag/: base legal citada, LLM opcional
 └── API FastAPI + Pydantic          ← api/: casca fina e stateless em /api/v1
 ```
@@ -125,7 +131,9 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio"), **margem venda a venda** e **margem por produto** (campeões e vilões do catálogo) | pronto — implementado e testado |
 | `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + **PDF com tabela no layout do modelo** (beta) + dados sintéticos reprodutíveis | pronto — implementado e testado |
 | `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | pronto — implementado e testado |
-| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
+| `cenarios.py` — **preços +X% (mesmo volume)**, comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
+| `insights.py` — **Radar do CFO**: tendência de custos entre meses, produtos de margem magra (com o ganho exato de um reajuste) e mês fora do padrão (2σ), com severidade e impacto em R$/mês | pronto — implementado e testado |
+| `caixa.py` — **projeção de caixa**: agenda de recebíveis das vendas já feitas (`calculado`) contra saídas mensais informadas (`estimado`), primeiro dia no vermelho e dias de fôlego | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
 | `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | ingerido — **revisão humana pendente** (`revisado: false`) |
@@ -136,13 +144,16 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | roadmap — mesma interface `Conector` |
 | Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | roadmap — mesma interface `Conector` |
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | pronto — implementado e testado |
-| `app.py` — dashboard Streamlit com 7 abas em linguagem de lojista (Resumo, Vendas e Produtos, Histórico, E se…?, Crescer, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto (sem teste automatizado de UI) |
+| `app.py` — dashboard Streamlit com 8 abas em linguagem de lojista (Resumo com **cachoeira da margem clicável** e **Radar do CFO**, Vendas e Produtos, Histórico, E se…?, Crescer, **Caixa**, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto (sem teste automatizado de UI) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | roadmap (depende de ICMS/ISS estaduais/municipais) |
 | RBT12 móvel mês a mês nas séries | roadmap |
 | Open Finance via agregador (Pluggy/Belvo) | roadmap |
 | MCP server (consultar a Carchuna por assistentes de IA) | roadmap |
 | Busca semântica (embeddings/ChromaDB, opt-in) | roadmap |
+| **Elasticidade de preço** (quanto de volume se perde ao subir o preço) | roadmap — exige histórico de variação de preço que a planilha de vendas não traz; até lá, os cenários de preço declaram "mesmo volume" como premissa |
+| **CAC/LTV por canal** (economia do cliente) | roadmap — exige dados de aquisição (gasto com anúncio, recompra) que não existem no relatório de vendas |
+| **Contas a pagar reais** no fluxo de caixa (vencimento a vencimento) | roadmap — hoje as saídas são uma média mensal informada pelo usuário, diluída por dia (simplificação documentada) |
 | ML preditivo (previsão de vendas) | roadmap — heurísticas transparentes primeiro |
 
 **Meta antes de qualquer conector:** 1 lojista piloto usando com CSV real.

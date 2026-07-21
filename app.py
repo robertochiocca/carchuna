@@ -1,8 +1,9 @@
 """Dashboard da Carchuna — pensado para o lojista, não para o analista.
 
-Sete abas em linguagem simples: Resumo (o essencial em uma tela),
-Vendas e Produtos (campeões e vilões de margem), Histórico (evolução
-mês a mês), E se…? (testes de estresse), Crescer (como faturar mais),
+Oito abas em linguagem simples: Resumo (cachoeira da margem com
+drill-down e o Radar do CFO), Vendas e Produtos (campeões e vilões de
+margem), Histórico (evolução mês a mês), E se…? (testes de estresse),
+Crescer (como faturar mais), Caixa (agenda de recebíveis e fôlego),
 Diagnóstico Legal e Relatório. Interface bilíngue (PT/EN); roda 100%
 offline com dados sintéticos e aceita upload de CSV/JSON/XLSX.
 
@@ -28,9 +29,11 @@ from carchuna import (
     AnalisadorMargem,
     CenarioCrescimentoCanal,
     ConfigTributaria,
+    MotorInsights,
     ParametrosDiagnostico,
     TabelaCustos,
     carregar_transacoes,
+    projetar_caixa,
     transacoes_sinteticas,
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO
@@ -226,6 +229,7 @@ T = {
             "Histórico",
             "E se…?",
             "Crescer",
+            "Caixa",
             "Diagnóstico Legal",
             "Relatório",
         ],
@@ -250,6 +254,70 @@ T = {
             "sua taxa real para ficar exato."
         ),
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
+        "wf_receita": "Faturamento",
+        "cachoeira_dica": (
+            "Toque numa barra de custo para abrir de onde ela vem — por "
+            "canal e por mês. Duplo clique desfaz a seleção."
+        ),
+        "drill_titulo": "De onde vem: {rotulo}",
+        "drill_por_canal": "Por canal",
+        "drill_por_mes": "Por mês",
+        "drill_sem_canal": (
+            "O DAS do MEI é fixo por mês — dividi-lo por canal seria "
+            "inventar número. A quebra por mês ao lado é a real."
+        ),
+        "radar_titulo": "Radar do CFO",
+        "radar_caption": (
+            "Sinais achados automaticamente nos seus números — cada um "
+            "com o impacto em R$/mês e o que fazer a respeito."
+        ),
+        "radar_vazio": (
+            "Nenhum sinal no radar — margens estáveis e sem vazamento "
+            "novo entre os meses."
+        ),
+        "radar_sev": {
+            "critico": "CRÍTICO",
+            "atencao": "ATENÇÃO",
+            "oportunidade": "OPORTUNIDADE",
+        },
+        "radar_aviso": (
+            "Insights calculados por regras transparentes, sem IA — são "
+            "sinais para investigar com seu contador, não veredito."
+        ),
+        "caixa_caption": (
+            "Seu fôlego financeiro: quando o dinheiro das vendas JÁ "
+            "FEITAS cai na conta, contra as contas que você paga por mês. "
+            "Nada aqui prevê vendas futuras — é agenda, não bola de "
+            "cristal."
+        ),
+        "caixa_inicial": "Dinheiro em caixa hoje (R$)",
+        "caixa_saidas": "Quanto sai por mês (R$)",
+        "caixa_saidas_ajuda": (
+            "Some tudo que sai todo mês: aluguel, salários, fornecedores, "
+            "luz — e inclua o DAS do Simples, que é pago à parte do "
+            "repasse dos canais."
+        ),
+        "caixa_recebs": "Vai cair na conta (90 dias)",
+        "caixa_saidas_metric": "Vai sair (90 dias)",
+        "caixa_folego": "Fôlego",
+        "caixa_folego_ok": "90+ dias",
+        "caixa_dias": "{dias} dias",
+        "caixa_alerta": (
+            "Risco de caixa: no ritmo informado, o saldo fica negativo "
+            "em {dias} dias ({data}). Antecipar recebíveis, adiar saídas "
+            "ou reforçar o caixa evita o aperto — leve esta curva ao seu "
+            "contador."
+        ),
+        "caixa_ok": (
+            "Sem sufoco à vista: o saldo não fica negativo nos próximos " "90 dias."
+        ),
+        "caixa_curva": "Saldo projetado, dia a dia",
+        "caixa_etiquetas": (
+            "Recebimentos: `calculado` — a agenda das vendas do arquivo, "
+            "no prazo de cada uma. Saídas: `estimado` — o valor que você "
+            "informou, diluído por dia. A curva enxerga só as vendas já "
+            "feitas: sem vendas novas no arquivo, ela desce."
+        ),
         "vendas_metricas": ["Vendas", "Faturamento", "Canais", "Devoluções"],
         "campeoes": "Campeões de margem — venda mais destes",
         "campeoes_caption": (
@@ -462,6 +530,7 @@ T = {
             "History",
             "What if…?",
             "Grow",
+            "Cash",
             "Legal Diagnosis",
             "Report",
         ],
@@ -486,6 +555,72 @@ T = {
             "one in the sidebar."
         ),
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
+        "wf_receita": "Revenue",
+        "cachoeira_dica": (
+            "Click a cost bar to see where it comes from — by channel "
+            "and by month. Double-click to clear."
+        ),
+        "drill_titulo": "Where it comes from: {rotulo}",
+        "drill_por_canal": "By channel",
+        "drill_por_mes": "By month",
+        "drill_sem_canal": (
+            "The MEI's DAS is a fixed monthly fee — splitting it by "
+            "channel would be making numbers up. The monthly breakdown "
+            "beside is the real one."
+        ),
+        "radar_titulo": "CFO radar",
+        "radar_caption": (
+            "Signals found automatically in your numbers — each with its "
+            "R$/month impact and what to do about it."
+        ),
+        "radar_vazio": (
+            "Nothing on the radar — stable margins and no new leak " "between months."
+        ),
+        "radar_sev": {
+            "critico": "CRITICAL",
+            "atencao": "WARNING",
+            "oportunidade": "OPPORTUNITY",
+        },
+        "radar_aviso": (
+            "Insights computed by transparent rules, no AI — signals to "
+            "investigate with your accountant, not verdicts. Narratives "
+            "are in Portuguese (the audience's language)."
+        ),
+        "caixa_caption": (
+            "Your cash runway: when the money from sales ALREADY MADE "
+            "lands in your account, against what you pay out each month. "
+            "Nothing here predicts future sales — it is a schedule, not "
+            "a crystal ball."
+        ),
+        "caixa_inicial": "Cash on hand today (R$)",
+        "caixa_saidas": "Monthly outflows (R$)",
+        "caixa_saidas_ajuda": (
+            "Add up everything that leaves every month: rent, salaries, "
+            "suppliers, utilities — and include the Simples DAS, which "
+            "is paid separately from channel payouts."
+        ),
+        "caixa_recebs": "Landing in your account (90 days)",
+        "caixa_saidas_metric": "Going out (90 days)",
+        "caixa_folego": "Runway",
+        "caixa_folego_ok": "90+ days",
+        "caixa_dias": "{dias} days",
+        "caixa_alerta": (
+            "Cash risk: at the stated pace, the balance goes negative in "
+            "{dias} days ({data}). Advancing receivables, delaying "
+            "outflows or adding cash avoids the squeeze — take this "
+            "curve to your accountant."
+        ),
+        "caixa_ok": (
+            "No squeeze in sight: the balance stays positive for the " "next 90 days."
+        ),
+        "caixa_curva": "Projected balance, day by day",
+        "caixa_etiquetas": (
+            "Receivables: `calculado` — the schedule of the sales in "
+            "your file, each on its payout term. Outflows: `estimado` — "
+            "the amount you entered, spread per day. The curve only sees "
+            "sales already made: with no new sales in the file, it goes "
+            "down."
+        ),
         "vendas_metricas": ["Sales", "Revenue", "Channels", "Returns"],
         "campeoes": "Margin champions — sell more of these",
         "campeoes_caption": (
@@ -662,65 +797,107 @@ def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> 
         "cenarios": analise.cenarios(),
         "achados": analise.diagnosticar(),
         "oportunidades": analise.crescimento(),
+        "radar": MotorInsights().radar(list(transacoes), config, tabela),
     }
 
 
-def _grafico_destino(decomposicao, rotulos: dict, t: dict):
-    """Barras horizontais com rótulos completos e valores nas pontas.
+@st.cache_data(show_spinner=False)
+def _composicao_cacheada(transacoes: tuple, config, tabela, nome: str) -> dict:
+    """Drill-down de uma dedução (por canal e por mês), cacheado por clique."""
+    return AnalisadorMargem(list(transacoes), config, tabela).composicao_deducao(nome)
 
-    Substitui o gráfico nativo (que trunca rótulos longos): Altair com
-    ``labelLimit=0``, cores calmas — quente-suave para o que foi embora,
-    verde-alga para o que sobrou — e o valor escrito ao fim de cada barra.
+
+def _grafico_cachoeira(decomposicao, rotulos: dict, t: dict):
+    """A cachoeira da margem: do faturamento ao que sobrou, degrau a degrau.
+
+    Cada dedução é um degrau descendo do acumulado; a última barra é o
+    que sobrou. As barras de custo são clicáveis (seleção nomeada
+    ``ponto``): o app abre a composição por canal e por mês da dedução
+    clicada. Estilo da casa: sem eixo Y, valor escrito sobre cada barra.
     """
-    linhas = [
-        {
-            "rotulo": rotulos.get(d.nome, d.nome),
-            "valor": float(d.valor),
-            "texto": _brl_inteiro(d.valor),
-            "tipo": t["foi_embora"],
-        }
-        for d in decomposicao.deducoes
-    ]
+    linhas = []
+    acumulado = decomposicao.receita_bruta
     linhas.append(
         {
+            "nome": "receita",
+            "rotulo": t["wf_receita"],
+            "inicio": 0.0,
+            "fim": float(acumulado),
+            "topo": float(acumulado),
+            "texto": _brl_inteiro(acumulado),
+            "tipo": "receita",
+        }
+    )
+    for d in decomposicao.deducoes:
+        linhas.append(
+            {
+                "nome": d.nome,
+                "rotulo": rotulos.get(d.nome, d.nome),
+                "inicio": float(acumulado - d.valor),
+                "fim": float(acumulado),
+                "topo": float(acumulado),
+                "texto": f"− {_brl_inteiro(d.valor)}",
+                "tipo": "deducao",
+            }
+        )
+        acumulado -= d.valor
+    margem = decomposicao.margem_liquida
+    linhas.append(
+        {
+            "nome": "margem",
             "rotulo": t["sobrou"],
-            "valor": float(decomposicao.margem_liquida),
-            "texto": _brl_inteiro(decomposicao.margem_liquida),
-            "tipo": t["sobrou"],
+            "inicio": float(min(Decimal("0"), margem)),
+            "fim": float(max(Decimal("0"), margem)),
+            "topo": float(max(Decimal("0"), margem)),
+            "texto": _brl_inteiro(margem),
+            "tipo": "margem",
         }
     )
     dados = pd.DataFrame(linhas)
-    ordem = dados.sort_values("valor", ascending=False)["rotulo"].tolist()
+    selecao = alt.selection_point(name="ponto", fields=["nome"], on="click")
     base = alt.Chart(dados).encode(
-        y=alt.Y(
-            "rotulo:N",
-            sort=ordem,
-            title=None,
-            axis=alt.Axis(labelLimit=0, labelFontSize=13, labelColor="#d8e7e5"),
-        ),
         x=alt.X(
-            "valor:Q",
+            "rotulo:N",
+            sort=dados["rotulo"].tolist(),
             title=None,
-            axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
-            scale=alt.Scale(paddingOuter=0.02),
-        ),
-    )
-    barras = base.mark_bar(cornerRadiusEnd=7, height=22).encode(
-        color=alt.Color(
-            "tipo:N",
-            scale=alt.Scale(
-                domain=[t["foi_embora"], t["sobrou"]],
-                range=["#cf8a70", "#8fd694"],
+            axis=alt.Axis(
+                labelAngle=-22,
+                labelFontSize=12,
+                labelColor="#d8e7e5",
+                labelLimit=0,
+                labelOverlap=False,
             ),
-            legend=None,
         )
     )
-    textos = base.mark_text(
-        align="left", dx=8, color="#cfe9e6", fontSize=12.5, font="monospace"
-    ).encode(text="texto:N")
-    return _base_config(
-        (barras + textos).properties(height=len(linhas) * 38, padding={"right": 90})
+    barras = (
+        base.mark_bar(cornerRadius=6, size=46)
+        .encode(
+            y=alt.Y(
+                "inicio:Q",
+                title=None,
+                axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
+            ),
+            y2="fim:Q",
+            color=alt.Color(
+                "tipo:N",
+                scale=alt.Scale(
+                    domain=["receita", "deducao", "margem"],
+                    range=[TEAL_CALMO, "#cf8a70", "#8fd694"],
+                ),
+                legend=None,
+            ),
+            opacity=alt.condition(selecao, alt.value(1.0), alt.value(0.55)),
+            tooltip=[
+                alt.Tooltip("rotulo:N", title=" "),
+                alt.Tooltip("texto:N", title="R$"),
+            ],
+        )
+        .add_params(selecao)
     )
+    textos = base.mark_text(
+        dy=-10, color=AGUA_TEXTO, fontSize=11.5, font="monospace"
+    ).encode(y=alt.Y("topo:Q"), text="texto:N")
+    return _base_config((barras + textos).properties(height=320, padding={"top": 16}))
 
 
 def _grafico_barras_h(linhas: list[dict], cor: str = TEAL_CALMO):
@@ -813,6 +990,67 @@ def _grafico_serie(linhas: list[dict], modo: str = "linha"):
         dy=-15, color=AGUA_TEXTO, fontSize=12, font="monospace"
     ).encode(text="texto:N")
     return _base_config((marca + textos).properties(height=280, padding={"top": 18}))
+
+
+def _grafico_caixa(curva, dia_negativo):
+    """Área do saldo projetado, com a linha do zero e o dia do vermelho.
+
+    Diferente dos gráficos mensais, aqui são 90 pontos — escrever o
+    valor em cada um viraria ruído; o eixo Y entra discreto no lugar.
+    """
+    dados = pd.DataFrame([{"dia": dia, "saldo": float(s)} for dia, s in curva])
+    base = alt.Chart(dados).encode(
+        x=alt.X(
+            "dia:T",
+            title=None,
+            axis=alt.Axis(
+                format="%d/%m",
+                grid=False,
+                labelColor="#d8e7e5",
+                labelFontSize=12,
+                tickColor="#134d57",
+                domainColor="#134d57",
+            ),
+        ),
+        y=alt.Y(
+            "saldo:Q",
+            title=None,
+            axis=alt.Axis(
+                grid=False,
+                labelColor="#87a9a8",
+                labelFontSize=11,
+                format="~s",
+                ticks=False,
+                domain=False,
+            ),
+        ),
+    )
+    gradiente = alt.Gradient(
+        gradient="linear",
+        stops=[
+            alt.GradientStop(color="rgba(46,230,214,0.02)", offset=0),
+            alt.GradientStop(color="rgba(46,230,214,0.30)", offset=1),
+        ],
+        x1=1,
+        x2=1,
+        y1=1,
+        y2=0,
+    )
+    area = base.mark_area(line={"color": AGUA, "strokeWidth": 2.5}, color=gradiente)
+    zero = (
+        alt.Chart(pd.DataFrame({"y": [0.0]}))
+        .mark_rule(color="#cf8a70", strokeDash=[5, 5], strokeWidth=1.5)
+        .encode(y="y:Q")
+    )
+    camadas = area + zero
+    if dia_negativo is not None:
+        marco = (
+            alt.Chart(pd.DataFrame({"dia": [pd.Timestamp(dia_negativo)]}))
+            .mark_rule(color="#cf8a70", strokeWidth=1.5)
+            .encode(x="dia:T")
+        )
+        camadas = camadas + marco
+    return _base_config(camadas.properties(height=300, padding={"top": 14}))
 
 
 st.title(t["titulo"])
@@ -995,6 +1233,7 @@ resumo = res["resumo"]
     aba_historico,
     aba_ese,
     aba_crescer,
+    aba_caixa,
     aba_diagnostico,
     aba_relatorio,
 ) = st.tabs(t["abas"])
@@ -1022,9 +1261,73 @@ with aba_resumo:
     )
 
     st.subheader(t["para_onde"])
-    st.altair_chart(
-        _grafico_destino(decomposicao, rotulos, t), use_container_width=True
+    evento = st.altair_chart(
+        _grafico_cachoeira(decomposicao, rotulos, t),
+        use_container_width=True,
+        on_select="rerun",
+        key="cachoeira",
     )
+    clicados = [
+        p.get("nome")
+        for p in (evento.selection.get("ponto") or [])
+        if p.get("nome") not in (None, "receita", "margem")
+    ]
+    if clicados:
+        nome_drill = clicados[0]
+        comp = _composicao_cacheada(tuple(transacoes), config, tabela, nome_drill)
+        rotulo_drill = rotulos.get(nome_drill, nome_drill)
+        st.markdown(f"##### {t['drill_titulo'].format(rotulo=rotulo_drill)}")
+        col_canal, col_mes = st.columns(2)
+        with col_canal:
+            st.caption(t["drill_por_canal"])
+            if comp["por_canal"]:
+                st.altair_chart(
+                    _grafico_barras_h(
+                        [
+                            {
+                                "rotulo": canal,
+                                "valor": float(v),
+                                "texto": _brl_inteiro(v),
+                            }
+                            for canal, v in comp["por_canal"]
+                        ]
+                    ),
+                    use_container_width=True,
+                )
+            else:
+                st.info(t["drill_sem_canal"])
+        with col_mes:
+            st.caption(t["drill_por_mes"])
+            st.altair_chart(
+                _grafico_barras_v(
+                    [
+                        {"rotulo": mes, "valor": float(v), "texto": _brl_inteiro(v)}
+                        for mes, v in comp["por_mes"]
+                    ]
+                ),
+                use_container_width=True,
+            )
+    else:
+        st.caption(t["cachoeira_dica"])
+
+    st.subheader(t["radar_titulo"])
+    st.caption(t["radar_caption"])
+    radar = res["radar"]
+    if not radar:
+        st.success(t["radar_vazio"])
+    estilo_sev = {
+        "critico": st.error,
+        "atencao": st.warning,
+        "oportunidade": st.success,
+    }
+    for sinal in radar:
+        estilo_sev[sinal.severidade](
+            f"**{t['radar_sev'][sinal.severidade]} · {sinal.titulo}** — "
+            f"~{_brl(sinal.impacto_mensal)}/{t['por_mes']} "
+            f"[{sinal.confianca}]\n\n{sinal.explicacao}"
+        )
+        st.caption(sinal.caminho_pratico)
+    st.caption(t["radar_aviso"])
 
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
@@ -1323,6 +1626,55 @@ with aba_crescer:
     except ValueError as erro:
         st.error(str(erro))
     st.caption(AVISO_CRESCIMENTO)
+
+# ---------------------------------------------------------------------------
+with aba_caixa:
+    st.caption(t["caixa_caption"])
+    col_cx1, col_cx2 = st.columns(2)
+    caixa_inicial = col_cx1.number_input(
+        t["caixa_inicial"], min_value=0.0, value=0.0, step=500.0, format="%.2f"
+    )
+    saidas_mensais = col_cx2.number_input(
+        t["caixa_saidas"],
+        min_value=0.0,
+        value=0.0,
+        step=500.0,
+        format="%.2f",
+        help=t["caixa_saidas_ajuda"],
+    )
+    projecao = projetar_caixa(
+        transacoes,
+        tabela,
+        caixa_inicial=Decimal(str(caixa_inicial)),
+        saidas_mensais=Decimal(str(saidas_mensais)),
+    )
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric(t["caixa_recebs"], _brl(projecao.recebimentos_no_horizonte))
+    col_m2.metric(t["caixa_saidas_metric"], _brl(projecao.saidas_no_horizonte))
+    col_m3.metric(
+        t["caixa_folego"],
+        (
+            t["caixa_folego_ok"]
+            if projecao.dias_de_folego is None
+            else t["caixa_dias"].format(dias=projecao.dias_de_folego)
+        ),
+    )
+    if projecao.dia_negativo is not None:
+        st.error(
+            t["caixa_alerta"].format(
+                dias=projecao.dias_de_folego,
+                data=projecao.dia_negativo.strftime("%d/%m/%Y"),
+            )
+        )
+    else:
+        st.success(t["caixa_ok"])
+
+    st.subheader(t["caixa_curva"])
+    st.altair_chart(
+        _grafico_caixa(projecao.curva, projecao.dia_negativo),
+        use_container_width=True,
+    )
+    st.caption(t["caixa_etiquetas"])
 
 # ---------------------------------------------------------------------------
 with aba_diagnostico:
