@@ -10,6 +10,12 @@ from carchuna.analise import (
     MargemVenda,
     ResumoExecutivo,
 )
+from carchuna.caixa import (
+    ProjecaoCaixa,
+    agenda_recebimentos,
+    projetar_caixa,
+    valor_liquido_recebivel,
+)
 from carchuna.cenarios import (
     Cenario,
     CenarioAntecipacao,
@@ -18,6 +24,7 @@ from carchuna.cenarios import (
     CenarioDevolucoesDobram,
     CenarioMigracaoCanal,
     CenarioMudancaAnexo,
+    CenarioPreco,
     ResultadoCenario,
     cenario_antecipacao,
     cenario_comissao,
@@ -40,6 +47,7 @@ from carchuna.diagnostico import (
     RegraDeteccao,
     diagnosticar,
 )
+from carchuna.insights import Insight, MotorInsights, ParametrosInsights
 from carchuna.margem import (
     ANEXOS_SIMPLES,
     ROTULOS_DEDUCOES,
@@ -73,21 +81,27 @@ __all__ = [
     "CenarioDevolucoesDobram",
     "CenarioMigracaoCanal",
     "CenarioMudancaAnexo",
+    "CenarioPreco",
     "ConfigTributaria",
     "DecomposicaoMargem",
     "Deducao",
     "FontePerda",
+    "Insight",
     "MargemVenda",
     "MotorCrescimento",
     "MotorDiagnostico",
+    "MotorInsights",
     "Oportunidade",
     "ParametrosCrescimento",
     "ParametrosDiagnostico",
+    "ParametrosInsights",
+    "ProjecaoCaixa",
     "RegraDeteccao",
     "ResultadoCenario",
     "ResumoExecutivo",
     "TabelaCustos",
     "Transacao",
+    "agenda_recebimentos",
     "aliquota_efetiva_simples",
     "carregar_transacoes",
     "cenario_antecipacao",
@@ -102,7 +116,9 @@ __all__ = [
     "maior_queda_margem",
     "margem_mensal",
     "preco_para_margem",
+    "projetar_caixa",
     "rodar_cenarios_padrao",
     "serie_margem_pct",
     "transacoes_sinteticas",
+    "valor_liquido_recebivel",
 ]

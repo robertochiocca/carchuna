@@ -202,6 +202,31 @@ class AnalisadorMargem:
         """Decomposição mês a mês ("AAAA-MM")."""
         return margem_mensal(self.transacoes, self.config, self.tabela)
 
+    def composicao_deducao(self, nome: str) -> dict[str, list[tuple[str, Decimal]]]:
+        """De onde vem uma dedução: quebra por canal e por mês.
+
+        Alimenta o drill-down do raio-X (clicar numa barra abre a
+        composição dela). ``por_canal`` traz só canais com valor > 0,
+        do maior para o menor; ``por_mes`` segue a ordem do calendário.
+
+        No MEI, o DAS é fixo mensal e não é rateável por canal (mesma
+        convenção de ``margem_por_venda``): a quebra de ``tributos`` por
+        canal fica vazia e o valor cheio aparece na quebra por mês.
+        """
+        config = self.config
+        if config.regime == "mei" and nome == "tributos":
+            config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("0"))
+        por_canal_grupos: dict[str, list[Transacao]] = {}
+        for t in self.transacoes:
+            por_canal_grupos.setdefault(t.canal, []).append(t)
+        por_canal = [
+            (canal, decompor_margem(grupo, config, self.tabela).deducao(nome).valor)
+            for canal, grupo in por_canal_grupos.items()
+        ]
+        por_canal = sorted([(c, v) for c, v in por_canal if v > 0], key=lambda x: -x[1])
+        por_mes = [(mes, d.deducao(nome).valor) for mes, d in self.mensal.items()]
+        return {"por_canal": por_canal, "por_mes": por_mes}
+
     def margem_por_venda(self) -> list[MargemVenda]:
         """A margem real de cada venda, decomposta pelo mesmo motor testado.
 

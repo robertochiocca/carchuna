@@ -99,6 +99,32 @@ def test_margem_por_produto_sem_produto_agrupa_por_canal():
     assert nomes == {"mercado_livre", "shopee"}
 
 
+def test_composicao_deducao_quebra_por_canal_e_por_mes():
+    """Drill-down do raio-X: comissões por canal e por mês, conferidas à mão."""
+    vendas = [
+        _venda("100"),  # maio, ML: comissão 12,00
+        _venda("200", canal="shopee"),  # maio, Shopee: 200 × 14% = 28,00
+        _venda("100", data=date(2026, 6, 10)),  # junho, ML: 12,00
+        _venda("100", canal="fisico"),  # maio, físico: comissão 0 → some
+    ]
+    comp = AnalisadorMargem(vendas, CONFIG).composicao_deducao("comissoes_canal")
+    assert comp["por_canal"] == [
+        ("shopee", Decimal("28.00")),
+        ("mercado_livre", Decimal("24.00")),
+    ]
+    assert comp["por_mes"] == [
+        ("2026-05", Decimal("40.00")),
+        ("2026-06", Decimal("12.00")),
+    ]
+
+
+def test_composicao_deducao_mei_nao_rateia_das_por_canal():
+    config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76"))
+    comp = AnalisadorMargem([_venda()], config).composicao_deducao("tributos")
+    assert comp["por_canal"] == []  # DAS fixo mensal: não rateável por canal
+    assert comp["por_mes"] == [("2026-05", Decimal("76.00"))]
+
+
 def test_fachada_delega_para_os_motores():
     analise = AnalisadorMargem.demo(meses=3)
     assert analise.decomposicao.receita_bruta > 0
