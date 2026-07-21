@@ -116,6 +116,13 @@ AnalisadorMargem (fachada)          ← analise.py: um objeto, os quatro motores
 │                                      herdar e registrar (aberto/fechado)
 ├── MotorInsights                   ← insights.py: o Radar do CFO
 │     └── AnaliseInsight (ABC)      ← severidade + impacto R$/mês, sem ML
+├── MotorAnomalias                  ← anomalias.py: z-score, IQR, média móvel
+├── MotorDecisao                    ← decisao.py: a fila "resolver primeiro"
+│     └── NotaConfianca             ← confianca.py: rubrica 0–100 explicável
+├── MotorOtimizacao                 ← otimizacao.py: grade preço × canal
+├── Copiloto                        ← copiloto.py: pergunta → motor → resposta
+├── linhagem.py                     ← "como chegamos neste número?"
+├── benchmarks.py                   ← comparações só com fonte etiquetada
 ├── caixa.py                        ← agenda de recebíveis + fôlego de caixa
 ├── Retriever (BM25 + sinônimos)    ← rag/: base legal citada, LLM opcional
 └── API FastAPI + Pydantic          ← api/: casca fina e stateless em /api/v1
@@ -133,6 +140,13 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | pronto — implementado e testado |
 | `cenarios.py` — **preços +X% (mesmo volume)**, comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
 | `insights.py` — **Radar do CFO**: tendência de custos entre meses, produtos de margem magra (com o ganho exato de um reajuste) e mês fora do padrão (2σ), com severidade e impacto em R$/mês | pronto — implementado e testado |
+| `decisao.py` — **motor de decisão**: achados + radar + crescimento numa fila única priorizada por impacto × confiança × esforço × velocidade × risco × reversibilidade, com a conta de cada posição aberta na justificativa | pronto — implementado e testado |
+| `confianca.py` — **nota de confiança explicável** (0–100): rubrica fixa de evidência, histórico, amostra e completude, cada componente com o motivo; separa "os dados mostram isso" de "hipótese possível" | pronto — implementado e testado |
+| `linhagem.py` — **linhagem de dados**: ficha por número (arquivo de origem, colunas, fórmula com os parâmetros do caso, transformações, premissas, limitações, fonte, momento do cálculo) | pronto — implementado e testado |
+| `anomalias.py` — **detecção de anomalias**: z-score + cerca de IQR por dedução, frete por pedido vs. média móvel, e a regra "receita subiu, lucro caiu" com a causa apontada; cada anomalia com esperado × observado, método e confiança | pronto — implementado e testado (STL: roadmap, exige 24+ meses) |
+| `otimizacao.py` — **otimizador em grade** (preço × migração de canal) com restrições nomeadas (margem mínima, queda máxima de volume, teto de ticket) e elasticidade como premissa do usuário; todos os candidatos avaliados ficam no resultado | pronto — implementado e testado |
+| `benchmarks.py` — **benchmarking honesto**: comissão efetiva vs. tabela pública (com link), referências documentadas editáveis, ou número trazido pelo usuário; sem fonte, "indisponível" | pronto — implementado e testado |
+| `copiloto.py` — **copiloto**: roteador de intenções sem IA ("por que meu lucro caiu em junho?") chamando os motores; `explicar_variacao` decompõe o Δlucro pela identidade contábil (fecha centavo a centavo) | pronto — implementado e testado |
 | `caixa.py` — **projeção de caixa**: agenda de recebíveis das vendas já feitas (`calculado`) contra saídas mensais informadas (`estimado`), primeiro dia no vermelho e dias de fôlego | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
@@ -151,7 +165,9 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | Open Finance via agregador (Pluggy/Belvo) | roadmap |
 | MCP server (consultar a Carchuna por assistentes de IA) | roadmap |
 | Busca semântica (embeddings/ChromaDB, opt-in) | roadmap |
-| **Elasticidade de preço** (quanto de volume se perde ao subir o preço) | roadmap — exige histórico de variação de preço que a planilha de vendas não traz; até lá, os cenários de preço declaram "mesmo volume" como premissa |
+| **Elasticidade de preço** (quanto de volume se perde ao subir o preço) | roadmap — exige histórico de variação de preço que a planilha de vendas não traz; até lá, os cenários de preço declaram "mesmo volume" como premissa e o otimizador aceita a SUA elasticidade como premissa declarada |
+| **Alavancas de publicidade/conversão/custos operacionais** no otimizador | roadmap — exigem dados (gasto com anúncio, funil, despesas) que o relatório de vendas não traz |
+| **Percentil de mercado** no benchmarking | não planejado sem fonte — percentil exige a distribuição do setor, e não há fonte gratuita auditável; benchmark inventado não entra |
 | **CAC/LTV por canal** (economia do cliente) | roadmap — exige dados de aquisição (gasto com anúncio, recompra) que não existem no relatório de vendas |
 | **Contas a pagar reais** no fluxo de caixa (vencimento a vencimento) | roadmap — hoje as saídas são uma média mensal informada pelo usuário, diluída por dia (simplificação documentada) |
 | ML preditivo (previsão de vendas) | roadmap — heurísticas transparentes primeiro |

@@ -29,10 +29,19 @@ from carchuna import (
     AnalisadorMargem,
     CenarioCrescimentoCanal,
     ConfigTributaria,
+    Copiloto,
+    MotorAnomalias,
+    MotorDecisao,
     MotorInsights,
+    MotorOtimizacao,
     ParametrosDiagnostico,
+    ParametrosOtimizacao,
+    Restricoes,
     TabelaCustos,
+    agenda_recebimentos,
+    analisar_caixa,
     carregar_transacoes,
+    comparar_benchmarks,
     projetar_caixa,
     transacoes_sinteticas,
 )
@@ -318,6 +327,79 @@ T = {
             "informou, diluído por dia. A curva enxerga só as vendas já "
             "feitas: sem vendas novas no arquivo, ela desce."
         ),
+        "fila_titulo": "Qual problema resolver primeiro",
+        "fila_caption": (
+            "Achados, sinais do radar e oportunidades, juntos numa fila "
+            "única — ordenada por impacto × confiança × esforço × "
+            "velocidade × risco × reversibilidade. A conta de cada posição "
+            "está aberta no 'por quê'."
+        ),
+        "fila_acao": "O que fazer:",
+        "fila_porque": "Por que esta prioridade?",
+        "fila_confianca": "confiança",
+        "fila_esforco": "esforço",
+        "fila_velocidade": "resultado em",
+        "fila_risco": "risco",
+        "fila_motivos": "O que sustenta a confiança:",
+        "anom_titulo": "Mudanças anormais no último mês",
+        "anom_esperado": "Esperado",
+        "anom_observado": "Observado",
+        "anom_desvio": "Desvio",
+        "anom_metodo": "Como foi detectada:",
+        "lin_titulo": "De onde vem cada número?",
+        "lin_caption": (
+            "Escolha um número e veja o arquivo de origem, as colunas, a "
+            "fórmula com os parâmetros do seu caso, as premissas e as "
+            "limitações — rastreabilidade completa."
+        ),
+        "lin_numero": "Número",
+        "lin_origem": "Fonte dos dados",
+        "lin_colunas": "Colunas usadas",
+        "lin_formula": "Cálculo",
+        "lin_transf": "Transformações na importação",
+        "lin_premissas": "Premissas",
+        "lin_limitacoes": "Limitações",
+        "lin_fonte": "Base legal / tabela",
+        "lin_quando": "Calculado em",
+        "otim_titulo": "Qual combinação maximiza o lucro?",
+        "otim_caption": (
+            "Busca em grade determinística sobre preço × migração de canal, "
+            "no mesmo motor testado. Defina suas restrições; todos os "
+            "candidatos avaliados ficam visíveis — a explicação é a grade."
+        ),
+        "otim_elast": "Volume perdido a cada +1% de preço (%) — sua premissa",
+        "otim_elast_ajuda": (
+            "0 = volume constante (premissa padrão, declarada no resultado). "
+            "A planilha de vendas não tem como medir elasticidade — este "
+            "número é uma hipótese SUA."
+        ),
+        "otim_margem_min": "Margem mínima (%)",
+        "otim_queda_max": "Queda máxima de volume (%)",
+        "otim_teto": "Ticket médio máximo (R$, 0 = sem teto)",
+        "otim_melhor": "Melhor combinação viável",
+        "otim_ganho": "Ganho vs. hoje",
+        "otim_grade": "Ver todos os candidatos avaliados",
+        "otim_col": {
+            "preco": "preço",
+            "migracao": "migração ML→próprio",
+            "margem": "margem %",
+            "lucro": "lucro/mês",
+            "status": "status",
+        },
+        "cx_janelas": "Janelas de 30, 60 e 90 dias",
+        "cx_entra": "entra",
+        "cx_sai": "sai",
+        "cx_saldo": "saldo",
+        "bench_titulo": "Comparações com régua honesta",
+        "bench_caption": (
+            "Só comparamos com o que tem fonte: tabela pública do canal "
+            "(com link), referências documentadas e editáveis, ou um número "
+            "que VOCÊ trouxer. Sem fonte confiável, dizemos 'indisponível' — "
+            "benchmark inventado não entra."
+        ),
+        "bench_sua_ref": "Sua referência de margem líquida (%, opcional)",
+        "bench_fonte": "Fonte:",
+        "cop_dados": "Os números por trás da resposta",
         "vendas_metricas": ["Vendas", "Faturamento", "Canais", "Devoluções"],
         "campeoes": "Campeões de margem — venda mais destes",
         "campeoes_caption": (
@@ -621,6 +703,79 @@ T = {
             "sales already made: with no new sales in the file, it goes "
             "down."
         ),
+        "fila_titulo": "Which problem to solve first",
+        "fila_caption": (
+            "Findings, radar signals and opportunities in a single queue — "
+            "ranked by impact × confidence × effort × speed × risk × "
+            "reversibility. The math behind each position is open in the "
+            "'why'."
+        ),
+        "fila_acao": "What to do:",
+        "fila_porque": "Why this priority?",
+        "fila_confianca": "confidence",
+        "fila_esforco": "effort",
+        "fila_velocidade": "results in",
+        "fila_risco": "risk",
+        "fila_motivos": "What supports the confidence:",
+        "anom_titulo": "Abnormal changes in the last month",
+        "anom_esperado": "Expected",
+        "anom_observado": "Observed",
+        "anom_desvio": "Deviation",
+        "anom_metodo": "How it was detected:",
+        "lin_titulo": "Where does each number come from?",
+        "lin_caption": (
+            "Pick a number and see the source file, the columns, the "
+            "formula with your case's parameters, the assumptions and the "
+            "limitations — full traceability."
+        ),
+        "lin_numero": "Number",
+        "lin_origem": "Data source",
+        "lin_colunas": "Columns used",
+        "lin_formula": "Calculation",
+        "lin_transf": "Import transformations",
+        "lin_premissas": "Assumptions",
+        "lin_limitacoes": "Limitations",
+        "lin_fonte": "Legal basis / table",
+        "lin_quando": "Computed at",
+        "otim_titulo": "Which combination maximizes profit?",
+        "otim_caption": (
+            "Deterministic grid search over price × channel migration, on "
+            "the same tested engine. Set your constraints; every candidate "
+            "evaluated stays visible — the grid IS the explanation."
+        ),
+        "otim_elast": "Volume lost per +1% price (%) — your assumption",
+        "otim_elast_ajuda": (
+            "0 = constant volume (default assumption, declared in the "
+            "result). A sales sheet cannot measure elasticity — this "
+            "number is YOUR hypothesis."
+        ),
+        "otim_margem_min": "Minimum margin (%)",
+        "otim_queda_max": "Maximum volume drop (%)",
+        "otim_teto": "Maximum average ticket (R$, 0 = no cap)",
+        "otim_melhor": "Best feasible combination",
+        "otim_ganho": "Gain vs. today",
+        "otim_grade": "See every candidate evaluated",
+        "otim_col": {
+            "preco": "price",
+            "migracao": "migration ML→own",
+            "margem": "margin %",
+            "lucro": "profit/mo",
+            "status": "status",
+        },
+        "cx_janelas": "30, 60 and 90-day windows",
+        "cx_entra": "in",
+        "cx_sai": "out",
+        "cx_saldo": "balance",
+        "bench_titulo": "Comparisons with an honest yardstick",
+        "bench_caption": (
+            "We only compare against things with a source: the channel's "
+            "public fee table (with link), documented editable references, "
+            "or a number YOU bring. Without a reliable source we say "
+            "'unavailable' — invented benchmarks don't get in."
+        ),
+        "bench_sua_ref": "Your net-margin reference (%, optional)",
+        "bench_fonte": "Source:",
+        "cop_dados": "The numbers behind the answer",
         "vendas_metricas": ["Sales", "Revenue", "Channels", "Returns"],
         "campeoes": "Margin champions — sell more of these",
         "campeoes_caption": (
@@ -773,8 +928,10 @@ def _retriever_cacheado() -> Retriever:
 
 
 @st.cache_data(show_spinner=False)
-def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> dict:
-    """Roda os quatro motores uma vez por (dados, config) — não por clique.
+def _resultados_cacheados(
+    transacoes: tuple, config, tabela, atividade: str, origem: str
+) -> dict:
+    """Roda os motores uma vez por (dados, config) — não por clique.
 
     Com bases reais (dezenas de milhares de vendas), decompor venda a
     venda a cada interação de widget ficaria lento; o cache devolve o
@@ -786,7 +943,11 @@ def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> 
         tabela,
         ParametrosDiagnostico(atividade=atividade),
         retriever=_retriever_cacheado(),
+        origem=origem,
     )
+    achados = analise.diagnosticar()
+    radar = MotorInsights().radar(list(transacoes), config, tabela)
+    oportunidades = analise.crescimento()
     return {
         "decomposicao": analise.decomposicao,
         "resumo": analise.resumo_executivo(),
@@ -795,9 +956,14 @@ def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> 
         "por_venda": analise.margem_por_venda(),
         "por_produto": analise.margem_por_produto(),
         "cenarios": analise.cenarios(),
-        "achados": analise.diagnosticar(),
-        "oportunidades": analise.crescimento(),
-        "radar": MotorInsights().radar(list(transacoes), config, tabela),
+        "anomalias": MotorAnomalias().detectar(list(transacoes), config, tabela),
+        "recomendacoes": MotorDecisao().recomendar(
+            list(transacoes), achados, radar, oportunidades
+        ),
+        "linhagem": analise.linhagem(),
+        "achados": achados,
+        "oportunidades": oportunidades,
+        "radar": radar,
     }
 
 
@@ -1214,15 +1380,26 @@ if monitorar and caminho_arquivo:
 
     _vigiar_arquivo()
 
+# Rastreabilidade: o nome do arquivo real alimenta a linhagem de dados.
+if upload is not None:
+    origem_dados = upload.name
+elif caminho_arquivo:
+    origem_dados = caminho_arquivo
+else:
+    origem_dados = (
+        "dados sintéticos de exemplo" if lang == "pt" else "synthetic sample data"
+    )
+
 # Motores rodam uma vez por (dados, config) via cache; a fachada fica
-# disponível para as ações sob demanda (simular, preço, PDF, busca legal).
-res = _resultados_cacheados(tuple(transacoes), config, tabela, atividade)
+# disponível para as ações sob demanda (simular, preço, PDF, copiloto).
+res = _resultados_cacheados(tuple(transacoes), config, tabela, atividade, origem_dados)
 analise = AnalisadorMargem(
     transacoes,
     config,
     tabela,
     ParametrosDiagnostico(atividade=atividade),
     retriever=_retriever_cacheado(),
+    origem=origem_dados,
 )
 decomposicao = res["decomposicao"]
 resumo = res["resumo"]
@@ -1327,23 +1504,78 @@ with aba_resumo:
             f"[{sinal.confianca}]\n\n{sinal.explicacao}"
         )
         st.caption(sinal.caminho_pratico)
+    anomalias = res["anomalias"]
+    if anomalias:
+        st.markdown(f"**{t['anom_titulo']}**")
+        for anomalia in anomalias:
+            estilo_sev[anomalia.severidade](
+                f"**{t['radar_sev'][anomalia.severidade]} · {anomalia.titulo}** "
+                f"— ~{_brl(anomalia.impacto_mensal)}/{t['por_mes']}\n\n"
+                f"{anomalia.o_que_aconteceu}\n\n"
+                f"{t['anom_esperado']}: {anomalia.esperado} · "
+                f"{t['anom_observado']}: {anomalia.observado} · "
+                f"{t['anom_desvio']}: {anomalia.desvio_pct:+}% · "
+                f"{t['fila_confianca']}: {anomalia.confianca.pct}%"
+            )
+            st.caption(f"{t['anom_metodo']} {anomalia.metodo}")
     st.caption(t["radar_aviso"])
 
-    st.subheader(t["acoes_titulo"])
-    st.caption(t["acoes_caption"])
-    acoes = [
-        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in res["achados"]
-    ] + [
-        (o.ganho_estimado_mensal, o.titulo, o.caminho_pratico)
-        for o in res["oportunidades"]
-    ]
-    acoes.sort(key=lambda x: x[0], reverse=True)
-    if not acoes:
+    st.subheader(t["fila_titulo"])
+    st.caption(t["fila_caption"])
+    recomendacoes = res["recomendacoes"]
+    if not recomendacoes:
         st.success(t["sem_acoes"])
-    for valor, titulo, caminho in acoes[:3]:
+    for rec in recomendacoes[:5]:
         with st.container(border=True):
-            st.markdown(f"**{titulo}** — ~{_brl(valor)}/{t['por_mes']}")
-            st.caption(caminho)
+            st.markdown(
+                f"**{rec.prioridade}. {rec.problema}** — "
+                f"~{_brl(rec.impacto_mensal)}/{t['por_mes']}"
+            )
+            st.markdown(f"{t['fila_acao']} {rec.acao}")
+            st.caption(
+                f"{t['fila_confianca']} {rec.confianca.pct}% "
+                f"({rec.confianca.nivel}) · {t['fila_esforco']} {rec.esforco} · "
+                f"{t['fila_velocidade']} {rec.velocidade} · "
+                f"{t['fila_risco']} {rec.risco} · {rec.reversibilidade}"
+            )
+            with st.expander(t["fila_porque"]):
+                st.markdown(rec.justificativa)
+                st.markdown(f"_{rec.confianca.frase}_")
+                st.markdown(f"**{t['fila_motivos']}**")
+                for motivo in rec.confianca.motivos:
+                    st.markdown(f"- {motivo}")
+
+    with st.expander(t["lin_titulo"]):
+        st.caption(t["lin_caption"])
+        fichas = res["linhagem"]
+        nome_ficha = st.selectbox(
+            t["lin_numero"],
+            list(fichas),
+            format_func=lambda n: (
+                f"{rotulos.get(n, fichas[n].rotulo)} — {_brl(fichas[n].valor)}"
+            ),
+            key="linhagem_numero",
+        )
+        ficha = fichas[nome_ficha]
+        st.markdown(f"**{t['lin_origem']}:** `{ficha.origem_dados}`")
+        st.markdown(f"**{t['lin_colunas']}:** `{'`, `'.join(ficha.colunas)}`")
+        st.markdown(f"**{t['lin_formula']}:** {ficha.formula}")
+        st.markdown(f"**{t['lin_transf']}:**")
+        for transf in ficha.transformacoes:
+            st.markdown(f"- {transf}")
+        if ficha.premissas:
+            st.markdown(f"**{t['lin_premissas']}:**")
+            for premissa in ficha.premissas:
+                st.markdown(f"- {premissa}")
+        if ficha.limitacoes:
+            st.markdown(f"**{t['lin_limitacoes']}:**")
+            for limitacao in ficha.limitacoes:
+                st.markdown(f"- {limitacao}")
+        st.caption(
+            f"{t['lin_fonte']} {ficha.fonte} · [{ficha.confianca_dados}] · "
+            f"{t['lin_quando']} "
+            f"{ficha.calculado_em.strftime('%d/%m/%Y %H:%M')}"
+        )
 
     with st.expander(t["como_ler"]):
         st.markdown(t["como_ler_texto"])
@@ -1561,6 +1793,61 @@ with aba_ese:
             c2.metric(t["impacto_reais"], _brl(resultado.impacto_reais))
             c3.metric(t["impacto_pp"], f"{resultado.impacto_pp:+.2f}")
 
+    st.subheader(t["otim_titulo"])
+    st.caption(t["otim_caption"])
+    col_o1, col_o2 = st.columns(2)
+    elast = col_o1.number_input(
+        t["otim_elast"], 0.0, 10.0, 0.0, 0.5, help=t["otim_elast_ajuda"]
+    )
+    margem_min = col_o2.number_input(t["otim_margem_min"], 0.0, 90.0, 0.0, 1.0)
+    col_o3, col_o4 = st.columns(2)
+    queda_max = col_o3.number_input(t["otim_queda_max"], 0.0, 100.0, 15.0, 5.0)
+    teto_ticket = col_o4.number_input(t["otim_teto"], 0.0, value=0.0, step=10.0)
+    otimizador = MotorOtimizacao(
+        ParametrosOtimizacao(elasticidade=Decimal(str(elast)) if elast > 0 else None)
+    )
+    resultado_otim = otimizador.otimizar(
+        transacoes,
+        config,
+        tabela,
+        restricoes=Restricoes(
+            margem_minima_pct=(Decimal(str(margem_min)) if margem_min > 0 else None),
+            queda_maxima_volume=Decimal(str(queda_max)) / 100,
+            preco_medio_maximo=(Decimal(str(teto_ticket)) if teto_ticket > 0 else None),
+        ),
+    )
+    if resultado_otim.melhor is not None:
+        melhor = resultado_otim.melhor
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric(
+            t["otim_melhor"],
+            f"{(melhor.delta_preco * 100).quantize(Decimal('1')):+}% · "
+            f"{(melhor.fracao_migracao * 100).quantize(Decimal('1'))}%",
+        )
+        col_m2.metric(t["margem_cenario"], f"{melhor.margem_pct}%")
+        col_m3.metric(t["otim_ganho"], _brl(resultado_otim.ganho_mensal))
+    st.info(resultado_otim.explicacao)
+    for premissa in resultado_otim.premissas:
+        st.caption(f"— {premissa}")
+    with st.expander(t["otim_grade"]):
+        cols = t["otim_col"]
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        cols["preco"]: f"{(c.delta_preco * 100):+.0f}%",
+                        cols["migracao"]: f"{(c.fracao_migracao * 100):.0f}%",
+                        cols["margem"]: float(c.margem_pct),
+                        cols["lucro"]: float(c.lucro_mensal),
+                        cols["status"]: ("ok" if c.viavel else "; ".join(c.violacoes)),
+                    }
+                    for c in resultado_otim.candidatos
+                ]
+            ),
+            use_container_width=True,
+            height=300,
+        )
+
 # ---------------------------------------------------------------------------
 with aba_crescer:
     st.caption(t["crescimento_caption"])
@@ -1625,6 +1912,29 @@ with aba_crescer:
         col_r2.metric(t["preco_para"].format(pct=f"{calc_margem:.0f}"), _brl(alvo))
     except ValueError as erro:
         st.error(str(erro))
+    st.subheader(t["bench_titulo"])
+    st.caption(t["bench_caption"])
+    ref_margem = st.number_input(t["bench_sua_ref"], 0.0, 90.0, 0.0, 0.5)
+    comparacoes = comparar_benchmarks(
+        transacoes,
+        config,
+        tabela,
+        referencias_usuario=(
+            {"margem_liquida_pct": Decimal(str(ref_margem))} if ref_margem > 0 else None
+        ),
+    )
+    for bench in comparacoes:
+        with st.container(border=True):
+            if bench.referencia is None:
+                st.markdown(f"**{bench.rotulo}** — {bench.valor_usuario}")
+            else:
+                st.markdown(
+                    f"**{bench.rotulo}** — {bench.valor_usuario} · "
+                    f"{bench.referencia} · {bench.diferenca}"
+                )
+            st.write(bench.leitura)
+            st.caption(f"[{bench.tipo_fonte}] {t['bench_fonte']} {bench.fonte}")
+
     st.caption(AVISO_CRESCIMENTO)
 
 # ---------------------------------------------------------------------------
@@ -1676,6 +1986,24 @@ with aba_caixa:
     )
     st.caption(t["caixa_etiquetas"])
 
+    intel = analisar_caixa(
+        projecao, agenda_recebimentos(transacoes, tabela, a_partir_de=projecao.hoje)
+    )
+    st.subheader(t["cx_janelas"])
+    colunas_janela = st.columns(max(len(intel.janelas), 1))
+    for coluna, janela in zip(colunas_janela, intel.janelas, strict=False):
+        coluna.metric(
+            f"{janela.dias}d",
+            _brl(janela.saldo_final),
+            (
+                f"+{_brl(janela.entradas)} {t['cx_entra']} · "
+                f"−{_brl(janela.saidas)} {t['cx_sai']}"
+            ),
+            delta_color="off",
+        )
+    for alerta in intel.alertas:
+        st.warning(alerta)
+
 # ---------------------------------------------------------------------------
 with aba_diagnostico:
     st.caption(t["diag_caption"])
@@ -1705,12 +2033,24 @@ with aba_diagnostico:
     st.subheader(t["pergunte"])
     pergunta = st.text_input(t["pergunta_exemplo"])
     if pergunta:
-        dispositivos = retriever.buscar(pergunta)
-        resposta = gerar_resposta(pergunta, dispositivos)
-        if resposta is None:
-            resposta = resposta_extrativa(pergunta, dispositivos)
-            st.caption(t["modo_extrativo"])
-        st.write(resposta)
+        # O copiloto tenta primeiro: perguntas numéricas ("por que meu
+        # lucro caiu em junho?") são respondidas pelos motores testados,
+        # com os números expostos; o que não é numérico segue para o RAG
+        # legal de sempre. O LLM nunca calcula — só o motor.
+        resposta_copiloto = Copiloto(analise).responder(pergunta)
+        if resposta_copiloto is not None:
+            st.info(resposta_copiloto.texto)
+            with st.expander(t["cop_dados"]):
+                for chave, valor in resposta_copiloto.dados.items():
+                    st.markdown(f"- `{chave}`: {valor}")
+            st.caption(resposta_copiloto.aviso)
+        else:
+            dispositivos = retriever.buscar(pergunta)
+            resposta = gerar_resposta(pergunta, dispositivos)
+            if resposta is None:
+                resposta = resposta_extrativa(pergunta, dispositivos)
+                st.caption(t["modo_extrativo"])
+            st.write(resposta)
 
 # ---------------------------------------------------------------------------
 with aba_relatorio:
