@@ -38,14 +38,14 @@ from carchuna.cenarios import (
     cenario_mudanca_anexo,
     rodar_cenarios_padrao,
 )
+from carchuna.confianca import NotaConfianca, avaliar_confianca
+from carchuna.copiloto import Copiloto, RespostaCopiloto, explicar_variacao
 from carchuna.crescimento import (
     MotorCrescimento,
     Oportunidade,
     ParametrosCrescimento,
     preco_para_margem,
 )
-from carchuna.confianca import NotaConfianca, avaliar_confianca
-from carchuna.copiloto import Copiloto, RespostaCopiloto, explicar_variacao
 from carchuna.dados import carregar_transacoes, transacoes_sinteticas
 from carchuna.decisao import MotorDecisao, Recomendacao, recomendar
 from carchuna.diagnostico import (
@@ -68,18 +68,18 @@ from carchuna.margem import (
     aliquota_efetiva_simples,
     decompor_margem,
 )
-from carchuna.otimizacao import (
-    MotorOtimizacao,
-    ParametrosOtimizacao,
-    Restricoes,
-    ResultadoOtimizacao,
-)
 from carchuna.metricas import (
     instabilidade_margem,
     lucro_acumulado,
     maior_queda_margem,
     margem_mensal,
     serie_margem_pct,
+)
+from carchuna.otimizacao import (
+    MotorOtimizacao,
+    ParametrosOtimizacao,
+    Restricoes,
+    ResultadoOtimizacao,
 )
 
 __version__ = "1.1.0"
