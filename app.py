@@ -1360,11 +1360,12 @@ with st.sidebar:
                     "desconhecido",
                 ):
                     for valor in grupos[estado]:
+                        chave_css = normalizar_valor(valor).replace(" ", "_")
                         escolha = st.selectbox(
                             f"“{valor}”",
                             opcoes_dev,
                             index=indice_padrao.get(estado, 0),
-                            key=f"devolucao_{normalizar_valor(valor)}",
+                            key=f"devolucao_{chave_css}",
                         )
                         if escolha == opcoes_dev[0]:
                             pendentes.append(valor)
