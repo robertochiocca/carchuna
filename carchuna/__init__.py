@@ -81,6 +81,12 @@ from carchuna.otimizacao import (
     Restricoes,
     ResultadoOtimizacao,
 )
+from carchuna.tipos import (
+    TipoColuna,
+    inferir_tipo_coluna,
+    interpretar_devolucao,
+    resumo_devolucao,
+)
 
 __version__ = "1.1.0"
 
@@ -131,6 +137,7 @@ __all__ = [
     "ResultadoCenario",
     "ResumoExecutivo",
     "TabelaCustos",
+    "TipoColuna",
     "Transacao",
     "agenda_recebimentos",
     "aliquota_efetiva_simples",
@@ -140,6 +147,7 @@ __all__ = [
     "comparar_benchmarks",
     "explicar_variacao",
     "recomendar",
+    "resumo_devolucao",
     "cenario_antecipacao",
     "cenario_comissao",
     "cenario_devolucoes_dobram",
@@ -147,7 +155,9 @@ __all__ = [
     "cenario_mudanca_anexo",
     "decompor_margem",
     "diagnosticar",
+    "inferir_tipo_coluna",
     "instabilidade_margem",
+    "interpretar_devolucao",
     "lucro_acumulado",
     "maior_queda_margem",
     "margem_mensal",

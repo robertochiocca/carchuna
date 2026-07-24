@@ -54,6 +54,7 @@ from carchuna.dados import (
 )
 from carchuna.rag.llm import gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
+from carchuna.tipos import inferir_tipo_coluna, normalizar_valor, resumo_devolucao
 
 st.set_page_config(page_title="Carchuna", layout="wide")
 
@@ -165,6 +166,26 @@ T = {
             "os campos com • (obrigatórios)."
         ),
         "mapa_incompleto": "Falta apontar: {campos}.",
+        "tipo_detectado": "Tipo detectado:",
+        "tipos_rotulos": {
+            "booleano": "Booleano",
+            "categorico": "Categórico",
+            "numerico": "Numérico",
+            "data": "Data",
+            "texto": "Texto",
+        },
+        "valores_encontrados": "valores encontrados:",
+        "devolucao_caption": (
+            "A coluna de devolução veio como STATUS, não como sim/não. "
+            "Confira como cada um foi entendido — os conclusivos já vêm "
+            "marcados; os indefinidos (ex.: 'Em análise') são decisão sua. "
+            "Nada vira sim/não em silêncio."
+        ),
+        "devolucao_op": ["—", "Não devolvida", "Devolvida"],
+        "devolucao_pendencia": (
+            "Defina como tratar: {valores}. Sem essa decisão a análise não "
+            "segue — a Carchuna não adivinha status de devolução."
+        ),
         "opcao_nenhuma": "— (não tem no arquivo)",
         "opcao_zero": "(usar zero para todas)",
         "opcao_nao": "(nenhuma foi devolvida)",
@@ -540,6 +561,26 @@ T = {
             "the fields marked • (required)."
         ),
         "mapa_incompleto": "Still missing: {campos}.",
+        "tipo_detectado": "Detected type:",
+        "tipos_rotulos": {
+            "booleano": "Boolean",
+            "categorico": "Categorical",
+            "numerico": "Numeric",
+            "data": "Date",
+            "texto": "Text",
+        },
+        "valores_encontrados": "values found:",
+        "devolucao_caption": (
+            "The returns column came as a STATUS, not yes/no. Check how "
+            "each one was understood — conclusive ones come pre-set; "
+            "indefinite ones (e.g. 'Under review') are your call. Nothing "
+            "becomes yes/no silently."
+        ),
+        "devolucao_op": ["—", "Not returned", "Returned"],
+        "devolucao_pendencia": (
+            "Decide how to treat: {valores}. The analysis will not proceed "
+            "without it — Carchuna does not guess return statuses."
+        ),
         "opcao_nenhuma": "— (not in the file)",
         "opcao_zero": "(use zero for all)",
         "opcao_nao": "(none was returned)",
@@ -1291,9 +1332,59 @@ with st.sidebar:
         if faltando:
             st.warning(t["mapa_incompleto"].format(campos=", ".join(faltando)))
             st.stop()
+
+        # Tipos semânticos da coluna de devolução: booleano ("Sim"/"Não")
+        # importa direto; categórico ("Solicitação aprovada"/"Em análise")
+        # mostra como cada status foi entendido e deixa o usuário
+        # sobrescrever — status indefinido NUNCA vira sim/não sozinho.
+        interpretacao_devolvida: dict[str, bool] = {}
+        col_devolvida = mapa.get("devolvida")
+        if col_devolvida and not col_devolvida.startswith("="):
+            valores_dev = [linha.get(col_devolvida) for linha in linhas_brutas]
+            tipo_dev = inferir_tipo_coluna(valores_dev)
+            st.caption(
+                f"{t['tipo_detectado']} **{t['tipos_rotulos'][tipo_dev.tipo]}** — "
+                f"{t['valores_encontrados']} "
+                f"{', '.join(tipo_dev.valores_distintos[:8]) or '—'}"
+            )
+            if tipo_dev.tipo != "booleano":
+                grupos = resumo_devolucao(valores_dev)
+                st.caption(t["devolucao_caption"])
+                opcoes_dev = t["devolucao_op"]  # ["—", não devolvida, devolvida]
+                indice_padrao = {"devolvida": 2, "nao_devolvida": 1}
+                pendentes: list[str] = []
+                for estado in (
+                    "devolvida",
+                    "nao_devolvida",
+                    "indefinido",
+                    "desconhecido",
+                ):
+                    for valor in grupos[estado]:
+                        escolha = st.selectbox(
+                            f"“{valor}”",
+                            opcoes_dev,
+                            index=indice_padrao.get(estado, 0),
+                            key=f"devolucao_{normalizar_valor(valor)}",
+                        )
+                        if escolha == opcoes_dev[0]:
+                            pendentes.append(valor)
+                        else:
+                            interpretacao_devolvida[normalizar_valor(valor)] = (
+                                escolha == opcoes_dev[2]
+                            )
+                if pendentes:
+                    st.warning(
+                        t["devolucao_pendencia"].format(
+                            valores=", ".join(f"“{v}”" for v in pendentes)
+                        )
+                    )
+                    st.stop()
+
         try:
             transacoes = transacoes_de_mapa(
-                linhas_brutas, {c: o for c, o in mapa.items() if o}
+                linhas_brutas,
+                {c: o for c, o in mapa.items() if o},
+                interpretacao_devolvida=interpretacao_devolvida or None,
             )
             st.success(f"{len(transacoes)} {t['importadas']}")
         except (ValueError, TypeError) as erro:
