@@ -1,6 +1,6 @@
 # Estado do loop — atualizado em 2026-08-05
 
-## Ciclos 1–10 — OBJETIVO MÁXIMO atingido em 05/08/2026
+## Ciclos 1–12 — OBJETIVO MÁXIMO atingido em 05/08/2026 (ciclos 11–12 são pós-objetivo)
 
 | # | Item | Commit |
 |---|---|---|
@@ -14,8 +14,10 @@
 | 8 | Tabela de status do README alinhada com a realidade | `2932647` |
 | 9 | Demo do site conferida contra o motor (tabelas + fórmula no node) | `19a9128` |
 | 10 | Caminho do LLM coberto sem chave; piso do CI de 85% para 95% | `7885439` |
+| 11 | Auditoria dos próprios testes: asserção fraca → comportamento, provada por mutação | `97bfb33` |
+| 12 | P4 — RBT12 móvel mês a mês, com recusa honesta quando a janela não fecha | `f6e7f6a` |
 
-- Portões do último ciclo: pytest 173 passando · cobertura 98,33% · ruff ok · black ok
+- Portões do último ciclo: pytest 189 passando · cobertura 98,29% · ruff ok · black ok
 - CI verde em Python 3.10, 3.11 e 3.12 (run 41, commit `86b1ae0`)
 
 ### Conferência das 6 condições de pronto
@@ -31,7 +33,6 @@
 ## Fila
 | P | Item | Estado | Bloqueio |
 |---|------|--------|----------|
-| P4 | RBT12 móvel mês a mês nas séries | fila | exige 12 meses contínuos no arquivo; hoje a RBT12 é um valor só para o período |
 | P4 | Lucro Presumido atrás de flag | bloqueado | cada alíquota de ICMS/ISS depende de estado e município e nenhuma foi validada em fonte oficial |
 | P5 | Conector Shopee API | bloqueado por humano | app aprovado na Open Platform + OAuth do lojista |
 | P5 | Conector Mercado Livre API | bloqueado por humano | app registrado + OAuth do lojista |
@@ -45,10 +46,17 @@
 - Conferir os 21 dispositivos de `data/corpus_pme.json` na fonte oficial e virar `revisado: true`.
 - Conseguir 1 lojista piloto e substituir `tests/fixtures/reais/` por um export de verdade,
   anonimizado (a fixture de hoje reproduz a FORMA do relatório, não é arquivo capturado).
-- Conferir os valores dos Anexos do Simples no Planalto (a conferência automática de
-  19/07/2026 recebeu HTTP 503) antes de qualquer uso real.
+- Conferir os valores dos Anexos do Simples no Planalto (conferência automática recebeu
+  HTTP 503 em 19/07/2026 e de novo em 05/08/2026) antes de qualquer uso real.
+- Conferir na fonte oficial a leitura do art. 18, § 1º usada na RBT12 móvel (doze meses
+  anteriores ao período de apuração) — mesma tentativa, mesmo 503.
 
 ## Decisões tomadas (para não redecidir)
+- **Janela de RBT12 incompleta se recusa, não chuta.** Mês sem os 12 anteriores no arquivo
+  usa a RBT12 informada; completar com zero baixaria a alíquota em silêncio.
+- **Teste novo passa por mutação antes de contar.** Duas vezes neste loop uma conta minha
+  errou a faixa do Simples e o teste é que estava errado — mutação no código-fonte é o que
+  separa teste com dentes de cobertura de enfeite.
 - **Data ambígua é brasileira.** `05/01/2026` é 5 de janeiro. O formato americano não entra
   na lista de tentativas: adivinhar entre dd/mm e mm/dd trocaria meses de lugar em silêncio.
 - **Dois contratos de importação, de propósito.** `carregar_transacoes` e
