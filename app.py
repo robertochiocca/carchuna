@@ -738,7 +738,7 @@ def _transacoes_do_resultado(resultado, textos: dict) -> list:
                 ]
             ),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
     return resultado.transacoes
 
@@ -1161,9 +1161,7 @@ with aba_resumo:
     )
 
     st.subheader(t["para_onde"])
-    st.altair_chart(
-        _grafico_destino(decomposicao, rotulos, t), use_container_width=True
-    )
+    st.altair_chart(_grafico_destino(decomposicao, rotulos, t), width="stretch")
 
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
@@ -1251,7 +1249,7 @@ with aba_vendas:
                 for p in produtos
             ]
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader(t["receita_por_canal"])
@@ -1267,7 +1265,7 @@ with aba_vendas:
                 for canal, valor in por_canal.items()
             ]
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     with st.expander(t["todas_vendas"]):
@@ -1275,7 +1273,7 @@ with aba_vendas:
             por_venda = res["por_venda"]
             frame["margem"] = [float(v.margem_liquida) for v in por_venda]
             frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
-        st.dataframe(frame, use_container_width=True, height=320)
+        st.dataframe(frame, width="stretch", height=320)
 
 # ---------------------------------------------------------------------------
 with aba_historico:
@@ -1334,7 +1332,7 @@ with aba_historico:
                     for mes, d in mensal.items()
                 ]
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.subheader(t["hist_margem"])
         st.altair_chart(
@@ -1349,7 +1347,7 @@ with aba_historico:
                 ],
                 modo="linha",
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.subheader(t["hist_lucro"])
         st.altair_chart(
@@ -1360,7 +1358,7 @@ with aba_historico:
                 ],
                 modo="area",
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
         st.subheader(t["hist_tabela"])
@@ -1378,7 +1376,7 @@ with aba_historico:
                 for mes, d in mensal.items()
             ]
         )
-        st.dataframe(historico, use_container_width=True)
+        st.dataframe(historico, width="stretch")
         st.download_button(
             t["baixar_hist"],
             data=historico.to_csv(index=False).encode("utf-8"),

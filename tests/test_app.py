@@ -356,6 +356,27 @@ def test_o_retriever_continua_cacheado():
     assert "_resultados_cacheados" in cacheadas
 
 
+def test_o_app_nao_usa_parametro_do_streamlit_com_remocao_marcada():
+    """`use_container_width` tinha remoção anunciada para 31/12/2025.
+
+    A data já passou. Enquanto o parâmetro só emite aviso o app roda,
+    mas no dia em que o Streamlit Cloud atualizar para uma versão que o
+    removeu, o dashboard publicado quebra inteiro — e o lojista não tem
+    como saber o que aconteceu. `width='stretch'` é o substituto.
+    """
+    fonte = Path(APP).read_text(encoding="utf-8")
+    assert "use_container_width" not in fonte
+
+
+def test_nenhum_aviso_de_depreciacao_escapa_para_a_tela(app_demo):
+    """`AppTest.exception` também recolhe aviso (`is_warning=True`).
+
+    Deixar aviso passar é o que fez o erro de cache sobreviver nove
+    commits: o Streamlit reclamava e ninguém estava ouvindo.
+    """
+    assert not app_demo.exception
+
+
 def test_a_taxa_digitada_chega_inteira_ao_motor(tmp_path):
     """A fronteira do widget não pode reintroduzir float no cálculo.
 
