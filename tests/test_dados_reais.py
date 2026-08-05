@@ -9,6 +9,7 @@ intervenção manual, ou falha com uma frase que o lojista entende**.
 
 import io
 import sys
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -150,6 +151,74 @@ def test_arquivo_sem_nenhum_cabecalho_reconhecivel(tmp_path):
     assert "cabeçalho" in mensagem.lower()
     # a frase precisa citar as colunas que a Carchuna procura
     assert "valor_bruto" in mensagem
+
+
+# ---------------------------------------------------------------------------
+# Datas em formatos mistos
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "texto,esperado",
+    [
+        ("2026-05-01", date(2026, 5, 1)),  # ISO, o formato do modelo
+        ("01/05/2026", date(2026, 5, 1)),  # dd/mm/aaaa — padrão brasileiro
+        ("01-05-2026", date(2026, 5, 1)),  # dd-mm-aaaa — export de ERP
+        ("01.05.2026", date(2026, 5, 1)),  # dd.mm.aaaa
+        ("2026/05/01", date(2026, 5, 1)),  # aaaa/mm/dd
+        ("01/05/26", date(2026, 5, 1)),  # ano com 2 dígitos
+        ("2026-05-01 14:32:07", date(2026, 5, 1)),  # ISO com hora
+        ("01/05/2026 14:32", date(2026, 5, 1)),  # brasileiro com hora
+        ("2026-05-01T14:32:07Z", date(2026, 5, 1)),  # ISO 8601 de API
+    ],
+)
+def test_formatos_de_data_aceitos(tmp_path, texto, esperado):
+    """Cada painel exporta a data de um jeito; todos viram a mesma date."""
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        CABECALHO + f"{texto};shopee;Capa;100,00;40,00;10,00\n", encoding="utf-8"
+    )
+    (transacao,) = carregar_transacoes(arquivo)
+    assert transacao.data == esperado
+
+
+def test_dia_e_mes_ambiguos_resolvem_para_o_padrao_brasileiro(tmp_path):
+    """05/01/2026 é 5 de janeiro no Brasil, não 1º de maio.
+
+    Ambíguo por natureza (nos EUA seria o contrário); o público da
+    Carchuna é brasileiro, então dd/mm vence — e a decisão está no
+    docstring do módulo para quem for ler depois.
+    """
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        CABECALHO + "05/01/2026;shopee;Capa;100,00;40,00;10,00\n", encoding="utf-8"
+    )
+    (transacao,) = carregar_transacoes(arquivo)
+    assert transacao.data == date(2026, 1, 5)
+
+
+def test_data_invalida_diz_qual_e_a_linha_e_o_que_esperava(tmp_path):
+    """Data ilegível vira frase de lojista, não `Invalid isoformat string`."""
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        CABECALHO + "ontem;shopee;Capa;100,00;40,00;10,00\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError) as erro:
+        carregar_transacoes(arquivo)
+    mensagem = str(erro.value)
+    assert "linha 2" in mensagem
+    assert "ontem" in mensagem
+    assert "dd/mm/aaaa" in mensagem
+
+
+def test_data_com_dia_31_em_mes_de_30_e_recusada(tmp_path):
+    """31/04 não existe: recusar é mais honesto que 'corrigir' para 30/04."""
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        CABECALHO + "31/04/2026;shopee;Capa;100,00;40,00;10,00\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="linha 2"):
+        carregar_transacoes(arquivo)
 
 
 if __name__ == "__main__":

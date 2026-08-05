@@ -18,7 +18,7 @@ import io
 import json
 import random
 import unicodedata
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -55,6 +55,40 @@ def _decimal_br(texto: str, campo: str, linha: int) -> Decimal:
         ) from None
 
 
+# Formatos de data tentados, em ordem. `dd/mm` vem antes de qualquer leitura
+# `mm/dd` porque o público é brasileiro: 05/01/2026 é 5 de janeiro. O formato
+# americano não entra na lista — adivinhar entre os dois em silêncio trocaria
+# meses inteiros de lugar sem o lojista perceber.
+_FORMATOS_DATA = ("%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d", "%d/%m/%y")
+
+
+def _data_br(texto: str, linha: int) -> date:
+    """Converte a data de qualquer painel em ``date``.
+
+    Aceita ISO (``2026-05-01``, com ou sem hora), o padrão brasileiro
+    (``01/05/2026``) e as variantes de ERP com ``-`` ou ``.``. A parte de
+    hora é descartada: a Carchuna trabalha por dia.
+    """
+    bruto = str(texto).strip()
+    # descarta a hora: '2026-05-01 14:32', '01/05/2026 14:32', ISO 8601 com T
+    dia = bruto.replace("T", " ").split(" ")[0]
+    try:
+        return date.fromisoformat(dia)
+    except ValueError:
+        pass
+    for formato in _FORMATOS_DATA:
+        try:
+            return datetime.strptime(dia, formato).date()
+        except ValueError:
+            continue
+    raise ValueError(
+        f"linha {linha}: `data` = {texto!r} não é uma data que eu saiba ler. "
+        "Use dd/mm/aaaa (ex.: 01/05/2026) ou aaaa-mm-dd (ex.: 2026-05-01). "
+        "Se a coluna veio do painel do marketplace com data e hora juntas, "
+        "pode deixar — a hora é ignorada."
+    )
+
+
 def _bool_br(texto: str, linha: int) -> bool:
     normal = str(texto).strip().lower()
     if normal in _VERDADEIRO:
@@ -74,7 +108,7 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
     )
     comissao = linha.get("comissao_cobrada")
     return Transacao(
-        data=date.fromisoformat(str(linha["data"]).strip()[:10]),
+        data=_data_br(linha["data"], numero),
         canal=canal,
         valor_bruto=_decimal_br(linha["valor_bruto"], "valor_bruto", numero),
         custo_produto=_decimal_br(linha["custo_produto"], "custo_produto", numero),
