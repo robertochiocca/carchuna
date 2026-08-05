@@ -204,6 +204,23 @@ T = {
             "Serviços = III a V. Seu contador sabe o seu."
         ),
         "rbt12": "Faturamento dos últimos 12 meses (R$)",
+        "rbt12_movel": "Calcular a alíquota mês a mês (RBT12 móvel)",
+        "rbt12_movel_ajuda": (
+            "No Simples a alíquota de cada mês sai do faturamento dos 12 "
+            "meses ANTERIORES a ele (LC 123/2006, art. 18, § 1º) — quem "
+            "cresceu paga mais no fim do ano. Só é possível nos meses em "
+            "que o seu arquivo cobre esses 12 meses inteiros; nos outros "
+            "vale o valor que você informou acima."
+        ),
+        "rbt12_movel_aplicada": (
+            "Alíquota calculada do próprio arquivo em {n} de {total} meses; "
+            "nos demais vale o faturamento que você informou."
+        ),
+        "rbt12_movel_sem_janela": (
+            "O seu arquivo ainda não cobre 12 meses anteriores a nenhum mês, "
+            "então a alíquota de todos eles vem do valor informado acima. "
+            "Com 13 meses de histórico este cálculo liga sozinho."
+        ),
         "rbt12_ajuda": (
             "Soma de tudo que a empresa faturou nos últimos 12 meses "
             "(o 'RBT12'). Está no extrato do Simples (PGDAS-D) que o "
@@ -447,6 +464,22 @@ T = {
             "Services = III to V. Your accountant knows yours."
         ),
         "rbt12": "Revenue over the last 12 months (R$)",
+        "rbt12_movel": "Compute the tax rate month by month (rolling RBT12)",
+        "rbt12_movel_ajuda": (
+            "Under Simples, each month's rate comes from the revenue of the "
+            "12 months BEFORE it (LC 123/2006, art. 18, § 1). Only possible "
+            "for months where your file covers those 12 months in full; for "
+            "the others the value you entered above applies."
+        ),
+        "rbt12_movel_aplicada": (
+            "Rate computed from your own file for {n} of {total} months; "
+            "the rest use the revenue you entered."
+        ),
+        "rbt12_movel_sem_janela": (
+            "Your file does not yet cover 12 months before any month, so "
+            "every month uses the value entered above. With 13 months of "
+            "history this turns on by itself."
+        ),
         "rbt12_ajuda": (
             "Everything the company billed in the last 12 months (the "
             "'RBT12'). Found in the monthly Simples statement (PGDAS-D). "
@@ -690,7 +723,9 @@ def _retriever_cacheado() -> Retriever:
 
 
 @st.cache_data(show_spinner=False)
-def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> dict:
+def _resultados_cacheados(
+    transacoes: tuple, config, tabela, atividade: str, rbt12_movel: bool = False
+) -> dict:
     """Roda os quatro motores uma vez por (dados, config) — não por clique.
 
     Com bases reais (dezenas de milhares de vendas), decompor venda a
@@ -703,9 +738,11 @@ def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> 
         tabela,
         ParametrosDiagnostico(atividade=atividade),
         retriever=_retriever_cacheado(),
+        rbt12_movel=rbt12_movel,
     )
     return {
         "decomposicao": analise.decomposicao,
+        "rbt12_mensal": analise.rbt12_mensal,
         "resumo": analise.resumo_executivo(),
         "mensal": analise.mensal,
         "lucro": analise.lucro_acumulado(),
@@ -985,10 +1022,14 @@ with st.sidebar:
         )
         if rbt12_sugerida:
             st.caption(t["rbt12_sugerida"])
+        usar_rbt12_movel = st.toggle(
+            t["rbt12_movel"], value=False, help=t["rbt12_movel_ajuda"]
+        )
         config = ConfigTributaria(
             regime="simples", anexo_simples=anexo, rbt12=Decimal(int(rbt12))
         )
     else:
+        usar_rbt12_movel = False
         das = st.number_input(t["das"], 1, 500, 76, help=t["das_ajuda"])
         config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal(int(das)))
 
@@ -1032,14 +1073,29 @@ if monitorar and caminho_arquivo:
 
 # Motores rodam uma vez por (dados, config) via cache; a fachada fica
 # disponível para as ações sob demanda (simular, preço, PDF, busca legal).
-res = _resultados_cacheados(tuple(transacoes), config, tabela, atividade)
+res = _resultados_cacheados(
+    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel
+)
 analise = AnalisadorMargem(
     transacoes,
     config,
     tabela,
     ParametrosDiagnostico(atividade=atividade),
     retriever=_retriever_cacheado(),
+    rbt12_movel=usar_rbt12_movel,
 )
+if usar_rbt12_movel:
+    # Honestidade na tela: dizer em quantos meses a alíquota saiu do
+    # próprio arquivo e em quantos veio do valor que o lojista digitou.
+    _com_janela = sum(1 for v in res["rbt12_mensal"].values() if v)
+    if _com_janela:
+        st.caption(
+            t["rbt12_movel_aplicada"].format(
+                n=_com_janela, total=len(res["rbt12_mensal"])
+            )
+        )
+    else:
+        st.info(t["rbt12_movel_sem_janela"])
 decomposicao = res["decomposicao"]
 resumo = res["resumo"]
 

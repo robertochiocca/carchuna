@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-173%2F173-2ee6d6.svg)](tests/)
+[![Testes](https://img.shields.io/badge/testes-189%2F189-2ee6d6.svg)](tests/)
 [![Cobertura](https://img.shields.io/badge/cobertura-98%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -139,7 +139,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `app.py` — dashboard Streamlit com 7 abas em linguagem de lojista (Resumo, Vendas e Produtos, Histórico, E se…?, Crescer, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto — implementado e testado (`streamlit.testing.v1.AppTest`) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | roadmap — cada alíquota de ICMS/ISS depende do estado e do município, e a regra da casa é não publicar alíquota que não foi validada em fonte oficial |
-| RBT12 móvel mês a mês nas séries | roadmap — exige 12 meses de histórico contínuo no arquivo para não trocar a alíquota por uma pior; hoje a RBT12 é um valor só para o período |
+| RBT12 móvel mês a mês nas séries (LC 123/2006, art. 18, § 1º) | pronto — implementado e testado: cada mês é tributado pela receita dos seus 12 meses anteriores, e nos meses em que o arquivo não cobre a janela inteira vale a RBT12 informada — a tela diz quantos meses foram de cada tipo, em vez de completar o buraco com zero |
 | Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano — depende de contrato com o agregador e de credenciais; sem isso não se escreve integração |
 | MCP server (consultar a Carchuna por assistentes de IA) | roadmap — a API `/api/v1` já expõe o motor; o MCP só faz sentido depois de um piloto que peça esse acesso |
 | Busca semântica (embeddings/ChromaDB, opt-in) | roadmap — o BM25 com sinônimos do lojista responde o corpus de 21 dispositivos; embeddings só se pagam com corpus grande |
@@ -155,7 +155,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 173 testes
+pip install pytest && pytest          # 189 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -195,7 +195,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (173 testes, cobertura 98%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (189 testes, cobertura 98%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -211,7 +211,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 173 tests, 98% coverage
+pytest                                        # 189 tests, 98% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```

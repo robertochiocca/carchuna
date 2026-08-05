@@ -232,5 +232,57 @@ def test_o_valor_da_venda_recusada_nao_entra_no_total(tmp_path):
     assert analise.decomposicao.receita_bruta == Decimal("300.00")
 
 
+# ---------------------------------------------------------------------------
+# RBT12 móvel na tela
+# ---------------------------------------------------------------------------
+
+
+def _csv_de_meses(caminho: Path, meses: int, valor: str, ano=2025, mes=1) -> Path:
+    """Uma venda por mês, a partir de (ano, mes)."""
+    linhas = ["data;canal;produto;valor_bruto;custo_produto;frete_pago"]
+    for i in range(meses):
+        a, m = ano + (mes - 1 + i) // 12, (mes - 1 + i) % 12 + 1
+        linhas.append(f"15/{m:02d}/{a};shopee;Capa;{valor};40,00;10,00")
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    return caminho
+
+
+def test_o_toggle_da_rbt12_movel_diz_quantos_meses_usou_o_arquivo(tmp_path):
+    """15 meses de histórico: 3 deles têm a janela de 12 meses fechada.
+
+    Conferido à mão: com dados de 2025-01 a 2026-03, os meses que têm
+    doze meses ANTERIORES dentro do arquivo são 2026-01, 2026-02 e
+    2026-03 — os outros 12 caem na RBT12 informada.
+    """
+    vendas = _csv_de_meses(tmp_path / "vendas.csv", 15, "30000,00")
+    teste = _rodar()
+    teste.text_input[CAMINHO].set_value(str(vendas))
+    teste.run()
+    # o toggle existe e começa desligado
+    movel = [tg for tg in teste.toggle if "RBT12" in tg.label]
+    assert len(movel) == 1
+    assert movel[0].value is False
+
+    movel[0].set_value(True)
+    teste.run()
+    assert not teste.exception
+    legendas = " ".join(c.value for c in teste.caption)
+    assert "3 de 15 meses" in legendas
+
+
+def test_arquivo_curto_avisa_que_a_aliquota_veio_do_valor_informado(tmp_path):
+    """6 meses: nenhuma janela fecha, e a tela diz isso em vez de fingir."""
+    vendas = _csv_de_meses(tmp_path / "vendas.csv", 6, "30000,00")
+    teste = _rodar()
+    teste.text_input[CAMINHO].set_value(str(vendas))
+    teste.run()
+    movel = [tg for tg in teste.toggle if "RBT12" in tg.label][0]
+    movel.set_value(True)
+    teste.run()
+    assert not teste.exception
+    avisos = " ".join(i.value for i in teste.info)
+    assert "não cobre 12 meses" in avisos
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
