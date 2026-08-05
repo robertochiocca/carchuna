@@ -16,8 +16,9 @@
 | 10 | Caminho do LLM coberto sem chave; piso do CI de 85% para 95% | `7885439` |
 | 11 | Auditoria dos próprios testes: asserção fraca → comportamento, provada por mutação | `97bfb33` |
 | 12 | P4 — RBT12 móvel mês a mês, com recusa honesta quando a janela não fecha | `f6e7f6a` |
+| 13 | Float na fronteira do widget; cache do Retriever restaurado; faixa separada da alíquota | `f73280b` |
 
-- Portões do último ciclo: pytest 189 passando · cobertura 98,29% · ruff ok · black ok
+- Portões do último ciclo: pytest 212 passando · cobertura 98,30% · ruff ok · black ok
 - CI verde em Python 3.10, 3.11 e 3.12 (run 41, commit `86b1ae0`)
 
 ### Conferência das 6 condições de pronto
@@ -49,11 +50,21 @@
 - Conferir os valores dos Anexos do Simples no Planalto (conferência automática recebeu
   HTTP 503 em 19/07/2026 e de novo em 05/08/2026) antes de qualquer uso real.
 - Conferir na fonte oficial a leitura do art. 18, § 1º usada na RBT12 móvel (doze meses
-  anteriores ao período de apuração) — mesma tentativa, mesmo 503.
+  anteriores ao período de apuração). **Duas rotas tentadas em 05/08/2026, as duas fechadas
+  a robô:** planalto.gov.br devolveu HTTP 503, e a API pública do portal de normas da
+  Receita (`/api/consulta-externa/ato/92278`, Resolução CGSN 140/2018) devolveu HTTP 403 do
+  próprio servidor, com e sem cabeçalhos de navegador. Num navegador comum os dois abrem:
+  https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm (art. 18, § 1º) e
+  https://normasinternet2.receita.fazenda.gov.br/#/consulta/externa/92278 (RCGSN 140/2018).
 
 ## Decisões tomadas (para não redecidir)
 - **Janela de RBT12 incompleta se recusa, não chuta.** Mês sem os 12 anteriores no arquivo
   usa a RBT12 informada; completar com zero baixaria a alíquota em silêncio.
+- **Conta manual do Simples se escreve em dois passos.** Primeiro afirma-se a FAIXA (com
+  nominal e parcela a deduzir), depois a alíquota. Errei a faixa duas vezes e nas duas quem
+  me corrigiu foi o motor — o que inverte o papel da validação.
+- **Percentual do formulário entra como texto.** `st.number_input` devolve `float`; o campo
+  é `text_input` + `decimal_de_texto`, para a exceção do openpyxl seguir sendo a única.
 - **Teste novo passa por mutação antes de contar.** Duas vezes neste loop uma conta minha
   errou a faixa do Simples e o teste é que estava errado — mutação no código-fonte é o que
   separa teste com dentes de cobertura de enfeite.
