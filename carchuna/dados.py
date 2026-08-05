@@ -122,7 +122,7 @@ def ler_linhas_brutas(source, name: str | None = None) -> list[dict]:
     """
     filename = (name or getattr(source, "name", str(source))).lower()
     extensao = filename.rsplit(".", 1)[-1]
-    if extensao == "csv":
+    if extensao in ("csv", "tsv"):
         return _ler_csv(source)
     if extensao == "json":
         return _ler_json(source)
@@ -131,7 +131,7 @@ def ler_linhas_brutas(source, name: str | None = None) -> list[dict]:
     if extensao == "pdf":
         return _ler_pdf(source)
     raise ValueError(
-        f"Formato não suportado: .{extensao} (aceitos: csv, json, xlsx, pdf)."
+        f"Formato não suportado: .{extensao} (aceitos: csv, tsv, json, xlsx, pdf)."
     )
 
 
@@ -236,12 +236,78 @@ def _abrir_texto(source):
     return io.StringIO(_decodificar(Path(source).read_bytes()))
 
 
+_SEPARADORES = (";", ",", "\t", "|")
+
+# Quantas linhas do começo do arquivo podem ser título/período antes da tabela.
+_MAX_LINHAS_DE_TITULO = 30
+
+# Uma linha só é cabeçalho se reconhecermos pelo menos duas colunas nela.
+# Uma só não basta: "lançamento;histórico;valor" de um extrato bancário
+# casaria com o palpite "valor" e sequestraria o arquivo inteiro.
+_MIN_COLUNAS_RECONHECIDAS = 2
+
+
+def _colunas_reconhecidas(celulas: list[str]) -> int:
+    """Quantas células parecem nome de coluna que a Carchuna sabe usar."""
+    total = 0
+    for celula in celulas:
+        norma = _normalizar_nome(celula).strip()
+        if not norma:
+            continue
+        if norma in COLUNAS_OBRIGATORIAS or norma in COLUNAS_OPCIONAIS:
+            total += 1
+            continue
+        if any(
+            termo in norma
+            for termos in _PALPITES_MAPEAMENTO.values()
+            for termo in termos
+        ):
+            total += 1
+    return total
+
+
+def _achar_cabecalho(linhas: list[str]) -> tuple[int, str]:
+    """Descobre em que linha começa a tabela e qual é o separador.
+
+    Relatório de marketplace quase nunca começa na tabela: vem título,
+    período, linha em branco e só então o cabeçalho. E a linha de título
+    costuma ter vírgulas, então detectar o separador nela escolhe o
+    separador errado. Testamos cada linha contra cada separador e ficamos
+    com a combinação que reconhece mais colunas.
+    """
+    melhor = (0, 0, 0, ",")  # (colunas reconhecidas, nº de células, índice, separador)
+    for indice, linha in enumerate(linhas[:_MAX_LINHAS_DE_TITULO]):
+        if not linha.strip():
+            continue
+        for separador in _SEPARADORES:
+            celulas = next(csv.reader([linha], delimiter=separador), [])
+            if len(celulas) < 2:
+                continue
+            reconhecidas = _colunas_reconhecidas(celulas)
+            # mais colunas reconhecidas vence; empate, mais células; depois,
+            # a linha mais acima (por isso o índice entra negativo)
+            candidato = (reconhecidas, len(celulas), -indice, separador)
+            if candidato[:3] > melhor[:3]:
+                melhor = candidato
+    if melhor[0] < _MIN_COLUNAS_RECONHECIDAS:
+        raise ValueError(
+            "Não encontrei o cabeçalho da tabela neste arquivo. A Carchuna "
+            "procura uma linha com os nomes das colunas (data, canal, "
+            "valor_bruto, custo_produto, frete_pago) ou os nomes do relatório "
+            "do marketplace (ex.: 'Data do pedido', 'Preço', 'Tarifa de "
+            "venda'). Confira se você exportou o relatório de VENDAS — um "
+            "extrato bancário ou um resumo financeiro não tem essas colunas."
+        )
+    return -melhor[2], melhor[3]
+
+
 def _ler_csv(source) -> list[dict]:
-    buffer = _abrir_texto(source)
-    amostra = buffer.readline()
-    buffer.seek(0)
-    separador = ";" if amostra.count(";") > amostra.count(",") else ","
-    leitor = csv.DictReader(buffer, delimiter=separador)
+    texto = _abrir_texto(source).read()
+    linhas = texto.splitlines()
+    inicio, separador = _achar_cabecalho(linhas)
+    leitor = csv.DictReader(
+        io.StringIO("\n".join(linhas[inicio:])), delimiter=separador
+    )
     return [
         {(k or "").strip().lower(): v for k, v in linha.items()} for linha in leitor
     ]

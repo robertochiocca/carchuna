@@ -81,5 +81,76 @@ def test_upload_em_bytes_tambem_aceita_latin1():
     assert transacao.custo_produto == Decimal("30.00")
 
 
+# ---------------------------------------------------------------------------
+# Linhas de título antes do cabeçalho e detecção de separador
+# ---------------------------------------------------------------------------
+
+
+def test_linhas_de_titulo_antes_do_cabecalho(tmp_path):
+    """Relatório de marketplace vem com título e período antes da tabela.
+
+    O cabeçalho de verdade é a 4ª linha; as três primeiras são texto solto
+    e uma linha em branco. Antes, o `DictReader` tomava 'Relatório de
+    vendas' como cabeçalho e todas as colunas ficavam vazias.
+    """
+    arquivo = tmp_path / "shopee.csv"
+    arquivo.write_text(
+        "Relatório de vendas - Shopee\n"
+        "Período: 01/05/2026 a 31/05/2026\n"
+        "\n" + CABECALHO + "2026-05-01;shopee;Capa;100,00;40,00;10,00\n"
+        "2026-05-02;shopee;Fone;200,00;90,00;12,00\n",
+        encoding="utf-8",
+    )
+    transacoes = carregar_transacoes(arquivo)
+    assert len(transacoes) == 2
+    assert transacoes[0].valor_bruto == Decimal("100.00")
+    assert transacoes[1].valor_bruto == Decimal("200.00")
+
+
+def test_separador_detectado_no_cabecalho_e_nao_na_primeira_linha(tmp_path):
+    """A linha de título tem vírgulas; a tabela é separada por ';'.
+
+    Detectar o separador na 1ª linha ('Período: 01/05/2026, loja X, ...')
+    escolheria ',' e quebraria a tabela inteira.
+    """
+    arquivo = tmp_path / "ml.csv"
+    arquivo.write_text(
+        "Relatório, gerado em 01/06/2026, loja Exemplo, todas as contas\n"
+        + CABECALHO
+        + "2026-05-01;mercado_livre;Capa;1.234,56;600,00;25,90\n",
+        encoding="utf-8",
+    )
+    (transacao,) = carregar_transacoes(arquivo)
+    assert transacao.canal == "mercado_livre"
+    assert transacao.valor_bruto == Decimal("1234.56")
+
+
+def test_separador_tab_do_export_copiado_da_tela(tmp_path):
+    """Colar a tabela do painel no Excel e salvar gera TSV."""
+    arquivo = tmp_path / "colado.tsv"
+    arquivo.write_text(
+        CABECALHO.replace(";", "\t")
+        + "2026-05-01\tshopee\tCapa\t100,00\t40,00\t10,00\n",
+        encoding="utf-8",
+    )
+    (transacao,) = carregar_transacoes(arquivo)
+    assert transacao.valor_bruto == Decimal("100.00")
+
+
+def test_arquivo_sem_nenhum_cabecalho_reconhecivel(tmp_path):
+    """Sem colunas conhecidas, a mensagem diz o que fazer — não estoura."""
+    arquivo = tmp_path / "extrato.csv"
+    arquivo.write_text(
+        "Extrato bancário\nlançamento;histórico;valor\n01/05;PIX recebido;100,00\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError) as erro:
+        carregar_transacoes(arquivo)
+    mensagem = str(erro.value)
+    assert "cabeçalho" in mensagem.lower()
+    # a frase precisa citar as colunas que a Carchuna procura
+    assert "valor_bruto" in mensagem
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
