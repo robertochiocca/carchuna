@@ -99,10 +99,27 @@ def _bool_br(texto: str, linha: int) -> bool:
     raise ValueError(f"linha {linha}: `devolvida` = {texto!r} não é sim/não.")
 
 
+def _campos_normalizados(linha: dict) -> dict:
+    """Indexa a linha por nome de coluna normalizado (sem caixa nem acento).
+
+    O cabeçalho chega como o lojista salvou — ``Data``, ``DATA``,
+    ``Valor_Bruto`` — e o nome original é preservado para aparecer no
+    mapeador e nas mensagens de erro. A busca por campo é que ignora
+    caixa e acento.
+    """
+    return {_normalizar_nome(chave).strip(): valor for chave, valor in linha.items()}
+
+
 def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
+    linha = _campos_normalizados(linha)
     faltando = [c for c in COLUNAS_OBRIGATORIAS if linha.get(c) in (None, "")]
     if faltando:
-        raise ValueError(f"linha {numero}: colunas obrigatórias vazias: {faltando}.")
+        colunas = ", ".join(f"`{c}`" for c in faltando)
+        plural = "estão vazias" if len(faltando) > 1 else "está vazia"
+        raise ValueError(
+            f"linha {numero}: {colunas} {plural} nesta linha. "
+            "Preencha na planilha ou apague a linha inteira."
+        )
     canal = str(linha["canal"]).strip().lower().replace(" ", "_")
     canal = "".join(
         c for c in unicodedata.normalize("NFKD", canal) if not unicodedata.combining(c)
@@ -122,6 +139,90 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
             else None
         ),
         produto=(str(linha.get("produto") or "").strip() or None),
+    )
+
+
+# Onde o lojista acha cada coluna no relatório que ele já tem.
+#
+# ATENÇÃO ao ler isto como fato: são PALPITES para ajudar a localizar a
+# coluna, colhidos dos nomes que aparecem nos relatórios, e não uma
+# transcrição conferida contra documentação oficial da Shopee ou do
+# Mercado Livre — os painéis mudam os rótulos sem aviso. Por isso a frase
+# diz "costuma se chamar", e o caminho garantido é sempre o mapeador de
+# colunas do dashboard, onde o próprio lojista aponta o de-para.
+_ONDE_ACHAR: dict[str, str] = {
+    "data": (
+        "a data da venda. No relatório da Shopee ela costuma se chamar "
+        '"Data do pedido"; no do Mercado Livre, "Data da venda". Serve '
+        "qualquer uma: dd/mm/aaaa ou aaaa-mm-dd, com ou sem hora."
+    ),
+    "canal": (
+        "onde a venda aconteceu. Relatório de um canal só não traz essa "
+        "coluna — e tudo bem: no mapeador do dashboard você fixa o canal "
+        "do arquivo inteiro (shopee, mercado_livre, amazon, loja_propria "
+        "ou fisico)."
+    ),
+    "valor_bruto": (
+        "quanto o cliente pagou pelo produto, antes de qualquer desconto. "
+        'No relatório da Shopee costuma se chamar "Valor total do pedido"; '
+        'no do Mercado Livre, "Receita por produtos".'
+    ),
+    "custo_produto": (
+        "quanto o produto custou para você (CMV). O marketplace não conhece "
+        "esse número: ele não existe no painel da Shopee nem no do "
+        "Mercado Livre. Ele vem do seu controle de estoque, do ERP ou da "
+        "nota do fornecedor — sem ele não dá para calcular margem."
+    ),
+    "frete_pago": (
+        "quanto do frete saiu do seu bolso. Na Shopee costuma aparecer "
+        'como "Taxa de envio"; no Mercado Livre, "Custo do frete". Se o '
+        "frete é sempre do comprador, fixe zero no mapeador."
+    ),
+}
+
+
+class ColunasFaltando(ValueError):
+    """O arquivo não tem alguma coluna obrigatória — erro do arquivo todo.
+
+    Diferente de célula vazia numa linha (isso é ``LinhaRejeitada``): aqui
+    a coluna não existe no cabeçalho, então não há o que importar.
+    """
+
+
+def _conferir_colunas(linhas: list[dict]) -> None:
+    """Confere o cabeçalho antes de tentar linha por linha.
+
+    Sem isto, um arquivo sem a coluna de valor produzia o mesmo erro em
+    todas as 5.000 linhas, e nenhum deles dizia onde achar a coluna.
+    """
+    if not linhas:
+        return
+    presentes = {_normalizar_nome(c).strip() for linha in linhas for c in linha}
+    faltando = [c for c in COLUNAS_OBRIGATORIAS if c not in presentes]
+    if not faltando:
+        return
+    originais = list(dict.fromkeys(c for linha in linhas for c in linha if c))
+    # Se a informação está no arquivo com outro nome, o palpite do mapeador
+    # já sabe qual coluna é — dizer isso poupa o lojista de procurar.
+    palpites = sugerir_mapeamento(originais)
+    itens = []
+    for campo in faltando:
+        dica = f"  • `{campo}`: {_ONDE_ACHAR[campo]}"
+        candidata = palpites.get(campo)
+        if candidata:
+            dica += f' No seu arquivo isso parece ser "{candidata}".'
+        itens.append(dica)
+    quantas = (
+        "Faltou 1 coluna que a Carchuna precisa"
+        if len(faltando) == 1
+        else f"Faltaram {len(faltando)} colunas que a Carchuna precisa"
+    )
+    raise ColunasFaltando(
+        f"{quantas} no seu arquivo:\n" + "\n".join(itens) + "\n\n"
+        f"O que o seu arquivo tem: {', '.join(originais)}.\n"
+        "Se a informação está aí com outro nome, use o mapeador de colunas "
+        "do dashboard para apontar qual coluna é qual — não precisa mexer na "
+        "planilha."
     )
 
 
@@ -183,6 +284,7 @@ def carregar_com_relatorio(source, name: str | None = None) -> ResultadoImportac
     de tudo-ou-nada usa ``carregar_transacoes``.
     """
     linhas = ler_linhas_brutas(source, name=name)
+    _conferir_colunas(linhas)
     transacoes: list[Transacao] = []
     rejeitadas: list[LinhaRejeitada] = []
     for numero, linha in enumerate(linhas, 2):
@@ -212,6 +314,7 @@ def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:
         buffer. ``None`` usa ``source.name``.
     """
     linhas = ler_linhas_brutas(source, name=name)
+    _conferir_colunas(linhas)
     transacoes = [_linha_para_transacao(linha, i) for i, linha in enumerate(linhas, 2)]
     if not transacoes:
         raise ValueError("Arquivo sem nenhuma transação válida.")
@@ -413,9 +516,7 @@ def _ler_csv(source) -> list[dict]:
     leitor = csv.DictReader(
         io.StringIO("\n".join(linhas[inicio:])), delimiter=separador
     )
-    return [
-        {(k or "").strip().lower(): v for k, v in linha.items()} for linha in leitor
-    ]
+    return [{(k or "").strip(): v for k, v in linha.items()} for linha in leitor]
 
 
 def _ler_json(source) -> list[dict]:
@@ -424,7 +525,7 @@ def _ler_json(source) -> list[dict]:
     dados = json.load(buffer, parse_float=str, parse_int=str)
     if not isinstance(dados, list):
         raise ValueError("JSON deve ser uma lista de objetos de transação.")
-    return [{str(k).strip().lower(): v for k, v in item.items()} for item in dados]
+    return [{str(k).strip(): v for k, v in item.items()} for item in dados]
 
 
 def _ler_xlsx(source) -> list[dict]:
@@ -437,7 +538,7 @@ def _ler_xlsx(source) -> list[dict]:
         ) from None
     planilha = load_workbook(source, read_only=True, data_only=True).active
     linhas_iter = planilha.iter_rows(values_only=True)
-    cabecalho = [str(c or "").strip().lower() for c in next(linhas_iter)]
+    cabecalho = [str(c or "").strip() for c in next(linhas_iter)]
     return [
         # células numéricas do Excel chegam como float; str() antes do Decimal
         dict(zip(cabecalho, ["" if v is None else str(v) for v in linha], strict=False))
