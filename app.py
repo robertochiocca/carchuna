@@ -30,7 +30,7 @@ from carchuna import (
     ConfigTributaria,
     ParametrosDiagnostico,
     TabelaCustos,
-    carregar_transacoes,
+    carregar_com_relatorio,
     transacoes_sinteticas,
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO
@@ -179,6 +179,13 @@ T = {
         "monitorando": "Acompanhando o arquivo — salve a planilha e veja aqui.",
         "importadas": "vendas importadas.",
         "falha_importacao": "Não consegui ler o arquivo:",
+        "linhas_de_fora": (
+            "{ok} vendas importadas. {fora} de {total} linhas ficaram de fora "
+            "e não entram em nenhum número desta tela — veja quais abaixo."
+        ),
+        "ver_de_fora": "Ver as linhas que ficaram de fora",
+        "col_linha": "Linha na sua planilha",
+        "col_motivo": "Por que ficou de fora",
         "meses_demo": "Meses de dados de exemplo",
         "aviso_demo": (
             "Você está vendo DADOS DE EXEMPLO. Envie sua planilha na barra "
@@ -416,6 +423,13 @@ T = {
         "monitorando": "Watching the file — save the spreadsheet and see it here.",
         "importadas": "sales imported.",
         "falha_importacao": "Could not read the file:",
+        "linhas_de_fora": (
+            "{ok} sales imported. {fora} of {total} rows were left out "
+            "and are in none of the numbers on this screen — see which below."
+        ),
+        "ver_de_fora": "See the rows that were left out",
+        "col_linha": "Row in your spreadsheet",
+        "col_motivo": "Why it was left out",
         "meses_demo": "Months of sample data",
         "aviso_demo": (
             "You are looking at SAMPLE DATA. Upload your spreadsheet in "
@@ -633,6 +647,44 @@ def _rotulo_opcao(opcao: str, textos: dict) -> str:
 
 
 @st.cache_resource(show_spinner=False)
+def _transacoes_do_resultado(resultado, textos: dict) -> list:
+    """Mostra o que entrou, o que ficou de fora e devolve as vendas boas.
+
+    A regra da casa é que nenhuma linha suma em silêncio: quando o
+    arquivo tem linha estragada, o lojista vê quantas ficaram de fora, o
+    número de cada uma na planilha dele e o motivo — e os totais da tela
+    são só das linhas que entraram.
+    """
+    if not resultado.transacoes:
+        st.error(f"{textos['falha_importacao']} {resultado.resumo()}")
+        st.stop()
+    if not resultado.rejeitadas:
+        st.success(f"{len(resultado.transacoes)} {textos['importadas']}")
+        return resultado.transacoes
+    st.warning(
+        textos["linhas_de_fora"].format(
+            ok=len(resultado.transacoes),
+            fora=len(resultado.rejeitadas),
+            total=resultado.total_lidas,
+        )
+    )
+    with st.expander(textos["ver_de_fora"]):
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        textos["col_linha"]: r.numero,
+                        textos["col_motivo"]: r.motivo,
+                    }
+                    for r in resultado.rejeitadas
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+    return resultado.transacoes
+
+
 def _retriever_cacheado() -> Retriever:
     return Retriever()
 
@@ -839,8 +891,9 @@ with st.sidebar:
     linhas_brutas = None
     if upload is not None:
         try:
-            transacoes = carregar_transacoes(upload, name=upload.name)
-            st.success(f"{len(transacoes)} {t['importadas']}")
+            transacoes = _transacoes_do_resultado(
+                carregar_com_relatorio(upload, name=upload.name), t
+            )
         except (ValueError, TypeError) as erro:
             upload.seek(0)
             try:
@@ -850,8 +903,9 @@ with st.sidebar:
                 st.stop()
     elif caminho_arquivo:
         try:
-            transacoes = carregar_transacoes(caminho_arquivo)
-            st.success(f"{len(transacoes)} {t['importadas']}")
+            transacoes = _transacoes_do_resultado(
+                carregar_com_relatorio(caminho_arquivo), t
+            )
             if monitorar:
                 st.info(t["monitorando"])
         except (ValueError, TypeError, OSError, ImportError) as erro:

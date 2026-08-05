@@ -32,7 +32,13 @@ from carchuna.crescimento import (
     ParametrosCrescimento,
     preco_para_margem,
 )
-from carchuna.dados import carregar_transacoes, transacoes_sinteticas
+from carchuna.dados import (
+    LinhaRejeitada,
+    ResultadoImportacao,
+    carregar_com_relatorio,
+    carregar_transacoes,
+    transacoes_sinteticas,
+)
 from carchuna.diagnostico import (
     Achado,
     MotorDiagnostico,
@@ -84,11 +90,14 @@ __all__ = [
     "ParametrosCrescimento",
     "ParametrosDiagnostico",
     "RegraDeteccao",
+    "LinhaRejeitada",
     "ResultadoCenario",
+    "ResultadoImportacao",
     "ResumoExecutivo",
     "TabelaCustos",
     "Transacao",
     "aliquota_efetiva_simples",
+    "carregar_com_relatorio",
     "carregar_transacoes",
     "cenario_antecipacao",
     "cenario_comissao",
