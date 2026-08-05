@@ -209,13 +209,31 @@ def transacoes_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> list[Transac
     return transacoes
 
 
+# Ordem de tentativa de decodificação. `utf-8-sig` primeiro (e trata o BOM);
+# `cp1252` cobre o Excel em português, que é o que a maioria dos lojistas usa
+# para abrir e salvar o relatório do marketplace; `latin-1` fecha a conta
+# porque decodifica qualquer byte — assim nenhum arquivo morre com
+# `UnicodeDecodeError`, que não é mensagem para lojista.
+_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
+
+
+def _decodificar(conteudo: bytes) -> str:
+    for encoding in _ENCODINGS:
+        try:
+            return conteudo.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    # latin-1 nunca falha; este retorno só existe para o caso de a lista mudar.
+    return conteudo.decode("latin-1", errors="replace")
+
+
 def _abrir_texto(source):
     if hasattr(source, "read"):
         conteudo = source.read()
         if isinstance(conteudo, bytes):
-            conteudo = conteudo.decode("utf-8-sig")
+            conteudo = _decodificar(conteudo)
         return io.StringIO(conteudo)
-    return io.StringIO(Path(source).read_text(encoding="utf-8-sig"))
+    return io.StringIO(_decodificar(Path(source).read_bytes()))
 
 
 def _ler_csv(source) -> list[dict]:
