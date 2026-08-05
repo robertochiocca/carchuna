@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-94%2F94-2ee6d6.svg)](tests/)
+[![Testes](https://img.shields.io/badge/testes-155%2F155-2ee6d6.svg)](tests/)
 [![Cobertura](https://img.shields.io/badge/cobertura-97%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -123,26 +123,26 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 |---|---|
 | `margem.py` — decomposição com alíquota efetiva do Simples (LC 123/2006, art. 18, § 1º-A; Anexos I–V) | pronto — implementado e testado |
 | `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio"), **margem venda a venda** e **margem por produto** (campeões e vilões do catálogo) | pronto — implementado e testado |
-| `dados.py` — importação CSV/JSON/XLSX (vírgula decimal BR) + **PDF com tabela no layout do modelo** (beta) + dados sintéticos reprodutíveis | pronto — implementado e testado |
+| `dados.py` — importação de export CRU de marketplace: encoding do Excel BR (latin-1/cp1252), linhas de título antes do cabeçalho, separador `;`/`,`/tab, vírgula decimal, datas em formatos mistos, **relatório de linhas recusadas** e mensagem que diz onde achar a coluna que faltou + PDF com tabela no layout do modelo (beta) + dados sintéticos reprodutíveis | pronto — implementado e testado (fixtures cruas em `tests/fixtures/reais/`) |
 | `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | pronto — implementado e testado |
 | `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
-| `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | ingerido — **revisão humana pendente** (`revisado: false`) |
+| `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | bloqueado por humano — conferir cada dispositivo na fonte oficial e virar `revisado: true` no arquivo; só o Roberto (ou um advogado) pode fazer isso |
 | `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | pronto — implementado e testado |
 | `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | pronto — implementado e testado |
 | `conectores/` — interface `Conector` + `ConectorArquivo` (CSV/JSON/XLSX de qualquer canal, com filtro de período) | pronto — implementado e testado |
-| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | pronto |
-| Conector **Shopee API** (Open Platform: app aprovado + OAuth do lojista; `get_escrow_detail` traz a comissão real por pedido) | roadmap — mesma interface `Conector` |
-| Conector **Mercado Livre API** (app registrado + OAuth; `/orders/search` e `/billing`) | roadmap — mesma interface `Conector` |
+| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | pronto — no ar, **sem teste automatizado**: a demo repete as tabelas do Simples em JavaScript e nada garante hoje que elas não divirjam de `margem.py` |
+| Conector **Shopee API** (Open Platform: `get_escrow_detail` traz a comissão real por pedido) | bloqueado por humano — depende de registrar o app na Shopee Open Platform e obter aprovação + OAuth do lojista; a interface `Conector` e o `ConectorArquivo` já existem e são testados |
+| Conector **Mercado Livre API** (`/orders/search` e `/billing`) | bloqueado por humano — depende de registrar o app no Mercado Livre e obter OAuth do lojista; mesma interface `Conector` |
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | pronto — implementado e testado |
-| `app.py` — dashboard Streamlit com 7 abas em linguagem de lojista (Resumo, Vendas e Produtos, Histórico, E se…?, Crescer, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto (sem teste automatizado de UI) |
+| `app.py` — dashboard Streamlit com 7 abas em linguagem de lojista (Resumo, Vendas e Produtos, Histórico, E se…?, Crescer, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto — implementado e testado (`streamlit.testing.v1.AppTest`) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | roadmap (depende de ICMS/ISS estaduais/municipais) |
-| RBT12 móvel mês a mês nas séries | roadmap |
-| Open Finance via agregador (Pluggy/Belvo) | roadmap |
-| MCP server (consultar a Carchuna por assistentes de IA) | roadmap |
-| Busca semântica (embeddings/ChromaDB, opt-in) | roadmap |
+| RBT12 móvel mês a mês nas séries | roadmap — exige 12 meses de histórico contínuo no arquivo para não trocar a alíquota por uma pior; hoje a RBT12 é um valor só para o período |
+| Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano — depende de contrato com o agregador e de credenciais; sem isso não se escreve integração |
+| MCP server (consultar a Carchuna por assistentes de IA) | roadmap — a API `/api/v1` já expõe o motor; o MCP só faz sentido depois de um piloto que peça esse acesso |
+| Busca semântica (embeddings/ChromaDB, opt-in) | roadmap — o BM25 com sinônimos do lojista responde o corpus de 21 dispositivos; embeddings só se pagam com corpus grande |
 | ML preditivo (previsão de vendas) | roadmap — heurísticas transparentes primeiro |
 
 **Meta antes de qualquer conector:** 1 lojista piloto usando com CSV real.
@@ -155,11 +155,11 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 94 testes
+pip install pytest && pytest          # 155 testes
 
 # Dashboard e API
 pip install -r requirements.txt
-streamlit run app.py                            # dashboard (5 abas)
+streamlit run app.py                            # dashboard (7 abas)
 uvicorn carchuna.api.main:app --reload          # API — OpenAPI em /docs
 ```
 
@@ -195,7 +195,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (94 testes, cobertura 97%, mínimo 85% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (155 testes, cobertura 97%, mínimo 85% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -211,7 +211,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 94 tests, 97% coverage
+pytest                                        # 155 tests, 97% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```
