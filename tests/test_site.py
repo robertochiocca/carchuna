@@ -156,7 +156,6 @@ def test_a_formula_do_site_devolve_a_mesma_aliquota_do_motor(rbt12, anexo):
     mesmo número, senão o visitante do site vê uma alíquota que o motor
     não assina.
     """
-    import json
     import subprocess
 
     from carchuna.margem import aliquota_efetiva_simples
@@ -164,18 +163,22 @@ def test_a_formula_do_site_devolve_a_mesma_aliquota_do_motor(rbt12, anexo):
     html = SITE.read_text(encoding="utf-8")
     anexos = re.search(r"(const ANEXOS = \{.*?\};)", html, re.DOTALL).group(1)
     funcao = re.search(r"(function aliquotaEfetiva\(.*?\n\})", html, re.DOTALL).group(1)
+    # `toFixed` faz o node imprimir um literal decimal: assim o número nunca
+    # passa por `float` do lado do Python. O JS calcula em double porque essa
+    # é a realidade do navegador — mas a imprecisão dele fica visível aqui,
+    # na comparação, em vez de entrar escondida num `Decimal(str(float))`.
     script = (
         f"{anexos}\n{funcao}\n"
-        f"console.log(JSON.stringify(aliquotaEfetiva({int(rbt12) * 100}, "
-        f'"{anexo}")));'
+        f"console.log(aliquotaEfetiva({int(rbt12) * 100}, "
+        f'"{anexo}").toFixed(10));'
     )
     saida = subprocess.run(
         ["node", "-e", script], capture_output=True, text=True, check=True
     )
-    do_site = Decimal(str(json.loads(saida.stdout))) / 10000
+    do_site = Decimal(saida.stdout.strip()) / 10000
 
     do_motor = aliquota_efetiva_simples(rbt12, anexo)
-    # o JS trabalha em pontos-base inteiros; comparar na 6ª casa da fração
+    # o JS trabalha em pontos-base; comparar na 6ª casa da fração (4ª do %)
     assert do_site.quantize(Decimal("0.000001")) == do_motor.quantize(
         Decimal("0.000001")
     )

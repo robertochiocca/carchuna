@@ -2,6 +2,7 @@
 
 import json
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -216,12 +217,24 @@ def test_o_prompt_leva_os_dispositivos_recuperados(monkeypatch):
 
 
 def test_recusa_do_modelo_cai_no_modo_extrativo(monkeypatch):
-    """`stop_reason == "refusal"` não vira resposta — vira None."""
+    """`stop_reason == "refusal"` não vira resposta — e o app cai no extrativo.
+
+    Afirmar só `is None` não valeria o nome do teste: o que importa é que
+    o caminho de quem chama (`gerar_resposta(...) or resposta_extrativa(...)`)
+    entregue a resposta com os dispositivos e o aviso.
+    """
     _instalar_cliente(
         monkeypatch, _Resposta([_BlocoTexto("...")], stop_reason="refusal")
     )
     dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
-    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
+    pergunta = "qual o limite do MEI?"
+    assert llm.gerar_resposta(pergunta, dispositivos) is None
+
+    entregue = llm.gerar_resposta(pergunta, dispositivos) or llm.resposta_extrativa(
+        pergunta, dispositivos
+    )
+    assert dispositivos[0].lei in entregue
+    assert "contador ou advogado" in entregue
 
 
 def test_resposta_vazia_do_modelo_cai_no_modo_extrativo(monkeypatch):
@@ -256,16 +269,76 @@ def test_desligar_o_llm_por_variavel_de_ambiente(monkeypatch):
     assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
 
 
-def test_nenhum_valor_monetario_sai_do_llm(monkeypatch):
-    """A IA nunca calcula: o prompt não manda o modelo produzir número.
+def test_o_numero_e_o_mesmo_com_llm_e_sem_llm(monkeypatch):
+    """A regra da casa, testada pelo comportamento: **a IA nunca calcula**.
 
-    O contexto enviado carrega texto de lei, não a decomposição da
-    margem — o número já saiu do motor antes de o LLM ser chamado.
+    O LLM falso devolve um texto recheado de números errados. Se algum
+    caminho de código deixasse o modelo influenciar dinheiro, a
+    decomposição mudaria. Ela não muda — centavo a centavo, com e sem.
+    """
+    from datetime import date
+
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria, Transacao
+
+    vendas = [
+        Transacao(
+            data=date(2026, 5, dia),
+            canal="shopee",
+            valor_bruto=Decimal(valor),
+            custo_produto=Decimal("40.00"),
+            frete_pago=Decimal("10.00"),
+        )
+        for dia, valor in enumerate(["100.00", "200.00", "300.00"], 1)
+    ]
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("360000")
+    )
+
+    def _numeros() -> tuple:
+        d = AnalisadorMargem(list(vendas), config).decomposicao
+        return (
+            d.receita_bruta,
+            d.margem_liquida,
+            d.margem_pct,
+            d.aliquota_efetiva,
+            tuple((x.nome, x.valor) for x in d.deducoes),
+        )
+
+    sem_llm = _numeros()
+
+    _instalar_cliente(
+        monkeypatch,
+        _Resposta(
+            [
+                _BlocoTexto(
+                    "Sua margem líquida é de R$ 999.999,99 e a alíquota "
+                    "efetiva é 0,01%. Você tem direito a R$ 50.000 de volta."
+                )
+            ]
+        ),
+    )
+    com_llm = _numeros()
+
+    assert com_llm == sem_llm
+    # e o número de verdade continua sendo o do motor: 100+200+300
+    assert sem_llm[0] == Decimal("600.00")
+
+
+def test_o_llm_nunca_recebe_a_decomposicao_para_recalcular(monkeypatch):
+    """O contexto que vai ao modelo é texto de lei, não a conta.
+
+    Se a decomposição fosse enviada, o modelo poderia "corrigir" o
+    número na narrativa — e a narrativa é o que o lojista lê.
     """
     _instalar_cliente(monkeypatch, _Resposta([_BlocoTexto("ok")]))
     dispositivos = RETRIEVER.buscar("comissão do marketplace", top_k=3)
     llm.gerar_resposta("por que sobra tão pouco?", dispositivos)
 
     enviado = _ClienteFalso.ultima_chamada
-    assert "calcule" not in enviado["system"][0]["text"].lower()
+    conteudo = enviado["messages"][0]["content"]
+    for disp in dispositivos:
+        assert disp.texto in conteudo
+    assert "margem_liquida" not in conteudo
+    assert "receita_bruta" not in conteudo
     assert "Não invente lei, número, alíquota" in enviado["system"][0]["text"]

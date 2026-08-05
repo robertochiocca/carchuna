@@ -54,9 +54,28 @@ def app_demo() -> AppTest:
     return _rodar()
 
 
-def test_o_app_sobe_sem_excecao_e_sem_chave_de_api(app_demo, monkeypatch):
-    """Degradação graciosa: nenhuma exceção, com ou sem ANTHROPIC_API_KEY."""
+def test_o_app_sobe_sem_excecao(app_demo):
+    """O caminho padrão monta inteiro, sem nenhuma exceção."""
     assert not app_demo.exception
+
+
+def test_o_app_monta_com_e_sem_ANTHROPIC_API_KEY(monkeypatch):
+    """Degradação graciosa de verdade: o teste mexe na variável.
+
+    Antes este teste recebia `monkeypatch` e não usava — o nome prometia
+    uma garantia que ninguém estava conferindo.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    sem_chave = _rodar()
+    assert not sem_chave.exception
+    rotulos_sem = [aba.label for aba in sem_chave.tabs]
+
+    # com chave (falsa): o app não pode nem quebrar nem mudar de forma —
+    # o cálculo não depende de LLM, então as abas são as mesmas
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-chave-falsa-de-teste")
+    com_chave = _rodar()
+    assert not com_chave.exception
+    assert [aba.label for aba in com_chave.tabs] == rotulos_sem
 
 
 def test_as_sete_abas_existem_com_os_nomes_do_lojista(app_demo):
@@ -150,11 +169,16 @@ def test_upload_de_arquivo_valido_recalcula_o_dashboard(tmp_path):
     )
     teste = _rodar_com_arquivo(vendas)
     assert not teste.exception
-    # receita bruta = 100 + 200 + 300 = 600, conferido à mão
+    # receita bruta = 100 + 200 + 300 = 600,00, conferido à mão. Procurar só
+    # por "600" casaria com "1.600" ou com um pedaço de data: exige o
+    # formato do app, com centavos.
     texto = " ".join(
         [m.value for m in teste.metric] + [str(m.value) for m in teste.markdown]
     )
-    assert "600" in texto
+    assert "600,00" in texto
+    # e as 3 vendas entraram, nenhuma de fora
+    sucessos = " ".join(s.value for s in teste.success)
+    assert "3 vendas importadas" in sucessos
 
 
 def test_arquivo_com_linha_estragada_importa_o_resto_e_avisa(tmp_path):
@@ -169,14 +193,17 @@ def test_arquivo_com_linha_estragada_importa_o_resto_e_avisa(tmp_path):
     )
     teste = _rodar_com_arquivo(vendas)
     assert not teste.exception
-    tela = " ".join(
-        [w.value for w in teste.warning]
-        + [s.value for s in teste.success]
-        + [i.value for i in teste.info]
+    avisos = " ".join(w.value for w in teste.warning)
+    # a frase inteira, não um dígito solto: "2" casaria com qualquer data
+    assert "2 vendas importadas" in avisos
+    assert "1 de 3 linhas ficaram de fora" in avisos
+
+    # e o motivo da linha recusada aparece na tabela do expander
+    motivos = " ".join(
+        str(d.value.to_dict()) for d in teste.dataframe if hasattr(d.value, "to_dict")
     )
-    # 2 vendas entraram e a linha 3 foi recusada, com o número da linha
-    assert "2" in tela
-    assert "linha 3" in tela or "1 de 3" in tela
+    assert "linha 3" in motivos
+    assert "valor monetário" in motivos
 
 
 def test_o_valor_da_venda_recusada_nao_entra_no_total(tmp_path):
