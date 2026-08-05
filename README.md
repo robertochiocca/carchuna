@@ -138,7 +138,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | pronto — implementado e testado |
 | `app.py` — dashboard Streamlit com 7 abas em linguagem de lojista (Resumo, Vendas e Produtos, Histórico, E se…?, Crescer, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto — implementado e testado (`streamlit.testing.v1.AppTest`) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
-| Regime **Lucro Presumido** | roadmap (depende de ICMS/ISS estaduais/municipais) |
+| Regime **Lucro Presumido** | roadmap — cada alíquota de ICMS/ISS depende do estado e do município, e a regra da casa é não publicar alíquota que não foi validada em fonte oficial |
 | RBT12 móvel mês a mês nas séries | roadmap — exige 12 meses de histórico contínuo no arquivo para não trocar a alíquota por uma pior; hoje a RBT12 é um valor só para o período |
 | Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano — depende de contrato com o agregador e de credenciais; sem isso não se escreve integração |
 | MCP server (consultar a Carchuna por assistentes de IA) | roadmap — a API `/api/v1` já expõe o motor; o MCP só faz sentido depois de um piloto que peça esse acesso |
