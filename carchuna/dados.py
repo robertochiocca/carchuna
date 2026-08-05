@@ -345,17 +345,60 @@ def ler_linhas_brutas(source, name: str | None = None) -> list[dict]:
 
 # Palpites do mapeador: por campo da Carchuna, termos que costumam aparecer
 # nos cabeçalhos dos relatórios reais (Shopee, Mercado Livre, Amazon, ERPs).
+#
+# Termos compostos existem para desempatar coluna que casa com dois campos:
+# "Custo do envio" tem "custo" (que puxaria para o CMV) e "envio" (que puxa
+# para o frete) — quem ganha é o termo MAIS LONGO que casou, e "custo do
+# envio" é mais específico que "custo". Mesma história entre "Receita por
+# produtos" (dinheiro) e "Título do anúncio" (produto).
 _PALPITES_MAPEAMENTO: dict[str, tuple[str, ...]] = {
-    "data": ("data", "date", "dia"),
-    "produto": ("produto", "item", "titulo", "sku", "anuncio", "product"),
+    "data": ("data", "date", "dia", "data do pedido", "data da venda"),
+    "produto": (
+        "produto",
+        "item",
+        "titulo",
+        "sku",
+        "anuncio",
+        "product",
+        "nome do produto",
+        "titulo do anuncio",
+    ),
     "canal": ("canal", "channel", "marketplace", "origem", "loja"),
-    "valor_bruto": ("valor_bruto", "preco", "valor", "price", "total", "bruto"),
-    "custo_produto": ("custo", "cost", "cmv"),
-    "frete_pago": ("frete", "shipping", "envio"),
+    "valor_bruto": (
+        "valor_bruto",
+        "preco",
+        "valor",
+        "price",
+        "total",
+        "bruto",
+        "receita",
+        "preco acordado",
+        "receita por produtos",
+        "valor total do pedido",
+    ),
+    "custo_produto": ("custo", "cost", "cmv", "custo do produto", "custo unitario"),
+    "frete_pago": (
+        "frete",
+        "shipping",
+        "envio",
+        "custo do envio",
+        "custo do frete",
+        "taxa de envio",
+        "valor do frete",
+    ),
     "devolvida": ("devolvid", "devolu", "cancelad", "returned", "estorn"),
     "prazo_recebimento_dias": ("prazo", "recebimento", "repasse"),
-    "comissao_cobrada": ("comissao", "tarifa", "commission", "fee"),
+    "comissao_cobrada": (
+        "comissao",
+        "tarifa",
+        "commission",
+        "fee",
+        "tarifa de venda",
+    ),
 }
+
+# Casar com o nome do campo em cheio vale mais que qualquer termo composto.
+_PESO_NOME_EXATO = 1000
 
 
 def _normalizar_nome(coluna: str) -> str:
@@ -363,34 +406,80 @@ def _normalizar_nome(coluna: str) -> str:
     return "".join(c for c in sem_acento if not unicodedata.combining(c))
 
 
+def _forca_do_palpite(campo: str, coluna_normalizada: str) -> int:
+    """O quanto uma coluna do arquivo puxa para um campo da Carchuna.
+
+    Nome do campo em cheio vale ``_PESO_NOME_EXATO``; fora isso, vale o
+    comprimento do termo mais longo que casou — quanto mais específico o
+    termo, mais forte o palpite.
+    """
+    if coluna_normalizada == campo:
+        return _PESO_NOME_EXATO
+    casados = [t for t in _PALPITES_MAPEAMENTO[campo] if t in coluna_normalizada]
+    return max((len(t) for t in casados), default=0)
+
+
 def sugerir_mapeamento(colunas: list[str]) -> dict[str, str | None]:
     """Sugere, por palpite, qual coluna do arquivo é qual campo da Carchuna.
 
-    Match exato primeiro, depois por conter o termo; cada coluna do
-    arquivo só é usada uma vez. Campos sem palpite ficam ``None`` — o
-    usuário decide no mapeador.
+    Todos os pares (campo, coluna) são pontuados e os mais fortes ficam
+    com a vaga primeiro, de modo que uma coluna ambígua vá para o campo
+    que a reconhece melhor: no relatório do Mercado Livre, "Custo do
+    envio (BRL)" fica com o frete (termo "custo do envio") e não com o
+    CMV (termo "custo"). Cada coluna é usada uma vez só, e campo sem
+    nenhum palpite fica ``None`` — quem decide é o usuário no mapeador.
     """
-    normalizadas = {c: _normalizar_nome(c) for c in colunas}
+    normalizadas = {c: _normalizar_nome(c).strip() for c in colunas}
+    ordem_dos_campos = list(_PALPITES_MAPEAMENTO)
+    candidatos = [
+        (forca, -ordem_dos_campos.index(campo), campo, coluna)
+        for campo in ordem_dos_campos
+        for coluna, norma in normalizadas.items()
+        if (forca := _forca_do_palpite(campo, norma)) > 0
+    ]
+    candidatos.sort(reverse=True)
+
+    mapa: dict[str, str | None] = dict.fromkeys(ordem_dos_campos)
     usadas: set[str] = set()
-    mapa: dict[str, str | None] = {}
-    for campo, termos in _PALPITES_MAPEAMENTO.items():
-        escolhida = None
-        for coluna, norma in normalizadas.items():
-            if coluna not in usadas and norma == campo:
-                escolhida = coluna
-                break
-        if escolhida is None:
-            for termo in termos:
-                for coluna, norma in normalizadas.items():
-                    if coluna not in usadas and termo in norma:
-                        escolhida = coluna
-                        break
-                if escolhida:
-                    break
-        mapa[campo] = escolhida
-        if escolhida:
-            usadas.add(escolhida)
+    for _forca, _ordem, campo, coluna in candidatos:
+        if mapa[campo] is None and coluna not in usadas:
+            mapa[campo] = coluna
+            usadas.add(coluna)
     return mapa
+
+
+def _aplicar_mapa(linha: dict, mapa: dict[str, str]) -> dict:
+    """Traduz uma linha crua para os campos da Carchuna.
+
+    Valor iniciado em ``=`` é constante do arquivo inteiro (ex.:
+    ``{"canal": "=shopee"}`` quando o relatório todo veio da Shopee).
+    """
+    convertida: dict = {}
+    for campo, origem in mapa.items():
+        if not origem:
+            continue
+        convertida[campo] = origem[1:] if origem.startswith("=") else linha.get(origem)
+    return convertida
+
+
+def relatorio_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> ResultadoImportacao:
+    """Como ``transacoes_de_mapa``, mas importando o que der.
+
+    É o caminho do mapeador no dashboard: o relatório do marketplace
+    quase sempre tem alguma linha estragada (pedido sem data, valor
+    escrito por extenso), e recusar o arquivo inteiro por causa dela
+    seria o mesmo erro que o importador cometia antes.
+    """
+    transacoes: list[Transacao] = []
+    rejeitadas: list[LinhaRejeitada] = []
+    for numero, linha in enumerate(linhas, 2):
+        try:
+            transacoes.append(_linha_para_transacao(_aplicar_mapa(linha, mapa), numero))
+        except (ValueError, TypeError) as erro:
+            rejeitadas.append(
+                LinhaRejeitada(numero=numero, motivo=str(erro), conteudo=dict(linha))
+            )
+    return ResultadoImportacao(transacoes=transacoes, rejeitadas=rejeitadas)
 
 
 def transacoes_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> list[Transacao]:
@@ -400,18 +489,14 @@ def transacoes_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> list[Transac
     iniciados em ``=`` são constantes para o arquivo inteiro (ex.:
     ``{"canal": "=shopee"}`` quando o relatório todo veio da Shopee, ou
     ``{"frete_pago": "=0"}`` quando o arquivo não traz frete).
+
+    Tudo-ou-nada: a primeira linha ruim derruba o lote. Para importar o
+    que der e listar as recusadas, use ``relatorio_de_mapa``.
     """
-    transacoes = []
-    for numero, linha in enumerate(linhas, 2):
-        convertida: dict = {}
-        for campo, origem in mapa.items():
-            if not origem:
-                continue
-            if origem.startswith("="):
-                convertida[campo] = origem[1:]
-            else:
-                convertida[campo] = linha.get(origem)
-        transacoes.append(_linha_para_transacao(convertida, numero))
+    transacoes = [
+        _linha_para_transacao(_aplicar_mapa(linha, mapa), numero)
+        for numero, linha in enumerate(linhas, 2)
+    ]
     if not transacoes:
         raise ValueError("Arquivo sem nenhuma transação válida.")
     return transacoes

@@ -1,0 +1,12 @@
+Relatório de Pedidos
+Loja: Exemplo Comércio Ltda
+Período: 01/05/2026 - 31/05/2026
+Gerado em: 01/06/2026 09:12
+
+ID do pedido;Data do pedido;Status do pedido;Nome do Produto;Preço acordado;Quantidade;Taxa de envio;Tarifa de venda;Devolução
+2605010001;01/05/2026;Concluído;Capa de celular - Preta;89,90;1;9,90;10,79;Não
+2605020002;02/05/2026;Concluído;Carregador turbo 20W;129,90;1;12,00;15,59;Não
+2605030003;03/05/2026;Concluído;Fone bluetooth XZ;249,90;1;14,00;29,99;Não
+2605040004;04/05/2026;Concluído;Relógio – Prata;349,00;1;18,00;41,88;Não
+2605050005;;Concluído;Caixa de som portátil;199,00;1;15,00;23,88;Não
+2605060006;06/05/2026;Cancelado;Capa de celular - Azul;89,90;1;9,90;10,79;Sim

@@ -1,0 +1,9 @@
+﻿Relatório de vendas
+"Período: 01/05/2026 a 31/05/2026"
+
+N.º de venda,Data da venda,Título do anúncio,Unidades,Receita por produtos (BRL),Tarifa de venda (BRL),Custo do envio (BRL),Status
+2000000001,2026-05-02T14:32:07,Fone bluetooth XZ,1,"249,90","29,99","18,50",Concluída
+2000000002,2026-05-03T09:14:55,Capa de celular - Preta,1,"89,90","10,79","12,00",Concluída
+2000000003,2026-05-05T18:02:11,Smartwatch série 8,1,"549,00","65,88","0,00",Concluída
+2000000004,2026-05-07T11:45:03,Carregador turbo 20W,2,"259,80","31,18","14,00",Concluída
+2000000005,2026-05-09T16:20:41,Relógio – Prata,1,"ver detalhe","41,88","18,00",Concluída
