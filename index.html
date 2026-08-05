@@ -135,13 +135,25 @@ section h2{font-size:clamp(1.5rem,3vw,2.2rem);margin-bottom:10px;letter-spacing:
 .demo-caixa input:focus,.demo-caixa select:focus{outline:none;border-color:var(--agua)}
 .barra{display:flex;align-items:center;gap:12px;margin:8px 0;font-size:.85rem}
 .barra .rot{width:150px;color:var(--dim);text-align:right;flex-shrink:0}
-.barra .trilho{flex:1;background:var(--abismo);border-radius:7px;height:24px;overflow:hidden}
-.barra .fill{height:100%;border-radius:7px;background:var(--coral);min-width:2px;
-  transition:width .4s cubic-bezier(.2,.8,.2,1)}
+.barra .trilho{flex:1;background:var(--abismo);border-radius:7px;height:24px;
+  overflow:hidden;border:1px solid rgba(19,77,87,.65)}
+/* vermelho no que faz perder, verde no que faz ganhar — a mesma dupla
+   coral/alga do raio-X, em degradê para não gritar sobre o fundo escuro */
+.barra .fill{height:100%;border-radius:7px;min-width:2px;
+  background:linear-gradient(90deg,#c4462f,var(--coral));
+  transition:width .45s cubic-bezier(.2,.8,.2,1)}
 .barra.receita .fill{background:linear-gradient(90deg,#1a9c90,var(--agua))}
 .barra.margem .fill{background:linear-gradient(90deg,#5fae68,var(--alga))}
+.barra.margem.prejuizo .fill{background:linear-gradient(90deg,#c4462f,var(--coral))}
 .barra .val{width:118px;font-family:'IBM Plex Mono',monospace;flex-shrink:0;
   color:#cfe9e6;font-variant-numeric:tabular-nums}
+.barra.neg .val{color:var(--coral)}
+.barra.margem .val{color:var(--alga)}
+.barra.margem.prejuizo .val{color:var(--coral)}
+/* repouso: trilhos vazios, sem número nenhum, à espera do primeiro preço */
+.barra.repouso .rot{opacity:.5}
+.barra.repouso .trilho{background:rgba(4,30,35,.55)}
+.barra.repouso .val{color:var(--dim);opacity:.45}
 #demo-frase{margin-top:22px;padding:16px 18px;background:rgba(4,30,35,.6);
   border-left:3px solid var(--agua);border-radius:10px;font-size:.92rem;color:var(--dim)}
 #demo-frase b{color:var(--agua-suave);font-weight:500}
@@ -266,11 +278,11 @@ footer a:hover{color:var(--agua-suave)}
   <div class="demo-caixa">
     <div>
       <label><span lang-pt>Preço de venda (R$)</span><span lang-en>Sale price (R$)</span></label>
-      <input id="d-preco" type="number" value="100" min="1" step="1">
+      <input id="d-preco" type="number" min="1" step="1" data-ph-pt="ex.: 100" data-ph-en="e.g. 100">
       <label><span lang-pt>Custo do produto (R$)</span><span lang-en>Product cost (R$)</span></label>
-      <input id="d-custo" type="number" value="40" min="0" step="1">
+      <input id="d-custo" type="number" min="0" step="1" data-ph-pt="ex.: 40" data-ph-en="e.g. 40">
       <label><span lang-pt>Frete pago (R$)</span><span lang-en>Shipping paid (R$)</span></label>
-      <input id="d-frete" type="number" value="10" min="0" step="1">
+      <input id="d-frete" type="number" min="0" step="1" data-ph-pt="ex.: 10" data-ph-en="e.g. 10">
       <label><span lang-pt>Canal de venda</span><span lang-en>Sales channel</span></label>
       <select id="d-canal">
         <option value="0.12" selected>Mercado Livre (~12%)</option>
@@ -411,7 +423,8 @@ const TEXTOS = {
     comissao: "Comissão do canal", frete: "Frete", custo: "Custo do produto",
     margem: "Margem líquida",
     teto: "RBT12 acima do teto do Simples (R$ 4,8 milhões) — hipótese de exclusão do regime (LC 123/2006, art. 3º, II).",
-    informe: "Informe um preço de venda.",
+    informe: "Informe um preço de venda — a decomposição aparece aqui, linha a linha.",
+    informeRbt: "Informe o faturamento dos últimos 12 meses (RBT12) — é dele que sai a alíquota efetiva do Simples.",
     frase: (aliq, anexo, anunciada, real, prejuizo) =>
       `Alíquota efetiva do Simples: <b>${aliq}%</b> (Anexo ${anexo}, fórmula do art. 18, § 1º-A da LC 123/2006). ` +
       `Margem "anunciada": <b>${anunciada}%</b>. Margem real: <b>${real}%</b>${prejuizo ? " — esta venda dá prejuízo" : ""}.`,
@@ -421,7 +434,8 @@ const TEXTOS = {
     comissao: "Channel commission", frete: "Shipping", custo: "Product cost",
     margem: "Net margin",
     teto: "RBT12 above the Simples ceiling (R$ 4.8 million) — grounds for exclusion from the regime (LC 123/2006, art. 3, II).",
-    informe: "Enter a sale price.",
+    informe: "Enter a sale price — the breakdown appears here, line by line.",
+    informeRbt: "Enter the last 12 months' revenue (RBT12) — the effective Simples rate comes from it.",
     frase: (aliq, anexo, anunciada, real, prejuizo) =>
       `Simples effective tax rate: <b>${aliq}%</b> (Annex ${anexo}, formula in art. 18, § 1º-A of LC 123/2006). ` +
       `"Naive" margin: <b>${anunciada}%</b>. Real margin: <b>${real}%</b>${prejuizo ? " — this sale loses money" : ""}.`,
@@ -442,6 +456,9 @@ function setLang(l) {
       if (opt.dataset[l]) opt.textContent = opt.dataset[l];
     }
   }
+  for (const campo of document.querySelectorAll("[data-ph-pt]")) {
+    campo.placeholder = campo.dataset[l === "pt" ? "phPt" : "phEn"];
+  }
   calcular();
 }
 
@@ -458,6 +475,22 @@ function aliquotaEfetiva(rbt12Cent, anexo) {
   return null; // acima do teto do Simples
 }
 
+// Repouso: os mesmos seis trilhos, rotulados e vazios — sem número algum
+// até que exista um preço de venda para decompor.
+function repouso() {
+  const tx = TEXTOS[LANG];
+  const linhas = [
+    [tx.receita, "receita"], [tx.tributos, "neg"], [tx.comissao, "neg"],
+    [tx.frete, "neg"], [tx.custo, "neg"], [tx.margem, "margem"],
+  ];
+  return linhas.map(([rot, cls]) => `
+    <div class="barra repouso ${cls}">
+      <div class="rot">${rot}</div>
+      <div class="trilho"></div>
+      <div class="val">—</div>
+    </div>`).join("");
+}
+
 function calcular() {
   const tx = TEXTOS[LANG];
   const preco = Math.round((+document.getElementById("d-preco").value || 0) * 100);
@@ -467,12 +500,17 @@ function calcular() {
   const anexo = document.getElementById("d-anexo").value;
   const rbt12 = Math.round((+document.getElementById("d-rbt12").value || 0) * 100);
 
-  const efetivaBp = aliquotaEfetiva(rbt12, anexo);
   const frase = document.getElementById("demo-frase");
   const barras = document.getElementById("d-barras");
-  if (efetivaBp === null || preco <= 0) {
-    barras.innerHTML = "";
-    frase.innerHTML = efetivaBp === null ? tx.teto : tx.informe;
+  if (preco <= 0 || rbt12 <= 0) {
+    barras.innerHTML = repouso();
+    frase.innerHTML = preco <= 0 ? tx.informe : tx.informeRbt;
+    return;
+  }
+  const efetivaBp = aliquotaEfetiva(rbt12, anexo);
+  if (efetivaBp === null) {
+    barras.innerHTML = repouso();
+    frase.innerHTML = tx.teto;
     return;
   }
   const tributos = Math.round(preco * efetivaBp / 10000);
@@ -487,12 +525,16 @@ function calcular() {
     [tx.custo, custo, "neg"],
     [tx.margem, margem, "margem"],
   ];
-  barras.innerHTML = linhas.map(([rot, v, cls]) => `
-    <div class="barra ${cls}">
+  barras.innerHTML = linhas.map(([rot, v, cls]) => {
+    const largura = Math.max(0, Math.min(100, Math.abs(v) / preco * 100));
+    const prejuizo = cls === "margem" && v < 0 ? " prejuizo" : "";
+    return `
+    <div class="barra ${cls}${prejuizo}">
       <div class="rot">${rot}</div>
-      <div class="trilho"><div class="fill" style="width:${Math.max(0, Math.min(100, v / preco * 100))}%"></div></div>
-      <div class="val">${brl(v)}</div>
-    </div>`).join("");
+      <div class="trilho"><div class="fill" style="width:${largura}%"></div></div>
+      <div class="val">${cls === "neg" && v > 0 ? "− " + brl(v) : brl(v)}</div>
+    </div>`;
+  }).join("");
 
   const dec = LANG === "pt" ? v => v.replace(".", ",") : v => v;
   const anunciada = dec(((preco - custo) / preco * 100).toFixed(1));

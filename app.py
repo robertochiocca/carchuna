@@ -78,6 +78,11 @@ st.markdown(
 AGUA = "#2ee6d6"
 AGUA_TEXTO = "#cfe9e6"
 TEAL_CALMO = "#4fb3c1"
+# O par de sinal, o mesmo do site: coral no que faz perder, alga no que
+# faz ganhar — quentes o bastante para ler de relance, sem berrar sobre
+# o fundo de água profunda.
+CORAL = "#ff6b52"
+ALGA = "#8fd694"
 _SEM_FUNDO = {"background": "rgba(0,0,0,0)"}
 
 
@@ -669,8 +674,8 @@ def _grafico_destino(decomposicao, rotulos: dict, t: dict):
     """Barras horizontais com rótulos completos e valores nas pontas.
 
     Substitui o gráfico nativo (que trunca rótulos longos): Altair com
-    ``labelLimit=0``, cores calmas — quente-suave para o que foi embora,
-    verde-alga para o que sobrou — e o valor escrito ao fim de cada barra.
+    ``labelLimit=0``, o par de cores da casa — coral no que faz perder,
+    verde-alga no que faz ganhar — e o valor escrito ao fim de cada barra.
     """
     linhas = [
         {
@@ -710,7 +715,7 @@ def _grafico_destino(decomposicao, rotulos: dict, t: dict):
             "tipo:N",
             scale=alt.Scale(
                 domain=[t["foi_embora"], t["sobrou"]],
-                range=["#cf8a70", "#8fd694"],
+                range=[CORAL, ALGA],
             ),
             legend=None,
         )
@@ -1029,17 +1034,23 @@ with aba_resumo:
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
     acoes = [
-        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in res["achados"]
+        (a.impacto_mensal, "perda", a.titulo, a.caminho_pratico)
+        for a in res["achados"]
     ] + [
-        (o.ganho_estimado_mensal, o.titulo, o.caminho_pratico)
+        (o.ganho_estimado_mensal, "ganho", o.titulo, o.caminho_pratico)
         for o in res["oportunidades"]
     ]
     acoes.sort(key=lambda x: x[0], reverse=True)
     if not acoes:
         st.success(t["sem_acoes"])
-    for valor, titulo, caminho in acoes[:3]:
+    for valor, sinal, titulo, caminho in acoes[:3]:
+        # Vermelho no que sangra, verde no que rende: o número diz de que
+        # lado da conta a ação está antes mesmo de ser lido.
+        cor, sinal_txt = ("red", "−") if sinal == "perda" else ("green", "+")
         with st.container(border=True):
-            st.markdown(f"**{titulo}** — ~{_brl(valor)}/{t['por_mes']}")
+            st.markdown(
+                f"**{titulo}** — :{cor}[~{sinal_txt}{_brl(valor)}/{t['por_mes']}]"
+            )
             st.caption(caminho)
 
     with st.expander(t["como_ler"]):
@@ -1265,7 +1276,8 @@ with aba_crescer:
         with st.container(border=True):
             ganho = _brl(oportunidade.ganho_estimado_mensal)
             st.markdown(
-                f"**{oportunidade.titulo}** — ~{ganho}/{t['por_mes']} "
+                f"**{oportunidade.titulo}** — "
+                f":green[~+{ganho}/{t['por_mes']}] "
                 f"[{oportunidade.confianca}]"
             )
             st.write(oportunidade.explicacao)
