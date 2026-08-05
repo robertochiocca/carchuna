@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-155%2F155-2ee6d6.svg)](tests/)
+[![Testes](https://img.shields.io/badge/testes-165%2F165-2ee6d6.svg)](tests/)
 [![Cobertura](https://img.shields.io/badge/cobertura-97%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -132,7 +132,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | pronto — implementado e testado |
 | `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | pronto — implementado e testado |
 | `conectores/` — interface `Conector` + `ConectorArquivo` (CSV/JSON/XLSX de qualquer canal, com filtro de período) | pronto — implementado e testado |
-| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | pronto — no ar, **sem teste automatizado**: a demo repete as tabelas do Simples em JavaScript e nada garante hoje que elas não divirjam de `margem.py` |
+| Site do projeto (GitHub Pages) com demo de decomposição no navegador + tutorial para leigos | pronto — implementado e testado: as tabelas do Simples E a fórmula em JavaScript da demo são conferidas contra `margem.py` a cada CI |
 | Conector **Shopee API** (Open Platform: `get_escrow_detail` traz a comissão real por pedido) | bloqueado por humano — depende de registrar o app na Shopee Open Platform e obter aprovação + OAuth do lojista; a interface `Conector` e o `ConectorArquivo` já existem e são testados |
 | Conector **Mercado Livre API** (`/orders/search` e `/billing`) | bloqueado por humano — depende de registrar o app no Mercado Livre e obter OAuth do lojista; mesma interface `Conector` |
 | `relatorio.py` — PDF de 3 páginas (raio-X, cenários, achados) | pronto — implementado e testado |
@@ -155,7 +155,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 155 testes
+pip install pytest && pytest          # 165 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -195,7 +195,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (155 testes, cobertura 97%, mínimo 85% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (165 testes, cobertura 97%, mínimo 85% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -211,7 +211,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 155 tests, 97% coverage
+pytest                                        # 165 tests, 97% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```
