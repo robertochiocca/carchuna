@@ -1,6 +1,6 @@
 # Estado do loop — atualizado em 2026-08-05
 
-## Ciclos 1–10
+## Ciclos 1–10 — OBJETIVO MÁXIMO atingido em 05/08/2026
 
 | # | Item | Commit |
 |---|---|---|
@@ -16,6 +16,17 @@
 | 10 | Caminho do LLM coberto sem chave; piso do CI de 85% para 95% | `7885439` |
 
 - Portões do último ciclo: pytest 173 passando · cobertura 98,33% · ruff ok · black ok
+- CI verde em Python 3.10, 3.11 e 3.12 (run 41, commit `86b1ae0`)
+
+### Conferência das 6 condições de pronto
+| # | Condição | Estado |
+|---|---|---|
+| 1 | pytest verde, cobertura ≥ 95% real | 173 testes, 98,33% |
+| 2 | ruff e black limpos; CI em 3.10/3.11/3.12 | verde nas três |
+| 3 | Export cru de Shopee e ML entra, ou falha com frase de lojista | as duas fixtures, ponta a ponta |
+| 4 | `AppTest` nas 7 abas + upload inválido | 10 testes em `tests/test_app.py` |
+| 5 | Todo item do README classificado sem meio-termo | 23 linhas conferidas |
+| 6 | Zero itens P0/P1 na fila | fila começa em P4 |
 
 ## Fila
 | P | Item | Estado | Bloqueio |
