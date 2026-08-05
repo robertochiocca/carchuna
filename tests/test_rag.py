@@ -1,6 +1,7 @@
 """Testes do motor legal: corpus, retriever BM25, sinônimos e camada LLM."""
 
 import json
+import re
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -342,3 +343,139 @@ def test_o_llm_nunca_recebe_a_decomposicao_para_recalcular(monkeypatch):
     assert "margem_liquida" not in conteudo
     assert "receita_bruta" not in conteudo
     assert "Não invente lei, número, alíquota" in enviado["system"][0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# O valor que a narrativa cita tem que existir fora dela
+# ---------------------------------------------------------------------------
+
+# "R$ 1.234,56", "R$ 81.000,00", "R$ 999.999,99"
+_MOEDA = re.compile(r"R\$\s?\d{1,3}(?:\.\d{3})*(?:,\d{2})?")
+
+
+def _valores_citados(texto: str) -> set[str]:
+    """Todo valor em reais que aparece no texto, normalizado."""
+    return {m.replace("R$", "").replace(" ", "").strip() for m in _MOEDA.findall(texto)}
+
+
+def _valores_com_lastro(decomposicao, dispositivos) -> set[str]:
+    """Os únicos valores que a narrativa pode citar.
+
+    Ou o motor calculou, ou está escrito na lei recuperada. Nada mais.
+    """
+    do_motor = [decomposicao.receita_bruta, decomposicao.margem_liquida]
+    do_motor += [d.valor for d in decomposicao.deducoes]
+    lastro = {
+        f"{v:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        for v in do_motor
+    }
+    for disp in dispositivos:
+        lastro |= _valores_citados(f"{disp.texto} {disp.resumo}")
+    return lastro
+
+
+def _sem_lastro(narrativa: str, decomposicao, dispositivos) -> set[str]:
+    """Valores citados na narrativa que não existem em lugar nenhum."""
+    return _valores_citados(narrativa) - _valores_com_lastro(decomposicao, dispositivos)
+
+
+def _decomposicao_de_exemplo():
+    from datetime import date
+
+    from carchuna.margem import (
+        ConfigTributaria,
+        Transacao,
+        decompor_margem,
+    )
+
+    vendas = [
+        Transacao(
+            data=date(2026, 5, 1),
+            canal="shopee",
+            valor_bruto=Decimal("1000.00"),
+            custo_produto=Decimal("400.00"),
+            frete_pago=Decimal("50.00"),
+        )
+    ]
+    return decompor_margem(
+        vendas,
+        ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("360000")),
+    )
+
+
+def test_a_narrativa_do_llm_nao_pode_citar_valor_que_ninguem_calculou(monkeypatch):
+    """O teste que faltava: pega o dia em que alguém religar os dois lados.
+
+    Se um caminho de código passar a mandar a decomposição ao modelo, ele
+    vai produzir valores monetários na narrativa — e narrativa é o que o
+    lojista lê. A regra: todo valor citado tem que estar OU no que o
+    motor calculou, OU no texto da lei recuperada. O resto é invenção.
+    """
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=3)
+    decomposicao = _decomposicao_de_exemplo()
+
+    _instalar_cliente(
+        monkeypatch,
+        _Resposta(
+            [
+                _BlocoTexto(
+                    "Em regra, a sua situação se relaciona ao art. 18 da "
+                    "LC 123/2006. Confirme com seu contador ou advogado "
+                    "antes de agir."
+                )
+            ]
+        ),
+    )
+    narrativa = llm.gerar_resposta("posso continuar no MEI?", dispositivos)
+    assert _sem_lastro(narrativa, decomposicao, dispositivos) == set()
+
+
+def test_o_detector_acusa_quando_o_modelo_inventa_um_valor(monkeypatch):
+    """A régua acima só vale se souber acusar — aqui ela acusa.
+
+    Sem este teste, o anterior passaria para sempre só porque a narrativa
+    de hoje não tem número nenhum.
+    """
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=3)
+    decomposicao = _decomposicao_de_exemplo()
+
+    _instalar_cliente(
+        monkeypatch,
+        _Resposta(
+            [
+                _BlocoTexto(
+                    "Sua margem líquida foi de R$ 999.999,99 e você tem "
+                    "direito a R$ 50.000,00 de volta."
+                )
+            ]
+        ),
+    )
+    narrativa = llm.gerar_resposta("por que sobra tão pouco?", dispositivos)
+    assert _sem_lastro(narrativa, decomposicao, dispositivos) == {
+        "999.999,99",
+        "50.000,00",
+    }
+
+
+def test_valor_que_o_motor_calculou_passa_pela_regua(monkeypatch):
+    """Narrar o número certo é o trabalho do LLM — isso não pode acusar.
+
+    A venda de R$ 1.000,00 com CMV de R$ 400,00: os dois são do motor e
+    a régua tem que deixar passar.
+    """
+    dispositivos = RETRIEVER.buscar("comissão do marketplace", top_k=2)
+    decomposicao = _decomposicao_de_exemplo()
+
+    _instalar_cliente(
+        monkeypatch,
+        _Resposta(
+            [
+                _BlocoTexto(
+                    "Das suas vendas de R$ 1.000,00, R$ 400,00 foram para o "
+                    "custo do produto."
+                )
+            ]
+        ),
+    )
+    narrativa = llm.gerar_resposta("para onde foi o dinheiro?", dispositivos)
+    assert _sem_lastro(narrativa, decomposicao, dispositivos) == set()

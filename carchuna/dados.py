@@ -43,13 +43,36 @@ _VERDADEIRO = {"1", "true", "sim", "s", "verdadeiro", "yes"}
 _FALSO = {"", "0", "false", "nao", "não", "n", "falso", "no"}
 
 
-def _decimal_br(texto: str, campo: str, linha: int) -> Decimal:
-    """Converte '1.234,56' ou '1234.56' em Decimal, sem passar por float."""
+def _para_decimal(texto: str) -> Decimal:
+    """'R$ 1.234,56' ou '1234.56' → Decimal, sem nunca passar por float."""
     limpo = str(texto).strip().replace("R$", "").replace(" ", "")
     if "," in limpo:  # formato brasileiro: ponto de milhar, vírgula decimal
         limpo = limpo.replace(".", "").replace(",", ".")
+    return Decimal(limpo)
+
+
+def decimal_de_texto(texto: str, campo: str = "valor") -> Decimal:
+    """Converte o que a pessoa digitou em ``Decimal``, sem passar por float.
+
+    É o mesmo parser das planilhas, exposto para os formulários: a taxa
+    da maquininha digitada como ``2,49`` precisa virar ``Decimal("2.49")``
+    e não ``2.49`` em ponto flutuante, porque esse número multiplica cada
+    venda da base. ``st.number_input`` devolve ``float`` — por isso o
+    dashboard lê percentual como texto e chama esta função.
+    """
     try:
-        return Decimal(limpo)
+        return _para_decimal(texto)
+    except InvalidOperation:
+        raise ValueError(
+            f"`{campo}` = {texto!r} não é um número válido. "
+            "Use vírgula ou ponto para os centavos (ex.: 2,49)."
+        ) from None
+
+
+def _decimal_br(texto: str, campo: str, linha: int) -> Decimal:
+    """Como ``decimal_de_texto``, mas com o número da linha na mensagem."""
+    try:
+        return _para_decimal(texto)
     except InvalidOperation:
         raise ValueError(
             f"linha {linha}: `{campo}` = {texto!r} não é um valor monetário válido."

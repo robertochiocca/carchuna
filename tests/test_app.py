@@ -31,9 +31,10 @@ FIXTURES = Path(__file__).parent / "fixtures" / "reais"
 TIMEOUT = 120
 
 
-# Os widgets do app não têm `key`, então são alcançados por posição.
-IDIOMA = 0  # st.radio "Idioma / Language" (barra lateral)
-CAMINHO = 1  # 2º st.text_input: "Caminho do arquivo"; o 1º é a pergunta do RAG
+# Widgets alcançados pela `key` do app, não pela posição: acrescentar um
+# campo na barra lateral não pode quebrar teste nenhum.
+IDIOMA = "idioma"
+CAMINHO = "caminho_arquivo"
 
 
 def _rodar() -> AppTest:
@@ -44,7 +45,7 @@ def _rodar() -> AppTest:
 def _rodar_com_arquivo(caminho) -> AppTest:
     """Roda o app apontando o campo de caminho para um arquivo de vendas."""
     teste = _rodar()
-    teste.text_input[CAMINHO].set_value(str(caminho))
+    teste.text_input(CAMINHO).set_value(str(caminho))
     return teste.run()
 
 
@@ -133,7 +134,7 @@ def test_todas_as_abas_renderizam_algum_conteudo(app_demo):
 def test_a_versao_em_ingles_tambem_monta():
     """Bilíngue de verdade: trocar o idioma não pode quebrar o app."""
     teste = _rodar()
-    teste.radio[IDIOMA].set_value("EN")
+    teste.radio(IDIOMA).set_value("EN")
     teste.run()
     assert not teste.exception
     assert [aba.label for aba in teste.tabs][0] == "Summary"
@@ -256,14 +257,13 @@ def test_o_toggle_da_rbt12_movel_diz_quantos_meses_usou_o_arquivo(tmp_path):
     """
     vendas = _csv_de_meses(tmp_path / "vendas.csv", 15, "30000,00")
     teste = _rodar()
-    teste.text_input[CAMINHO].set_value(str(vendas))
+    teste.text_input(CAMINHO).set_value(str(vendas))
     teste.run()
     # o toggle existe e começa desligado
-    movel = [tg for tg in teste.toggle if "RBT12" in tg.label]
-    assert len(movel) == 1
-    assert movel[0].value is False
+    movel = teste.toggle("rbt12_movel")
+    assert movel.value is False
 
-    movel[0].set_value(True)
+    movel.set_value(True)
     teste.run()
     assert not teste.exception
     legendas = " ".join(c.value for c in teste.caption)
@@ -274,14 +274,131 @@ def test_arquivo_curto_avisa_que_a_aliquota_veio_do_valor_informado(tmp_path):
     """6 meses: nenhuma janela fecha, e a tela diz isso em vez de fingir."""
     vendas = _csv_de_meses(tmp_path / "vendas.csv", 6, "30000,00")
     teste = _rodar()
-    teste.text_input[CAMINHO].set_value(str(vendas))
+    teste.text_input(CAMINHO).set_value(str(vendas))
     teste.run()
-    movel = [tg for tg in teste.toggle if "RBT12" in tg.label][0]
-    movel.set_value(True)
+    teste.toggle("rbt12_movel").set_value(True)
     teste.run()
     assert not teste.exception
     avisos = " ".join(i.value for i in teste.info)
     assert "não cobre 12 meses" in avisos
+
+
+def test_nenhuma_funcao_que_desenha_widget_esta_cacheada():
+    """Guarda estrutural — este erro passou por aqui e ninguém viu.
+
+    Ao inserir uma função nova logo acima de outra, o decorador
+    `@st.cache_resource` da de baixo ficou grudado na de cima: uma função
+    que desenha widgets virou cacheada, e o `Retriever` (que lê e indexa
+    o corpus) perdeu o cache e passou a ser reconstruído a cada rerun.
+    O Streamlit só reclama disso como aviso, então o teste de tela não
+    derrubou nada. Este lê a árvore sintática do `app.py` e não depende
+    de nenhum aviso.
+    """
+    import ast
+
+    DESENHAM = {
+        "text_input",
+        "number_input",
+        "selectbox",
+        "slider",
+        "toggle",
+        "radio",
+        "checkbox",
+        "button",
+        "file_uploader",
+        "expander",
+        "error",
+        "warning",
+        "success",
+        "info",
+        "metric",
+        "dataframe",
+        "stop",
+        "tabs",
+        "download_button",
+        "caption",
+        "markdown",
+    }
+    arvore = ast.parse(Path(APP).read_text(encoding="utf-8"))
+    problemas = []
+    for no in ast.walk(arvore):
+        if not isinstance(no, ast.FunctionDef):
+            continue
+        cacheada = any("cache" in ast.unparse(d) for d in no.decorator_list)
+        if not cacheada:
+            continue
+        for interno in ast.walk(no):
+            if (
+                isinstance(interno, ast.Call)
+                and isinstance(interno.func, ast.Attribute)
+                and isinstance(interno.func.value, ast.Name)
+                and interno.func.value.id == "st"
+                and interno.func.attr in DESENHAM
+            ):
+                problemas.append(
+                    f"{no.name}() é cacheada e chama st.{interno.func.attr}"
+                )
+    assert not problemas, "; ".join(problemas)
+
+
+def test_o_retriever_continua_cacheado():
+    """O corpus é lido e indexado uma vez, não a cada clique de widget."""
+    import ast
+
+    arvore = ast.parse(Path(APP).read_text(encoding="utf-8"))
+    cacheadas = {
+        no.name
+        for no in ast.walk(arvore)
+        if isinstance(no, ast.FunctionDef)
+        and any("cache" in ast.unparse(d) for d in no.decorator_list)
+    }
+    assert "_retriever_cacheado" in cacheadas
+    assert "_resultados_cacheados" in cacheadas
+
+
+def test_a_taxa_digitada_chega_inteira_ao_motor(tmp_path):
+    """A fronteira do widget não pode reintroduzir float no cálculo.
+
+    `TabelaCustos` rejeita `float` com `TypeError` — então se o campo
+    voltasse a ser `st.number_input`, o app quebraria e `exception` não
+    estaria vazio. Além disso o valor digitado tem que chegar inteiro:
+    numa venda de R$ 1.000,00 em canal com adquirência própria, mudar a
+    taxa de 2,00% para 2,49% muda a dedução em exatamente R$ 4,90
+    (1000 × 0,0049), e é isso que a tela precisa refletir.
+    """
+    vendas = tmp_path / "vendas.csv"
+    vendas.write_text(
+        "data;canal;produto;valor_bruto;custo_produto;frete_pago\n"
+        "01/05/2026;loja_propria;Capa;1000,00;400,00;0,00\n",
+        encoding="utf-8",
+    )
+
+    def _foi_embora(taxa: str) -> Decimal:
+        teste = _rodar()
+        teste.text_input(CAMINHO).set_value(str(vendas))
+        teste.text_input("taxa_adq").set_value(taxa)
+        teste.run()
+        assert not teste.exception, f"o app quebrou com a taxa {taxa}"
+        # selecionar pelo RÓTULO, não pela posição: a ordem das métricas
+        # é layout, e layout muda
+        (foi_embora,) = [
+            m.value for m in teste.metric if m.label == "Foi embora em custos e taxas"
+        ]
+        return Decimal(
+            foi_embora.removeprefix("R$ ").replace(".", "").replace(",", ".")
+        )
+
+    assert _foi_embora("2,49") - _foi_embora("2,00") == Decimal("4.90")
+
+
+def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
+    """'dois e meio' vira frase de lojista, não ValueError na tela."""
+    teste = _rodar()
+    teste.text_input("taxa_adq").set_value("dois e meio")
+    teste.run()
+    assert not teste.exception
+    erros = " ".join(e.value for e in teste.error)
+    assert "dois e meio" in erros
 
 
 if __name__ == "__main__":

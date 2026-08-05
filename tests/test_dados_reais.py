@@ -474,3 +474,57 @@ def test_relatorio_de_mercado_livre_tambem_e_citado(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# O mesmo parser serve o formulário do dashboard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "digitado,esperado",
+    [
+        ("2,49", "2.49"),
+        ("2.49", "2.49"),
+        ("2", "2"),
+        ("1,99", "1.99"),
+        ("0", "0"),
+        ("R$ 1.234,56", "1234.56"),
+        (" 3,5 ", "3.5"),
+    ],
+)
+def test_decimal_de_texto_le_o_que_o_lojista_digita(digitado, esperado):
+    """O que o usuário digita vira Decimal direto, sem passar por float.
+
+    É o mesmo parser das planilhas, reaproveitado no formulário: a taxa
+    da maquininha entra como texto e nunca encosta em `float`, senão
+    2,49% viraria 0.024900000000000002 antes de multiplicar dinheiro.
+    """
+    from carchuna.dados import decimal_de_texto
+
+    assert decimal_de_texto(digitado, "taxa") == Decimal(esperado)
+
+
+def test_decimal_de_texto_recusa_lixo_com_frase_de_lojista():
+    from carchuna.dados import decimal_de_texto
+
+    with pytest.raises(ValueError) as erro:
+        decimal_de_texto("dois e meio", "taxa da maquininha")
+    assert "taxa da maquininha" in str(erro.value)
+    assert "dois e meio" in str(erro.value)
+
+
+def test_a_taxa_do_formulario_nao_perde_precisao_como_o_float_perderia():
+    """A prova de que a regra tem consequência prática.
+
+    2,49% via float: 2.49/100 = 0.024900000000000002 — e esse resto
+    multiplica cada venda da base. Via Decimal é 0.0249 exato.
+    """
+    from carchuna.dados import decimal_de_texto
+
+    por_decimal = decimal_de_texto("2,49", "taxa") / 100
+    assert por_decimal == Decimal("0.0249")
+    assert str(por_decimal) == "0.0249"
+    # o caminho antigo, para deixar registrado o que se estava evitando
+    assert Decimal(str(2.49)) / 100 == Decimal("0.0249")  # str() salva...
+    assert Decimal(2.49) / 100 != Decimal("0.0249")  # ...mas o float cru, não
