@@ -143,3 +143,129 @@ def test_prompt_do_sistema_mantem_o_dna_da_trilogia():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# O caminho do LLM, sem chave de API nenhuma
+# ---------------------------------------------------------------------------
+
+
+class _BlocoTexto:
+    """Imita um bloco de conteúdo da resposta da API da Anthropic."""
+
+    def __init__(self, texto: str, tipo: str = "text"):
+        self.text = texto
+        self.type = tipo
+
+
+class _Resposta:
+    def __init__(self, blocos, stop_reason="end_turn"):
+        self.content = blocos
+        self.stop_reason = stop_reason
+
+
+class _ClienteFalso:
+    """Cliente que devolve o que o teste mandar — e guarda o que recebeu."""
+
+    ultima_chamada: dict = {}
+
+    def __init__(self, resposta=None, erro=None):
+        self._resposta = resposta
+        self._erro = erro
+        self.messages = self
+
+    def create(self, **kwargs):
+        type(self).ultima_chamada = kwargs
+        if self._erro:
+            raise self._erro
+        return self._resposta
+
+
+def _instalar_cliente(monkeypatch, resposta=None, erro=None):
+    """Põe um `anthropic` falso no lugar do módulo real."""
+    import types
+
+    falso = types.SimpleNamespace(
+        Anthropic=lambda *a, **k: _ClienteFalso(resposta=resposta, erro=erro)
+    )
+    monkeypatch.setattr(llm, "anthropic", falso)
+    monkeypatch.setenv("CARCHUNA_USAR_LLM", "1")
+
+
+def test_gerar_resposta_devolve_o_texto_do_modelo(monkeypatch):
+    """Caminho feliz do LLM, exercitado sem chave e sem rede."""
+    _instalar_cliente(monkeypatch, _Resposta([_BlocoTexto("  Em regra, sim.  ")]))
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) == "Em regra, sim."
+
+
+def test_o_prompt_leva_os_dispositivos_recuperados(monkeypatch):
+    """A IA só pode falar do que o Retriever achou — é o contrato do RAG."""
+    _instalar_cliente(monkeypatch, _Resposta([_BlocoTexto("ok")]))
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    llm.gerar_resposta("qual o limite do MEI?", dispositivos)
+
+    enviado = _ClienteFalso.ultima_chamada
+    conteudo = enviado["messages"][0]["content"]
+    for disp in dispositivos:
+        assert disp.lei in conteudo
+        assert disp.fonte in conteudo
+    assert "qual o limite do MEI?" in conteudo
+    # o system prompt vai com cache_control, e é o da casa
+    assert enviado["system"][0]["text"] == llm.SYSTEM_PROMPT
+
+
+def test_recusa_do_modelo_cai_no_modo_extrativo(monkeypatch):
+    """`stop_reason == "refusal"` não vira resposta — vira None."""
+    _instalar_cliente(
+        monkeypatch, _Resposta([_BlocoTexto("...")], stop_reason="refusal")
+    )
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
+
+
+def test_resposta_vazia_do_modelo_cai_no_modo_extrativo(monkeypatch):
+    """Texto em branco é o mesmo que não ter resposta."""
+    _instalar_cliente(monkeypatch, _Resposta([_BlocoTexto("   ")]))
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
+
+
+def test_bloco_que_nao_e_texto_e_ignorado(monkeypatch):
+    """Só blocos `type == "text"` entram na resposta."""
+    _instalar_cliente(
+        monkeypatch,
+        _Resposta([_BlocoTexto("ignore", tipo="thinking"), _BlocoTexto("vale")]),
+    )
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) == "vale"
+
+
+def test_erro_da_api_nao_derruba_o_app(monkeypatch):
+    """Degradação graciosa: sem rede, sem crédito ou API fora, cai para None."""
+    _instalar_cliente(monkeypatch, erro=RuntimeError("connection refused"))
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
+
+
+def test_desligar_o_llm_por_variavel_de_ambiente(monkeypatch):
+    """`CARCHUNA_USAR_LLM=0` desliga a geração mesmo com cliente disponível."""
+    _instalar_cliente(monkeypatch, _Resposta([_BlocoTexto("não deveria aparecer")]))
+    monkeypatch.setenv("CARCHUNA_USAR_LLM", "0")
+    dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
+    assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
+
+
+def test_nenhum_valor_monetario_sai_do_llm(monkeypatch):
+    """A IA nunca calcula: o prompt não manda o modelo produzir número.
+
+    O contexto enviado carrega texto de lei, não a decomposição da
+    margem — o número já saiu do motor antes de o LLM ser chamado.
+    """
+    _instalar_cliente(monkeypatch, _Resposta([_BlocoTexto("ok")]))
+    dispositivos = RETRIEVER.buscar("comissão do marketplace", top_k=3)
+    llm.gerar_resposta("por que sobra tão pouco?", dispositivos)
+
+    enviado = _ClienteFalso.ultima_chamada
+    assert "calcule" not in enviado["system"][0]["text"].lower()
+    assert "Não invente lei, número, alíquota" in enviado["system"][0]["text"]
