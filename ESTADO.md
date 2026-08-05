@@ -41,7 +41,17 @@
 | P5 | Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano | contrato e credenciais do agregador |
 | P6 | Persistência/auth | roadmap | só faz sentido com piloto multiusuário |
 
-**Nenhum item P0 ou P1 na fila.**
+**Nenhum item P0 ou P1 na fila. A fila só tem itens bloqueados** — condição de parada da
+seção 7 do loop. Retomar só quando um dos bloqueios cair; até lá, seguir seria reescrever o
+que já funciona.
+
+### O que destrava cada coisa, na ordem de quem chega primeiro
+1. **Export real de um lojista** → substitui `tests/fixtures/reais/` e reabre P1 com dados
+   de verdade (é o único item que provavelmente revela ingestão que ainda não aguenta).
+2. **Credencial OAuth de Shopee ou ML** → P5 sai de bloqueado; a interface `Conector` e o
+   `ConectorArquivo` já existem e são testados, então é só a implementação concreta.
+3. **Revisão jurídica do corpus** → os 21 dispositivos saem de `revisado: false`.
+4. **Alíquotas de ICMS/ISS validadas em fonte oficial** → P4 Lucro Presumido.
 
 ## Bloqueados por humano (ação do Roberto)
 - Registrar o app na Shopee Open Platform e no Mercado Livre e obter as credenciais OAuth.
