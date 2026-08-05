@@ -17,8 +17,9 @@
 | 11 | Auditoria dos próprios testes: asserção fraca → comportamento, provada por mutação | `97bfb33` |
 | 12 | P4 — RBT12 móvel mês a mês, com recusa honesta quando a janela não fecha | `f6e7f6a` |
 | 13 | Float na fronteira do widget; cache do Retriever restaurado; faixa separada da alíquota | `f73280b` |
+| 14 | `use_container_width` (remoção vencida em 31/12/2025) trocado por `width="stretch"` | `9c9514a` |
 
-- Portões do último ciclo: pytest 212 passando · cobertura 98,30% · ruff ok · black ok
+- Portões do último ciclo: pytest 214 passando · cobertura 98,30% · ruff ok · black ok
 - CI verde em Python 3.10, 3.11 e 3.12 (run 41, commit `86b1ae0`)
 
 ### Conferência das 6 condições de pronto
@@ -60,6 +61,10 @@
 ## Decisões tomadas (para não redecidir)
 - **Janela de RBT12 incompleta se recusa, não chuta.** Mês sem os 12 anteriores no arquivo
   usa a RBT12 informada; completar com zero baixaria a alíquota em silêncio.
+- **Aviso do Streamlit é falha, não ruído.** `AppTest.exception` recolhe aviso
+  (`is_warning=True`) e os testes exigem a lista vazia. Ignorar aviso foi o que deixou o
+  erro de cache do Retriever sobreviver nove commits e o `use_container_width` vencido
+  passar o loop inteiro no stderr.
 - **Conta manual do Simples se escreve em dois passos.** Primeiro afirma-se a FAIXA (com
   nominal e parcela a deduzir), depois a alíquota. Errei a faixa duas vezes e nas duas quem
   me corrigiu foi o motor — o que inverte o papel da validação.
