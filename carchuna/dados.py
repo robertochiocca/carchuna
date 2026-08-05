@@ -18,6 +18,7 @@ import io
 import json
 import random
 import unicodedata
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -122,6 +123,76 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
         ),
         produto=(str(linha.get("produto") or "").strip() or None),
     )
+
+
+@dataclass(frozen=True)
+class LinhaRejeitada:
+    """Uma linha que não virou venda — com o número e o motivo em PT-BR.
+
+    ``numero`` é o número da linha no arquivo como o lojista o vê na
+    planilha (o cabeçalho é a linha 1), para ele conseguir ir lá e olhar.
+    """
+
+    numero: int
+    motivo: str
+    conteudo: dict
+
+
+@dataclass(frozen=True)
+class ResultadoImportacao:
+    """O que entrou, o que ficou de fora e por quê.
+
+    Existe para que nenhuma linha suma em silêncio: um arquivo com 5.000
+    vendas e 3 linhas estragadas importa as 4.997 e mostra as 3 — em vez
+    de recusar o arquivo inteiro (o que era o comportamento antigo) ou,
+    pior, descartar as 3 sem avisar.
+    """
+
+    transacoes: list[Transacao]
+    rejeitadas: list[LinhaRejeitada]
+
+    @property
+    def total_lidas(self) -> int:
+        """Linhas de dados lidas do arquivo (fora o cabeçalho)."""
+        return len(self.transacoes) + len(self.rejeitadas)
+
+    def resumo(self) -> str:
+        """Uma frase para o lojista sobre o que aconteceu com o arquivo."""
+        if not self.transacoes:
+            return (
+                f"Nenhuma venda pôde ser lida: as {self.total_lidas} linhas do "
+                "arquivo foram recusadas. Veja o motivo de cada uma abaixo e "
+                "corrija a planilha — normalmente é a coluna de valor ou a de "
+                "data que veio em outro formato."
+            )
+        if not self.rejeitadas:
+            return f"{len(self.transacoes)} vendas importadas, nenhuma linha de fora."
+        return (
+            f"{len(self.transacoes)} vendas importadas. "
+            f"{len(self.rejeitadas)} de {self.total_lidas} linhas ficaram de fora "
+            "e não entram em nenhum número deste relatório — a lista abaixo diz "
+            "o número da linha na sua planilha e o motivo."
+        )
+
+
+def carregar_com_relatorio(source, name: str | None = None) -> ResultadoImportacao:
+    """Importa o que der e explica o que não deu.
+
+    É o caminho do dashboard: o lojista sobe o arquivo cru e vê o raio-X
+    das linhas boas mais um relatório das linhas recusadas. Quem precisa
+    de tudo-ou-nada usa ``carregar_transacoes``.
+    """
+    linhas = ler_linhas_brutas(source, name=name)
+    transacoes: list[Transacao] = []
+    rejeitadas: list[LinhaRejeitada] = []
+    for numero, linha in enumerate(linhas, 2):
+        try:
+            transacoes.append(_linha_para_transacao(linha, numero))
+        except (ValueError, TypeError) as erro:
+            rejeitadas.append(
+                LinhaRejeitada(numero=numero, motivo=str(erro), conteudo=dict(linha))
+            )
+    return ResultadoImportacao(transacoes=transacoes, rejeitadas=rejeitadas)
 
 
 def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:

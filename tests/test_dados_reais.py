@@ -221,5 +221,109 @@ def test_data_com_dia_31_em_mes_de_30_e_recusada(tmp_path):
         carregar_transacoes(arquivo)
 
 
+# ---------------------------------------------------------------------------
+# Linhas parcialmente inválidas: relatório de rejeitadas, nunca descarte mudo
+# ---------------------------------------------------------------------------
+
+CSV_COM_LINHAS_RUINS = (
+    CABECALHO + "2026-05-01;shopee;Capa;100,00;40,00;10,00\n"  # linha 2: boa
+    "2026-05-02;shopee;Fone;LIXO;90,00;12,00\n"  # linha 3: valor ilegível
+    "2026-05-03;shopee;Caixa;200,00;90,00;12,00\n"  # linha 4: boa
+    "ontem;shopee;Capa;50,00;20,00;5,00\n"  # linha 5: data ilegível
+    ";shopee;Capa;50,00;20,00;5,00\n"  # linha 6: data vazia
+    "2026-05-06;shopee;Relógio;300,00;100,00;15,00\n"  # linha 7: boa
+)
+
+
+def test_relatorio_de_rejeitadas_separa_boas_de_ruins(tmp_path):
+    """3 linhas boas, 3 ruins: importa as 3 e explica as outras 3.
+
+    Conferido à mão: linhas 2, 4 e 7 são válidas (100 + 200 + 300 = 600
+    de receita bruta); linhas 3, 5 e 6 caem, cada uma com o seu motivo.
+    """
+    from carchuna.dados import carregar_com_relatorio
+
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(CSV_COM_LINHAS_RUINS, encoding="utf-8")
+    resultado = carregar_com_relatorio(arquivo)
+
+    assert len(resultado.transacoes) == 3
+    assert sum(t.valor_bruto for t in resultado.transacoes) == Decimal("600.00")
+
+    assert [r.numero for r in resultado.rejeitadas] == [3, 5, 6]
+    # nenhuma linha some sem explicação
+    assert resultado.total_lidas == 6
+    assert resultado.total_lidas == len(resultado.transacoes) + len(
+        resultado.rejeitadas
+    )
+
+
+def test_cada_rejeitada_diz_o_motivo_e_guarda_a_linha_original(tmp_path):
+    """O lojista precisa achar a linha na planilha dele e ver o porquê."""
+    from carchuna.dados import carregar_com_relatorio
+
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(CSV_COM_LINHAS_RUINS, encoding="utf-8")
+    resultado = carregar_com_relatorio(arquivo)
+    por_numero = {r.numero: r for r in resultado.rejeitadas}
+
+    assert "valor monetário" in por_numero[3].motivo
+    assert por_numero[3].conteudo["produto"] == "Fone"
+
+    assert "data" in por_numero[5].motivo.lower()
+    assert "obrigatórias" in por_numero[6].motivo
+
+
+def test_resumo_da_importacao_e_frase_de_lojista(tmp_path):
+    """'3 de 6 linhas ficaram de fora' — número e motivo, sem jargão."""
+    from carchuna.dados import carregar_com_relatorio
+
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(CSV_COM_LINHAS_RUINS, encoding="utf-8")
+    resumo = carregar_com_relatorio(arquivo).resumo()
+
+    assert "3" in resumo and "6" in resumo
+    assert "linha" in resumo.lower()
+    assert "Traceback" not in resumo
+
+
+def test_arquivo_todo_bom_nao_tem_rejeitadas(tmp_path):
+    """Caminho feliz: relatório vazio, resumo diz que entrou tudo."""
+    from carchuna.dados import carregar_com_relatorio
+
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        CABECALHO + "2026-05-01;shopee;Capa;100,00;40,00;10,00\n", encoding="utf-8"
+    )
+    resultado = carregar_com_relatorio(arquivo)
+    assert resultado.rejeitadas == []
+    assert "1" in resultado.resumo()
+
+
+def test_carregar_transacoes_continua_estrito(tmp_path):
+    """O contrato de hoje não muda: quem chama `carregar_transacoes`
+    quer tudo ou nada, e continua recebendo a exceção da primeira linha
+    ruim. Quem quer importar o que dá é quem chama `carregar_com_relatorio`.
+    """
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(CSV_COM_LINHAS_RUINS, encoding="utf-8")
+    with pytest.raises(ValueError, match="linha 3"):
+        carregar_transacoes(arquivo)
+
+
+def test_arquivo_so_com_linhas_ruins_nao_finge_sucesso(tmp_path):
+    """Zero transações válidas: o resultado diz isso na cara."""
+    from carchuna.dados import carregar_com_relatorio
+
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        CABECALHO + "ontem;shopee;Capa;LIXO;20,00;5,00\n", encoding="utf-8"
+    )
+    resultado = carregar_com_relatorio(arquivo)
+    assert resultado.transacoes == []
+    assert len(resultado.rejeitadas) == 1
+    assert "nenhuma" in resultado.resumo().lower()
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
