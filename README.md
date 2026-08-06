@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-290%2F290-2ee6d6.svg)](tests/)
+[![Testes](https://img.shields.io/badge/testes-315%2F315-2ee6d6.svg)](tests/)
 [![Cobertura](https://img.shields.io/badge/cobertura-98%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -146,6 +146,7 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal**, **subir os preços X%** (com a premissa de volume constante no nome do cenário) | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
+| `rag/ingestao.py` + `scripts/ingerir_planalto.py` — extrai artigos de uma lei do Planalto (incluindo `Art. 18-A`, que a LC 123 usa à exaustão) e gera esqueletos no formato do corpus; a mesclagem nunca sobrescreve dispositivo com conteúdo humano | pronto — implementado e testado. Resolve a **digitação**, não a conferência: todo esqueleto sai `revisado: false` com resumo TODO |
 | `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | bloqueado por humano — conferir cada dispositivo na fonte oficial e virar `revisado: true` no arquivo; só o Roberto (ou um advogado) pode fazer isso |
 | `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | pronto — implementado e testado |
 | `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | pronto — implementado e testado |
@@ -172,7 +173,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 290 testes
+pip install pytest && pytest          # 315 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -212,7 +213,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (290 testes, cobertura 98,40%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (315 testes, cobertura 98,52%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -232,7 +233,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 290 tests, 98.40% coverage
+pytest                                        # 315 tests, 98.52% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```
