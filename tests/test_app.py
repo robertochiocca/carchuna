@@ -653,6 +653,41 @@ def test_cada_sinal_do_radar_chega_com_a_propria_nota_de_confianca(tmp_path):
         assert sinal.confianca.frase in tela
 
 
+def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
+    """ "E se eu subisse os preços 5%?" na tela, com a premissa junto.
+
+    O impacto tem que ser o do motor — que recalcula imposto e comissão
+    sobre o preço novo — e não 5% do faturamento. E a premissa do volume
+    constante aparece no próprio nome do cenário: sem ela o número vira
+    promessa, porque ninguém sabe quanta venda se perde ao subir preço.
+    """
+    from carchuna.analise import AnalisadorMargem
+
+    cenarios = AnalisadorMargem.demo(meses=6).cenarios()
+    preco = [c for c in cenarios if "preços" in c.nome]
+    assert len(preco) == 1, "o cenário de preço entra uma vez na bateria"
+    (preco,) = preco
+    assert "mesmo volume" in preco.nome
+
+    aba_ese = app_demo.tabs[3]
+    assert aba_ese.label.strip().startswith("E se")
+    nomes = [str(m.value) for m in aba_ese.markdown]
+    assert any(preco.nome in n for n in nomes)
+
+    # o app formata em pt-BR: R$ 1.234.567,89
+    formatado = "R$ " + (
+        f"{preco.impacto_reais:,.2f}".replace(",", "@")
+        .replace(".", ",")
+        .replace("@", ".")
+    )
+    valores = [m.value for m in aba_ese.metric]
+    assert formatado in valores
+
+    # o ganho não é 5% do faturamento: imposto e comissão comem parte
+    receita = AnalisadorMargem.demo(meses=6).decomposicao.receita_bruta
+    assert preco.impacto_reais < receita * Decimal("0.05")
+
+
 def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     """'dois e meio' vira frase de lojista, não ValueError na tela."""
     teste = _rodar()
