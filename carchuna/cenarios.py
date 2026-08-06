@@ -292,7 +292,43 @@ class CenarioCrescimentoCanal(Cenario):
         return list(transacoes) + extras, config, tabela
 
 
+class CenarioPreco(Cenario):
+    """Todos os preços sobem ``delta`` (0.05 = +5%), com o MESMO volume.
+
+    A alavanca mais direta do lojista: o motor recalcula imposto e
+    comissão sobre o preço novo (comissões observadas no extrato são
+    percentuais e escalam junto). Premissa explícita e honesta: volume
+    constante — estimar quanto de venda se perde com preço maior
+    (elasticidade) exige histórico de variação de preço e é roadmap.
+    """
+
+    def __init__(self, delta: Decimal = Decimal("0.05")):
+        self.delta = delta
+
+    @property
+    def nome(self) -> str:
+        pct = (self.delta * 100).quantize(Decimal("1"))
+        return f"Aumentar os preços em {pct}% (mesmo volume)"
+
+    def transformar(self, transacoes, config, tabela) -> _Entradas:
+        fator = Decimal("1") + self.delta
+        novas = [
+            replace(
+                t,
+                valor_bruto=(t.valor_bruto * fator).quantize(Decimal("0.01")),
+                comissao_cobrada=(
+                    (t.comissao_cobrada * fator).quantize(Decimal("0.01"))
+                    if t.comissao_cobrada is not None
+                    else None
+                ),
+            )
+            for t in transacoes
+        ]
+        return novas, config, tabela
+
+
 CENARIOS_PADRAO: tuple[type[Cenario], ...] = (
+    CenarioPreco,
     CenarioComissao,
     CenarioAntecipacao,
     CenarioDevolucoesDobram,
@@ -308,6 +344,7 @@ def rodar_cenarios_padrao(
 ) -> list[ResultadoCenario]:
     """Roda a bateria padrão de cenários (a "página de stress" do relatório)."""
     cenarios: list[Cenario] = [
+        CenarioPreco(),
         CenarioComissao(),
         CenarioAntecipacao(),
         CenarioDevolucoesDobram(),
