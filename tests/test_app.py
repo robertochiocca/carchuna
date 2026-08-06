@@ -688,6 +688,39 @@ def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
     assert preco.impacto_reais < receita * Decimal("0.05")
 
 
+def test_numero_implausivel_aparece_com_motivo_no_topo_do_resumo(tmp_path):
+    """CMV acima do faturamento: a tela diz por que, antes dos números.
+
+    A regra é a do módulo: mostrar o motivo, e **não** esconder, limitar
+    nem zerar o valor. Um número absurdo com teto continua absurdo e passa
+    a ser também invisível.
+    """
+    vendas = tmp_path / "vendas.csv"
+    vendas.write_text(
+        "data;canal;produto;valor_bruto;custo_produto;frete_pago\n"
+        "01/05/2026;shopee;Capa;100,00;5000,00;10,00\n"
+        "02/05/2026;shopee;Fone;200,00;9000,00;12,00\n",
+        encoding="utf-8",
+    )
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    erros = " ".join(e.value for e in teste.error)
+    assert "não fecham com a realidade" in erros
+    assert "mais que todo o faturamento" in erros
+    # o número segue na tela: 300,00 de receita continua sendo mostrado
+    tela = " ".join(
+        [m.value for m in teste.metric] + [str(m.value) for m in teste.markdown]
+    )
+    assert "300,00" in tela
+
+
+def test_base_saudavel_nao_mostra_aviso_de_implausibilidade(app_demo):
+    """O aviso só aparece quando há o que avisar — senão vira ruído."""
+    erros = " ".join(e.value for e in app_demo.error)
+    assert "não fecham com a realidade" not in erros
+
+
 def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     """'dois e meio' vira frase de lojista, não ValueError na tela."""
     teste = _rodar()
