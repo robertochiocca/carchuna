@@ -33,6 +33,7 @@ from carchuna import (
     carregar_com_relatorio,
     transacoes_sinteticas,
 )
+from carchuna.confianca import avaliar_confianca
 from carchuna.crescimento import AVISO_CRESCIMENTO
 from carchuna.dados import (
     COLUNAS_OBRIGATORIAS,
@@ -279,6 +280,63 @@ T = {
             "sua taxa real para ficar exato."
         ),
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
+        "wf_receita": "Faturamento",
+        "cachoeira_dica": (
+            "Toque numa barra de custo para abrir de onde ela vem — por "
+            "canal e por mês. Duplo clique desfaz a seleção."
+        ),
+        "drill_titulo": "De onde vem: {rotulo}",
+        "drill_por_canal": "Por canal",
+        "drill_por_mes": "Por mês",
+        "drill_sem_canal": (
+            "O DAS do MEI é fixo por mês — dividi-lo por canal seria "
+            "inventar número. A quebra por mês ao lado é a real."
+        ),
+        "radar_titulo": "Radar do CFO",
+        "radar_caption": (
+            "Sinais achados automaticamente nos seus números — cada um "
+            "com o impacto em R$/mês, o método que o detectou e o que "
+            "fazer a respeito."
+        ),
+        "radar_vazio": (
+            "Nenhum sinal no radar — margens estáveis e sem vazamento "
+            "novo entre os meses."
+        ),
+        "radar_sev": {
+            "critico": "CRÍTICO",
+            "atencao": "ATENÇÃO",
+            "oportunidade": "OPORTUNIDADE",
+        },
+        "radar_esperado": "esperado",
+        "radar_observado": "observado",
+        "radar_metodo": "Como foi detectado:",
+        "radar_aviso": (
+            "Sinais calculados por regras transparentes, sem IA — são "
+            "pistas para investigar com seu contador, não veredito."
+        ),
+        "lin_titulo": "De onde vem cada número?",
+        "lin_caption": (
+            "Escolha um número e veja o arquivo de origem, as colunas, a "
+            "fórmula com os parâmetros do seu caso, as premissas e as "
+            "limitações — rastreabilidade completa."
+        ),
+        "lin_numero": "Número",
+        "lin_origem": "Fonte dos dados",
+        "lin_colunas": "Colunas usadas",
+        "lin_formula": "Cálculo",
+        "lin_transf": "Transformações na importação",
+        "lin_premissas": "Premissas",
+        "lin_limitacoes": "Limitações",
+        "lin_fonte": "Base legal / tabela",
+        "lin_quando": "Calculado em",
+        "conf_titulo": "Quanto dá para confiar nestes números?",
+        "conf_nota": "Confiança da base: {pct}% ({nivel})",
+        "conf_caption": (
+            "A nota mede a sua BASE, não o cálculo: o cálculo é o mesmo "
+            "sempre. Ela soma quatro componentes de rubrica fixa — "
+            "evidência, histórico, amostra e campos preenchidos — e cada "
+            "um diz o porquê da sua parcela."
+        ),
         "vendas_metricas": ["Vendas", "Faturamento", "Canais", "Devoluções"],
         "campeoes": "Campeões de margem — venda mais destes",
         "campeoes_caption": (
@@ -542,6 +600,64 @@ T = {
             "one in the sidebar."
         ),
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
+        "wf_receita": "Revenue",
+        "cachoeira_dica": (
+            "Click a cost bar to see where it comes from — by channel "
+            "and by month. Double-click to clear."
+        ),
+        "drill_titulo": "Where it comes from: {rotulo}",
+        "drill_por_canal": "By channel",
+        "drill_por_mes": "By month",
+        "drill_sem_canal": (
+            "The MEI's DAS is a fixed monthly fee — splitting it by "
+            "channel would be making numbers up. The monthly breakdown "
+            "beside is the real one."
+        ),
+        "radar_titulo": "CFO radar",
+        "radar_caption": (
+            "Signals found automatically in your numbers — each with its "
+            "R$/month impact, the method that caught it and what to do "
+            "about it."
+        ),
+        "radar_vazio": (
+            "Nothing on the radar — stable margins and no new leak between months."
+        ),
+        "radar_sev": {
+            "critico": "CRITICAL",
+            "atencao": "WARNING",
+            "oportunidade": "OPPORTUNITY",
+        },
+        "radar_esperado": "expected",
+        "radar_observado": "observed",
+        "radar_metodo": "How it was detected:",
+        "radar_aviso": (
+            "Signals computed by transparent rules, no AI — leads to "
+            "investigate with your accountant, not verdicts. Narratives "
+            "are in Portuguese (the audience's language)."
+        ),
+        "lin_titulo": "Where does each number come from?",
+        "lin_caption": (
+            "Pick a number and see the source file, the columns, the "
+            "formula with your case's parameters, the assumptions and the "
+            "limitations — full traceability."
+        ),
+        "lin_numero": "Number",
+        "lin_origem": "Data source",
+        "lin_colunas": "Columns used",
+        "lin_formula": "Calculation",
+        "lin_transf": "Import transformations",
+        "lin_premissas": "Assumptions",
+        "lin_limitacoes": "Limitations",
+        "lin_fonte": "Legal basis / table",
+        "lin_quando": "Computed at",
+        "conf_titulo": "How much can you trust these numbers?",
+        "conf_nota": "Confidence in the data: {pct}% ({nivel})",
+        "conf_caption": (
+            "The score rates your DATA, not the maths: the maths is always "
+            "the same. It adds up four fixed-rubric components — evidence, "
+            "history, sample size and filled-in fields — and each one "
+            "states why it scored what it scored."
+        ),
         "vendas_metricas": ["Sales", "Revenue", "Channels", "Returns"],
         "campeoes": "Margin champions — sell more of these",
         "campeoes_caption": (
@@ -750,7 +866,12 @@ def _retriever_cacheado() -> Retriever:
 
 @st.cache_data(show_spinner=False)
 def _resultados_cacheados(
-    transacoes: tuple, config, tabela, atividade: str, rbt12_movel: bool = False
+    transacoes: tuple,
+    config,
+    tabela,
+    atividade: str,
+    rbt12_movel: bool = False,
+    origem: str | None = None,
 ) -> dict:
     """Roda os quatro motores uma vez por (dados, config) — não por clique.
 
@@ -765,6 +886,7 @@ def _resultados_cacheados(
         ParametrosDiagnostico(atividade=atividade),
         retriever=_retriever_cacheado(),
         rbt12_movel=rbt12_movel,
+        origem=origem,
     )
     return {
         "decomposicao": analise.decomposicao,
@@ -777,7 +899,108 @@ def _resultados_cacheados(
         "cenarios": analise.cenarios(),
         "achados": analise.diagnosticar(),
         "oportunidades": analise.crescimento(),
+        "radar": analise.radar(),
+        "linhagem": analise.linhagem(),
+        "confianca": avaliar_confianca(list(transacoes), base="calculado"),
     }
+
+
+@st.cache_data(show_spinner=False)
+def _composicao_cacheada(transacoes: tuple, config, tabela, nome: str) -> dict:
+    """Drill-down de uma dedução (por canal e por mês), cacheado por clique."""
+    return AnalisadorMargem(list(transacoes), config, tabela).composicao_deducao(nome)
+
+
+def _grafico_cachoeira(decomposicao, rotulos: dict, t: dict):
+    """A cachoeira da margem: do faturamento ao que sobrou, degrau a degrau.
+
+    Cada dedução é um degrau descendo do acumulado; a última barra é o
+    que sobrou. As barras de custo são clicáveis (seleção nomeada
+    ``ponto``): o app abre a composição por canal e por mês da dedução
+    clicada. Estilo da casa: sem eixo Y, valor escrito sobre cada barra.
+    """
+    linhas = [
+        {
+            "nome": "receita",
+            "rotulo": t["wf_receita"],
+            "inicio": 0.0,
+            "fim": float(decomposicao.receita_bruta),
+            "topo": float(decomposicao.receita_bruta),
+            "texto": _brl_inteiro(decomposicao.receita_bruta),
+            "tipo": "receita",
+        }
+    ]
+    acumulado = decomposicao.receita_bruta
+    for d in decomposicao.deducoes:
+        linhas.append(
+            {
+                "nome": d.nome,
+                "rotulo": rotulos.get(d.nome, d.nome),
+                "inicio": float(acumulado - d.valor),
+                "fim": float(acumulado),
+                "topo": float(acumulado),
+                "texto": f"− {_brl_inteiro(d.valor)}",
+                "tipo": "deducao",
+            }
+        )
+        acumulado -= d.valor
+    margem = decomposicao.margem_liquida
+    linhas.append(
+        {
+            "nome": "margem",
+            "rotulo": t["sobrou"],
+            "inicio": float(min(Decimal("0"), margem)),
+            "fim": float(max(Decimal("0"), margem)),
+            "topo": float(max(Decimal("0"), margem)),
+            "texto": _brl_inteiro(margem),
+            "tipo": "margem",
+        }
+    )
+    dados = pd.DataFrame(linhas)
+    selecao = alt.selection_point(name="ponto", fields=["nome"], on="click")
+    base = alt.Chart(dados).encode(
+        x=alt.X(
+            "rotulo:N",
+            sort=dados["rotulo"].tolist(),
+            title=None,
+            axis=alt.Axis(
+                labelAngle=-22,
+                labelFontSize=12,
+                labelColor="#d8e7e5",
+                labelLimit=0,
+                labelOverlap=False,
+            ),
+        )
+    )
+    barras = (
+        base.mark_bar(cornerRadius=6, size=46)
+        .encode(
+            y=alt.Y(
+                "inicio:Q",
+                title=None,
+                axis=alt.Axis(labels=False, grid=False, ticks=False, domain=False),
+            ),
+            y2="fim:Q",
+            color=alt.Color(
+                "tipo:N",
+                scale=alt.Scale(
+                    domain=["receita", "deducao", "margem"],
+                    range=[TEAL_CALMO, "#cf8a70", "#8fd694"],
+                ),
+                legend=None,
+            ),
+            opacity=alt.condition(selecao, alt.value(1.0), alt.value(0.55)),
+            tooltip=[
+                alt.Tooltip("rotulo:N", title=" "),
+                alt.Tooltip("texto:N", title="R$"),
+            ],
+        )
+        .add_params(selecao)
+    )
+    textos = base.mark_text(
+        dy=-10, color=AGUA_TEXTO, fontSize=11.5, font="monospace"
+    ).encode(y=alt.Y("topo:Q"), text="texto:N")
+    return _base_config((barras + textos).properties(height=320, padding={"top": 16}))
 
 
 def _grafico_destino(decomposicao, rotulos: dict, t: dict):
@@ -1100,10 +1323,21 @@ if monitorar and caminho_arquivo:
 
     _vigiar_arquivo()
 
+# Rastreabilidade: o nome do arquivo real alimenta a ficha de linhagem.
+# Dado de exemplo se declara como exemplo — na ficha, não só no aviso.
+if upload is not None:
+    origem_dados = upload.name
+elif caminho_arquivo:
+    origem_dados = caminho_arquivo
+else:
+    origem_dados = (
+        "dados sintéticos de exemplo" if lang == "pt" else "synthetic sample data"
+    )
+
 # Motores rodam uma vez por (dados, config) via cache; a fachada fica
 # disponível para as ações sob demanda (simular, preço, PDF, busca legal).
 res = _resultados_cacheados(
-    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel
+    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel, origem_dados
 )
 analise = AnalisadorMargem(
     transacoes,
@@ -1112,6 +1346,7 @@ analise = AnalisadorMargem(
     ParametrosDiagnostico(atividade=atividade),
     retriever=_retriever_cacheado(),
     rbt12_movel=usar_rbt12_movel,
+    origem=origem_dados,
 )
 if usar_rbt12_movel:
     # Honestidade na tela: dizer em quantos meses a alíquota saiu do
@@ -1161,7 +1396,87 @@ with aba_resumo:
     )
 
     st.subheader(t["para_onde"])
-    st.altair_chart(_grafico_destino(decomposicao, rotulos, t), width="stretch")
+    evento = st.altair_chart(
+        _grafico_cachoeira(decomposicao, rotulos, t),
+        width="stretch",
+        on_select="rerun",
+        key="cachoeira",
+    )
+    clicados = [
+        p.get("nome")
+        for p in (evento.selection.get("ponto") or [])
+        if p.get("nome") not in (None, "receita", "margem")
+    ]
+    if clicados:
+        nome_drill = clicados[0]
+        comp = _composicao_cacheada(tuple(transacoes), config, tabela, nome_drill)
+        rotulo_drill = rotulos.get(nome_drill, nome_drill)
+        st.markdown(f"##### {t['drill_titulo'].format(rotulo=rotulo_drill)}")
+        col_canal, col_mes = st.columns(2)
+        with col_canal:
+            st.caption(t["drill_por_canal"])
+            if comp["por_canal"]:
+                st.altair_chart(
+                    _grafico_barras_h(
+                        [
+                            {
+                                "rotulo": canal,
+                                "valor": float(valor),
+                                "texto": _brl_inteiro(valor),
+                            }
+                            for canal, valor in comp["por_canal"]
+                        ]
+                    ),
+                    width="stretch",
+                )
+            else:
+                st.info(t["drill_sem_canal"])
+        with col_mes:
+            st.caption(t["drill_por_mes"])
+            st.altair_chart(
+                _grafico_barras_v(
+                    [
+                        {
+                            "rotulo": mes,
+                            "valor": float(valor),
+                            "texto": _brl_inteiro(valor),
+                        }
+                        for mes, valor in comp["por_mes"]
+                    ]
+                ),
+                width="stretch",
+            )
+    else:
+        st.caption(t["cachoeira_dica"])
+
+    st.subheader(t["radar_titulo"])
+    st.caption(t["radar_caption"])
+    radar = res["radar"]
+    if not radar:
+        st.success(t["radar_vazio"])
+    estilo_sev = {
+        "critico": st.error,
+        "atencao": st.warning,
+        "oportunidade": st.success,
+    }
+    for sinal in radar:
+        corpo = (
+            f"**{t['radar_sev'][sinal.severidade]} · {sinal.titulo}** — "
+            f"~{_brl(sinal.impacto_mensal)}/{t['por_mes']}\n\n{sinal.explicacao}"
+        )
+        if sinal.esperado and sinal.observado:
+            corpo += (
+                f"\n\n{t['radar_esperado']}: {sinal.esperado} · "
+                f"{t['radar_observado']}: {sinal.observado}"
+            )
+        nota_sinal = t["conf_nota"].format(
+            pct=sinal.confianca.pct, nivel=sinal.confianca.nivel
+        )
+        corpo += f"\n\n{nota_sinal} — {sinal.confianca.frase}"
+        estilo_sev[sinal.severidade](corpo)
+        st.caption(f"{t['radar_metodo']} {sinal.metodo}")
+        st.caption(sinal.caminho_pratico)
+    st.caption(t["radar_aviso"])
 
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
@@ -1178,6 +1493,49 @@ with aba_resumo:
         with st.container(border=True):
             st.markdown(f"**{titulo}** — ~{_brl(valor)}/{t['por_mes']}")
             st.caption(caminho)
+
+    nota = res["confianca"]
+    with st.expander(
+        f"{t['conf_titulo']} — "
+        + t["conf_nota"].format(pct=nota.pct, nivel=nota.nivel.upper())
+    ):
+        st.markdown(f"_{nota.frase}_")
+        st.caption(t["conf_caption"])
+        for componente in nota.componentes:
+            st.markdown(
+                f"- **{componente.pontos}/{componente.maximo}** — {componente.motivo}"
+            )
+
+    with st.expander(t["lin_titulo"]):
+        st.caption(t["lin_caption"])
+        fichas = res["linhagem"]
+        nome_ficha = st.selectbox(
+            t["lin_numero"],
+            list(fichas),
+            format_func=lambda n: (
+                f"{rotulos.get(n, fichas[n].rotulo)} — {_brl(fichas[n].valor)}"
+            ),
+            key="linhagem_numero",
+        )
+        ficha = fichas[nome_ficha]
+        st.markdown(f"**{t['lin_origem']}:** `{ficha.origem_dados}`")
+        st.markdown(f"**{t['lin_colunas']}:** `{'`, `'.join(ficha.colunas)}`")
+        st.markdown(f"**{t['lin_formula']}:** {ficha.formula}")
+        st.markdown(f"**{t['lin_transf']}:**")
+        for transformacao in ficha.transformacoes:
+            st.markdown(f"- {transformacao}")
+        if ficha.premissas:
+            st.markdown(f"**{t['lin_premissas']}:**")
+            for premissa in ficha.premissas:
+                st.markdown(f"- {premissa}")
+        if ficha.limitacoes:
+            st.markdown(f"**{t['lin_limitacoes']}:**")
+            for limitacao in ficha.limitacoes:
+                st.markdown(f"- {limitacao}")
+        st.caption(
+            f"{t['lin_fonte']} {ficha.fonte} · [{ficha.confianca_dados}] · "
+            f"{t['lin_quando']} {ficha.calculado_em.strftime('%d/%m/%Y %H:%M')}"
+        )
 
     with st.expander(t["como_ler"]):
         st.markdown(t["como_ler_texto"])

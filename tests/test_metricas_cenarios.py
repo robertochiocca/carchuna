@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 
 from carchuna.cenarios import (
+    CenarioPreco,
     cenario_antecipacao,
     cenario_comissao,
     cenario_devolucoes_dobram,
@@ -151,13 +152,36 @@ def test_cenario_migracao_de_canal_calculado_a_mao():
         cenario_migracao_canal(vendas, CONFIG, fracao=Decimal("1.5"))
 
 
+def test_cenario_preco_recalcula_imposto_e_comissao_sobre_o_preco_novo():
+    # Venda ML de 100 com CMV 50 no Anexo I @ 360k (efetiva 5,65%):
+    # base:  100 − 5,65 − 12,00 (comissão 12%) − 50 = 32,35.
+    # +5%:   105 − 5,93 (105 × 5,65%) − 12,60 (105 × 12%) − 50 = 36,47.
+    # O ganho não é 5% do preço (5,00): imposto e comissão comem parte —
+    # impacto = 36,47 − 32,35 = +4,12.
+    vendas = [_venda("100", 5, custo=Decimal("50"))]
+    r = CenarioPreco(Decimal("0.05")).executar(vendas, CONFIG)
+    assert r.base.margem_liquida == Decimal("32.35")
+    assert r.cenario.margem_liquida == Decimal("36.47")
+    assert r.impacto_reais == Decimal("4.12")
+    assert "5%" in r.nome and "mesmo volume" in r.nome
+
+
+def test_cenario_preco_escala_comissao_observada_do_extrato():
+    # Comissão observada (18,00 sobre 100) é percentual → escala para
+    # 18,90 sobre 105. Margem base: 100 − 5,65 − 18 = 76,35;
+    # cenário: 105 − 5,93 − 18,90 = 80,17 → impacto +3,82.
+    vendas = [_venda("100", 5, comissao_cobrada=Decimal("18"))]
+    r = CenarioPreco(Decimal("0.05")).executar(vendas, CONFIG)
+    assert r.impacto_reais == Decimal("3.82")
+
+
 def test_bateria_padrao_inclui_anexo_so_no_simples_e_migracao_se_ha_ml():
     vendas = [_venda("100", 5)]
-    assert len(rodar_cenarios_padrao(vendas, CONFIG)) == 5  # inclui migração
+    assert len(rodar_cenarios_padrao(vendas, CONFIG)) == 6  # inclui migração
     sem_ml = [_venda("100", 5, canal="fisico")]
-    assert len(rodar_cenarios_padrao(sem_ml, CONFIG)) == 4  # sem migração
+    assert len(rodar_cenarios_padrao(sem_ml, CONFIG)) == 5  # sem migração
     config_mei = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76"))
-    assert len(rodar_cenarios_padrao(vendas, config_mei)) == 4
+    assert len(rodar_cenarios_padrao(vendas, config_mei)) == 5
     with pytest.raises(ValueError, match="Simples"):
         cenario_mudanca_anexo(vendas, config_mei)
 
