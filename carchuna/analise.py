@@ -389,6 +389,14 @@ class AnalisadorMargem:
         motor = MotorCrescimento(retriever=self.retriever)
         return motor.sugerir(self.transacoes, self.config, self.tabela)
 
+    # -- radar: o que mudou e quanto custou ----------------------------------
+
+    def radar(self) -> list:
+        """Sinais do radar: tendência, margem magra e mês fora do padrão."""
+        from carchuna.insights import MotorInsights
+
+        return MotorInsights().radar(self.transacoes, self.config, self.tabela)
+
     # -- linhagem: como chegamos a cada número -------------------------------
 
     def linhagem(self, nome: str | None = None):

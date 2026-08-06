@@ -184,6 +184,18 @@ def test_fachada_delega_para_os_motores():
     assert resultado.impacto_reais == atalho.impacto_reais
 
 
+def test_radar_delega_para_o_motor_de_insights():
+    """A fachada não pode contar história diferente do motor."""
+    from carchuna.insights import MotorInsights
+
+    analise = AnalisadorMargem.demo(meses=6)
+    pela_fachada = analise.radar()
+    direto = MotorInsights().radar(analise.transacoes, analise.config, analise.tabela)
+    assert [(i.categoria, i.impacto_mensal) for i in pela_fachada] == [
+        (i.categoria, i.impacto_mensal) for i in direto
+    ]
+
+
 def test_construtor_de_arquivo(tmp_path):
     arquivo = tmp_path / "vendas.csv"
     arquivo.write_text(
