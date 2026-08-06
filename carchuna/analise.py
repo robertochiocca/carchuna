@@ -21,6 +21,7 @@ Uso típico::
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from functools import cached_property
 
@@ -44,6 +45,7 @@ from carchuna.metricas import (
     lucro_acumulado,
     maior_queda_margem,
     margem_mensal,
+    rbt12_por_mes,
     serie_margem_pct,
 )
 from carchuna.rag.retrieval import Retriever
@@ -150,6 +152,8 @@ class AnalisadorMargem:
         tabela: TabelaCustos | None = None,
         parametros: ParametrosDiagnostico | None = None,
         retriever: Retriever | None = None,
+        rbt12_movel: bool = False,
+        origem: str | None = None,
     ):
         if not transacoes:
             raise ValueError("`transacoes` não pode ser vazio.")
@@ -158,6 +162,14 @@ class AnalisadorMargem:
         self.tabela = tabela or TabelaCustos()
         self.parametros = parametros or ParametrosDiagnostico()
         self._retriever = retriever
+        # Rastreabilidade: de onde os dados vieram e quando o cálculo rodou.
+        self.origem = origem or "origem não informada"
+        self.criado_em = datetime.now()
+        # Tributar cada mês pela RBT12 dos seus 12 meses anteriores
+        # (LC 123/2006, art. 18, § 1º) em vez de repetir a informada.
+        # Só afeta a série mensal; o total do período segue a informada,
+        # porque a janela de 12 meses do período inteiro não existe.
+        self.rbt12_movel = rbt12_movel
 
     # -- construtores alternativos ------------------------------------------
 
@@ -171,6 +183,7 @@ class AnalisadorMargem:
         **kwargs,
     ) -> AnalisadorMargem:
         """Cria o analisador direto de um CSV/JSON/XLSX de vendas."""
+        kwargs.setdefault("origem", name or str(source))
         return cls(carregar_transacoes(source, name=name), config, tabela, **kwargs)
 
     @classmethod
@@ -186,6 +199,7 @@ class AnalisadorMargem:
         config = config or ConfigTributaria(
             regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
         )
+        kwargs.setdefault("origem", f"dados sintéticos de exemplo (seed {seed})")
         return cls(
             transacoes_sinteticas(meses=meses, seed=seed), config, tabela, **kwargs
         )
@@ -200,7 +214,43 @@ class AnalisadorMargem:
     @cached_property
     def mensal(self) -> dict[str, DecomposicaoMargem]:
         """Decomposição mês a mês ("AAAA-MM")."""
-        return margem_mensal(self.transacoes, self.config, self.tabela)
+        return margem_mensal(
+            self.transacoes, self.config, self.tabela, rbt12_movel=self.rbt12_movel
+        )
+
+    def composicao_deducao(self, nome: str) -> dict[str, list[tuple[str, Decimal]]]:
+        """De onde vem uma dedução: quebra por canal e por mês.
+
+        Alimenta o drill-down do raio-X (clicar numa barra abre a
+        composição dela). ``por_canal`` traz só canais com valor > 0,
+        do maior para o menor; ``por_mes`` segue a ordem do calendário.
+
+        No MEI, o DAS é fixo mensal e não é rateável por canal (mesma
+        convenção de ``margem_por_venda``): a quebra de ``tributos`` por
+        canal fica vazia e o valor cheio aparece na quebra por mês.
+        """
+        config = self.config
+        if config.regime == "mei" and nome == "tributos":
+            config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("0"))
+        por_canal_grupos: dict[str, list[Transacao]] = {}
+        for t in self.transacoes:
+            por_canal_grupos.setdefault(t.canal, []).append(t)
+        por_canal = [
+            (canal, decompor_margem(grupo, config, self.tabela).deducao(nome).valor)
+            for canal, grupo in por_canal_grupos.items()
+        ]
+        por_canal = sorted([(c, v) for c, v in por_canal if v > 0], key=lambda x: -x[1])
+        por_mes = [(mes, d.deducao(nome).valor) for mes, d in self.mensal.items()]
+        return {"por_canal": por_canal, "por_mes": por_mes}
+
+    @cached_property
+    def rbt12_mensal(self) -> dict[str, Decimal | None]:
+        """RBT12 móvel de cada mês; ``None`` onde o arquivo não cobre a janela.
+
+        Serve para a tela dizer de onde veio a alíquota de cada mês em
+        vez de o lojista ter que adivinhar.
+        """
+        return rbt12_por_mes(self.transacoes)
 
     def margem_por_venda(self) -> list[MargemVenda]:
         """A margem real de cada venda, decomposta pelo mesmo motor testado.
@@ -338,6 +388,35 @@ class AnalisadorMargem:
 
         motor = MotorCrescimento(retriever=self.retriever)
         return motor.sugerir(self.transacoes, self.config, self.tabela)
+
+    # -- radar: o que mudou e quanto custou ----------------------------------
+
+    def radar(self) -> list:
+        """Sinais do radar: tendência, margem magra e mês fora do padrão."""
+        from carchuna.insights import MotorInsights
+
+        return MotorInsights().radar(self.transacoes, self.config, self.tabela)
+
+    # -- linhagem: como chegamos a cada número -------------------------------
+
+    def linhagem(self, nome: str | None = None):
+        """Ficha de rastreabilidade dos números (todas, ou uma por nome).
+
+        Responde "como a Carchuna chegou a este número?": arquivo de
+        origem, colunas, transformações, fórmula com os parâmetros do
+        caso, premissas, limitações e o momento do cálculo.
+        """
+        from carchuna.linhagem import montar_linhagem
+
+        fichas = montar_linhagem(
+            self.decomposicao,
+            self.transacoes,
+            self.config,
+            self.tabela,
+            origem_dados=self.origem,
+            calculado_em=self.criado_em,
+        )
+        return fichas if nome is None else fichas[nome]
 
     def preco_sugerido(
         self,

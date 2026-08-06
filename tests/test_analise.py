@@ -99,6 +99,75 @@ def test_margem_por_produto_sem_produto_agrupa_por_canal():
     assert nomes == {"mercado_livre", "shopee"}
 
 
+def test_composicao_deducao_quebra_por_canal_e_por_mes():
+    """Drill-down do raio-X: comissões por canal e por mês, conferidas à mão."""
+    vendas = [
+        _venda("100"),  # maio, ML: comissão 12,00
+        _venda("200", canal="shopee"),  # maio, Shopee: 200 × 14% = 28,00
+        _venda("100", data=date(2026, 6, 10)),  # junho, ML: 12,00
+        _venda("100", canal="fisico"),  # maio, físico: comissão 0 → some
+    ]
+    comp = AnalisadorMargem(vendas, CONFIG).composicao_deducao("comissoes_canal")
+    assert comp["por_canal"] == [
+        ("shopee", Decimal("28.00")),
+        ("mercado_livre", Decimal("24.00")),
+    ]
+    assert comp["por_mes"] == [
+        ("2026-05", Decimal("40.00")),
+        ("2026-06", Decimal("12.00")),
+    ]
+
+
+def test_composicao_deducao_mei_nao_rateia_das_por_canal():
+    config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76"))
+    comp = AnalisadorMargem([_venda()], config).composicao_deducao("tributos")
+    assert comp["por_canal"] == []  # DAS fixo mensal: não rateável por canal
+    assert comp["por_mes"] == [("2026-05", Decimal("76.00"))]
+
+
+TODAS_AS_DEDUCOES = (
+    "tributos",
+    "comissoes_canal",
+    "adquirencia",
+    "antecipacao",
+    "frete",
+    "devolucoes",
+    "cmv",
+)
+
+
+def test_a_composicao_por_canal_fecha_centavo_a_centavo_com_o_raio_x():
+    """A quebra não pode divergir do número que ela explica.
+
+    Se a soma por canal não bater com a dedução do raio-X, o drill-down
+    estaria contando outra história que a da tela — que é exatamente o
+    defeito que ele existe para não ter.
+    """
+    analise = AnalisadorMargem.demo(meses=4)
+    for nome in TODAS_AS_DEDUCOES:
+        total = analise.decomposicao.deducao(nome).valor
+        comp = analise.composicao_deducao(nome)
+        assert sum(v for _, v in comp["por_canal"]) == total, nome
+
+
+def test_a_composicao_por_mes_fecha_a_menos_do_arredondamento_do_mes():
+    """Por mês, a soma pode diferir por centavos de arredondamento.
+
+    Cada mês é decomposto e arredondado por conta própria, então a soma
+    dos doze pode não bater com o total do período no último centavo. Com
+    os dados de exemplo isso aparece na antecipação. O teste fixa o
+    tamanho aceitável do desvio — um centavo por mês, no pior caso — em
+    vez de escolher só as deduções que fecham exato e fingir que o
+    problema não existe.
+    """
+    analise = AnalisadorMargem.demo(meses=4)
+    tolerancia = Decimal("0.01") * len(analise.mensal)
+    for nome in TODAS_AS_DEDUCOES:
+        total = analise.decomposicao.deducao(nome).valor
+        soma = sum(v for _, v in analise.composicao_deducao(nome)["por_mes"])
+        assert abs(soma - total) <= tolerancia, nome
+
+
 def test_fachada_delega_para_os_motores():
     analise = AnalisadorMargem.demo(meses=3)
     assert analise.decomposicao.receita_bruta > 0
@@ -113,6 +182,18 @@ def test_fachada_delega_para_os_motores():
     resultado = analise.simular(CenarioComissao())
     atalho = cenario_comissao(analise.transacoes, analise.config, analise.tabela)
     assert resultado.impacto_reais == atalho.impacto_reais
+
+
+def test_radar_delega_para_o_motor_de_insights():
+    """A fachada não pode contar história diferente do motor."""
+    from carchuna.insights import MotorInsights
+
+    analise = AnalisadorMargem.demo(meses=6)
+    pela_fachada = analise.radar()
+    direto = MotorInsights().radar(analise.transacoes, analise.config, analise.tabela)
+    assert [(i.categoria, i.impacto_mensal) for i in pela_fachada] == [
+        (i.categoria, i.impacto_mensal) for i in direto
+    ]
 
 
 def test_construtor_de_arquivo(tmp_path):

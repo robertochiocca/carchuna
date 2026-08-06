@@ -30,7 +30,8 @@ jobs:
         run: black --check .
 
       - name: Testes com cobertura
-        run: pytest -v --cov=carchuna --cov-report=term --cov-fail-under=85
+        # o piso é 95%: abaixo disso a cobertura deixa de ser garantia
+        run: pytest -v --cov=carchuna --cov-report=term --cov-fail-under=95
 
       - name: Rodar o exemplo (offline, dados sintéticos)
         run: python examples/exemplo_diagnostico.py
