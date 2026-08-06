@@ -568,6 +568,91 @@ def test_sem_sinal_o_radar_diz_que_esta_limpo(app_demo):
     assert "Nenhum sinal no radar" in sucessos
 
 
+def test_a_ficha_de_linhagem_aponta_o_arquivo_que_o_lojista_subiu(tmp_path):
+    """Rastreabilidade só vale se apontar a origem de verdade.
+
+    A ficha nasceu para responder "de onde veio este número?". Se ela
+    mostrasse um rótulo genérico enquanto o cálculo saiu do arquivo do
+    lojista, seria decoração — e decoração que afirma procedência é pior
+    que nenhuma.
+    """
+    arquivo = _csv_com_salto_de_comissao(tmp_path / "vendas.csv")
+    teste = _rodar_com_arquivo(arquivo)
+    assert not teste.exception
+
+    tela = " ".join(str(m.value) for m in teste.markdown)
+    assert str(arquivo) in tela
+    assert "Fonte dos dados" in tela
+    assert "Colunas usadas" in tela
+    assert "Cálculo" in tela
+
+
+def test_a_ficha_de_linhagem_traz_o_valor_e_a_formula_do_motor(app_demo):
+    """O número da ficha é o do motor, e a fórmula cita os parâmetros do caso."""
+    from carchuna.analise import AnalisadorMargem
+
+    analise = AnalisadorMargem.demo(meses=6)
+    fichas = analise.linhagem()
+    receita = fichas["receita_bruta"]
+    assert receita.valor == analise.decomposicao.receita_bruta
+
+    tributos = fichas["tributos"]
+    assert tributos.valor == analise.decomposicao.deducao("tributos").valor
+    # a fórmula é a do caso, com os parâmetros dentro — não um texto fixo
+    assert "Anexo" in tributos.formula or "DAS" in tributos.formula
+    assert tributos.fonte
+    assert tributos.colunas
+
+    # dado de exemplo se declara como exemplo na própria ficha
+    tela = " ".join(str(m.value) for m in app_demo.markdown)
+    assert "dados sintéticos de exemplo" in tela
+
+
+def test_a_nota_de_confianca_na_tela_e_a_soma_dos_seus_componentes(app_demo):
+    """A nota exibida tem que reconstruir: pct == soma dos componentes.
+
+    E cada componente aparece com o motivo. Nota sem motivo na tela é
+    número mágico, que é o que a rubrica existe para não ser.
+    """
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.confianca import avaliar_confianca
+
+    nota = avaliar_confianca(AnalisadorMargem.demo(meses=6).transacoes, "calculado")
+    assert nota.pct == sum(c.pontos for c in nota.componentes)
+
+    rotulos = [e.label for e in app_demo.expander]
+    assert any(f"{nota.pct}% ({nota.nivel.upper()})" in r for r in rotulos)
+
+    tela = " ".join(str(m.value) for m in app_demo.markdown)
+    assert nota.frase in tela
+    for componente in nota.componentes:
+        assert f"{componente.pontos}/{componente.maximo}" in tela
+        assert componente.motivo in tela
+
+
+def test_cada_sinal_do_radar_chega_com_a_propria_nota_de_confianca(tmp_path):
+    """Conclusão na tela sem etiqueta de confiança é conclusão sem contexto."""
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.dados import carregar_com_relatorio
+    from carchuna.margem import ConfigTributaria
+
+    arquivo = _csv_com_salto_de_comissao(tmp_path / "vendas.csv")
+    teste = _rodar_com_arquivo(arquivo)
+    radar = AnalisadorMargem(
+        carregar_com_relatorio(arquivo).transacoes,
+        ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("4200000")),
+    ).radar()
+
+    tela = " ".join(
+        [e.value for e in teste.error]
+        + [w.value for w in teste.warning]
+        + [s.value for s in teste.success]
+    )
+    for sinal in radar:
+        assert f"{sinal.confianca.pct}% ({sinal.confianca.nivel})" in tela
+        assert sinal.confianca.frase in tela
+
+
 def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     """'dois e meio' vira frase de lojista, não ValueError na tela."""
     teste = _rodar()

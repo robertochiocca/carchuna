@@ -33,6 +33,7 @@ from carchuna import (
     carregar_com_relatorio,
     transacoes_sinteticas,
 )
+from carchuna.confianca import avaliar_confianca
 from carchuna.crescimento import AVISO_CRESCIMENTO
 from carchuna.dados import (
     COLUNAS_OBRIGATORIAS,
@@ -312,6 +313,29 @@ T = {
         "radar_aviso": (
             "Sinais calculados por regras transparentes, sem IA — são "
             "pistas para investigar com seu contador, não veredito."
+        ),
+        "lin_titulo": "De onde vem cada número?",
+        "lin_caption": (
+            "Escolha um número e veja o arquivo de origem, as colunas, a "
+            "fórmula com os parâmetros do seu caso, as premissas e as "
+            "limitações — rastreabilidade completa."
+        ),
+        "lin_numero": "Número",
+        "lin_origem": "Fonte dos dados",
+        "lin_colunas": "Colunas usadas",
+        "lin_formula": "Cálculo",
+        "lin_transf": "Transformações na importação",
+        "lin_premissas": "Premissas",
+        "lin_limitacoes": "Limitações",
+        "lin_fonte": "Base legal / tabela",
+        "lin_quando": "Calculado em",
+        "conf_titulo": "Quanto dá para confiar nestes números?",
+        "conf_nota": "Confiança da base: {pct}% ({nivel})",
+        "conf_caption": (
+            "A nota mede a sua BASE, não o cálculo: o cálculo é o mesmo "
+            "sempre. Ela soma quatro componentes de rubrica fixa — "
+            "evidência, histórico, amostra e campos preenchidos — e cada "
+            "um diz o porquê da sua parcela."
         ),
         "vendas_metricas": ["Vendas", "Faturamento", "Canais", "Devoluções"],
         "campeoes": "Campeões de margem — venda mais destes",
@@ -611,6 +635,29 @@ T = {
             "investigate with your accountant, not verdicts. Narratives "
             "are in Portuguese (the audience's language)."
         ),
+        "lin_titulo": "Where does each number come from?",
+        "lin_caption": (
+            "Pick a number and see the source file, the columns, the "
+            "formula with your case's parameters, the assumptions and the "
+            "limitations — full traceability."
+        ),
+        "lin_numero": "Number",
+        "lin_origem": "Data source",
+        "lin_colunas": "Columns used",
+        "lin_formula": "Calculation",
+        "lin_transf": "Import transformations",
+        "lin_premissas": "Assumptions",
+        "lin_limitacoes": "Limitations",
+        "lin_fonte": "Legal basis / table",
+        "lin_quando": "Computed at",
+        "conf_titulo": "How much can you trust these numbers?",
+        "conf_nota": "Confidence in the data: {pct}% ({nivel})",
+        "conf_caption": (
+            "The score rates your DATA, not the maths: the maths is always "
+            "the same. It adds up four fixed-rubric components — evidence, "
+            "history, sample size and filled-in fields — and each one "
+            "states why it scored what it scored."
+        ),
         "vendas_metricas": ["Sales", "Revenue", "Channels", "Returns"],
         "campeoes": "Margin champions — sell more of these",
         "campeoes_caption": (
@@ -819,7 +866,12 @@ def _retriever_cacheado() -> Retriever:
 
 @st.cache_data(show_spinner=False)
 def _resultados_cacheados(
-    transacoes: tuple, config, tabela, atividade: str, rbt12_movel: bool = False
+    transacoes: tuple,
+    config,
+    tabela,
+    atividade: str,
+    rbt12_movel: bool = False,
+    origem: str | None = None,
 ) -> dict:
     """Roda os quatro motores uma vez por (dados, config) — não por clique.
 
@@ -834,6 +886,7 @@ def _resultados_cacheados(
         ParametrosDiagnostico(atividade=atividade),
         retriever=_retriever_cacheado(),
         rbt12_movel=rbt12_movel,
+        origem=origem,
     )
     return {
         "decomposicao": analise.decomposicao,
@@ -847,6 +900,8 @@ def _resultados_cacheados(
         "achados": analise.diagnosticar(),
         "oportunidades": analise.crescimento(),
         "radar": analise.radar(),
+        "linhagem": analise.linhagem(),
+        "confianca": avaliar_confianca(list(transacoes), base="calculado"),
     }
 
 
@@ -1268,10 +1323,21 @@ if monitorar and caminho_arquivo:
 
     _vigiar_arquivo()
 
+# Rastreabilidade: o nome do arquivo real alimenta a ficha de linhagem.
+# Dado de exemplo se declara como exemplo — na ficha, não só no aviso.
+if upload is not None:
+    origem_dados = upload.name
+elif caminho_arquivo:
+    origem_dados = caminho_arquivo
+else:
+    origem_dados = (
+        "dados sintéticos de exemplo" if lang == "pt" else "synthetic sample data"
+    )
+
 # Motores rodam uma vez por (dados, config) via cache; a fachada fica
 # disponível para as ações sob demanda (simular, preço, PDF, busca legal).
 res = _resultados_cacheados(
-    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel
+    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel, origem_dados
 )
 analise = AnalisadorMargem(
     transacoes,
@@ -1280,6 +1346,7 @@ analise = AnalisadorMargem(
     ParametrosDiagnostico(atividade=atividade),
     retriever=_retriever_cacheado(),
     rbt12_movel=usar_rbt12_movel,
+    origem=origem_dados,
 )
 if usar_rbt12_movel:
     # Honestidade na tela: dizer em quantos meses a alíquota saiu do
@@ -1402,6 +1469,10 @@ with aba_resumo:
                 f"\n\n{t['radar_esperado']}: {sinal.esperado} · "
                 f"{t['radar_observado']}: {sinal.observado}"
             )
+        nota_sinal = t["conf_nota"].format(
+            pct=sinal.confianca.pct, nivel=sinal.confianca.nivel
+        )
+        corpo += f"\n\n{nota_sinal} — {sinal.confianca.frase}"
         estilo_sev[sinal.severidade](corpo)
         st.caption(f"{t['radar_metodo']} {sinal.metodo}")
         st.caption(sinal.caminho_pratico)
@@ -1422,6 +1493,49 @@ with aba_resumo:
         with st.container(border=True):
             st.markdown(f"**{titulo}** — ~{_brl(valor)}/{t['por_mes']}")
             st.caption(caminho)
+
+    nota = res["confianca"]
+    with st.expander(
+        f"{t['conf_titulo']} — "
+        + t["conf_nota"].format(pct=nota.pct, nivel=nota.nivel.upper())
+    ):
+        st.markdown(f"_{nota.frase}_")
+        st.caption(t["conf_caption"])
+        for componente in nota.componentes:
+            st.markdown(
+                f"- **{componente.pontos}/{componente.maximo}** — {componente.motivo}"
+            )
+
+    with st.expander(t["lin_titulo"]):
+        st.caption(t["lin_caption"])
+        fichas = res["linhagem"]
+        nome_ficha = st.selectbox(
+            t["lin_numero"],
+            list(fichas),
+            format_func=lambda n: (
+                f"{rotulos.get(n, fichas[n].rotulo)} — {_brl(fichas[n].valor)}"
+            ),
+            key="linhagem_numero",
+        )
+        ficha = fichas[nome_ficha]
+        st.markdown(f"**{t['lin_origem']}:** `{ficha.origem_dados}`")
+        st.markdown(f"**{t['lin_colunas']}:** `{'`, `'.join(ficha.colunas)}`")
+        st.markdown(f"**{t['lin_formula']}:** {ficha.formula}")
+        st.markdown(f"**{t['lin_transf']}:**")
+        for transformacao in ficha.transformacoes:
+            st.markdown(f"- {transformacao}")
+        if ficha.premissas:
+            st.markdown(f"**{t['lin_premissas']}:**")
+            for premissa in ficha.premissas:
+                st.markdown(f"- {premissa}")
+        if ficha.limitacoes:
+            st.markdown(f"**{t['lin_limitacoes']}:**")
+            for limitacao in ficha.limitacoes:
+                st.markdown(f"- {limitacao}")
+        st.caption(
+            f"{t['lin_fonte']} {ficha.fonte} · [{ficha.confianca_dados}] · "
+            f"{t['lin_quando']} {ficha.calculado_em.strftime('%d/%m/%Y %H:%M')}"
+        )
 
     with st.expander(t["como_ler"]):
         st.markdown(t["como_ler_texto"])
