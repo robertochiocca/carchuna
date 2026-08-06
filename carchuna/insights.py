@@ -41,6 +41,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
+from functools import cached_property
 
 from carchuna.confianca import NotaConfianca, avaliar_confianca
 from carchuna.margem import (
@@ -78,6 +79,13 @@ class Insight:
     ``base_evidencia`` é a natureza da evidência ("calculado" quando sai
     dos dados e da lei/tabela, "estimado" quando depende de premissa) e
     alimenta a rubrica; ``confianca`` é a nota que sai dela.
+
+    A regra para escolher entre as duas: se algum número do sinal só
+    existe porque se assumiu uma coisa que os dados não dizem — volume
+    constante depois de um reajuste, o mês seguinte parecido com a média
+    dos três anteriores — então é ``estimado``, e a nota cai 15 pontos.
+    Um sinal que erra essa classificação para cima é pior que um sinal
+    sem nota: ele empresta autoridade de dado a um palpite.
     """
 
     categoria: str
@@ -236,12 +244,31 @@ class ContextoInsights:
     tabela: TabelaCustos
     parametros: ParametrosInsights
 
-    @property
+    @cached_property
     def mensal(self):
+        """A série mensal, decomposta uma vez por radar.
+
+        Três análises leem isto. Como ``@property`` simples, cada leitura
+        redecompunha a base inteira — o mesmo trabalho, três vezes, num
+        objeto que vive uma chamada só. ``AnalisadorMargem`` já usava
+        ``cached_property`` para a mesma série.
+        """
         return margem_mensal(self.transacoes, self.config, self.tabela)
 
+    @cached_property
+    def _notas(self) -> dict[str, NotaConfianca]:
+        return {}
+
     def nota(self, base: str = "calculado") -> NotaConfianca:
-        return avaliar_confianca(self.transacoes, base=base)
+        """Nota da base, memoizada por natureza de evidência.
+
+        A rubrica só depende das transações e de ``base``, e ambas são
+        fixas durante um radar — recalcular por sinal seria varrer a base
+        inteira uma vez para cada linha da tela.
+        """
+        if base not in self._notas:
+            self._notas[base] = avaliar_confianca(self.transacoes, base=base)
+        return self._notas[base]
 
 
 class AnaliseInsight(ABC):
@@ -366,8 +393,10 @@ class ProdutosMargemMagra(AnaliseInsight):
                     "preço-alvo de cada um; teste o reajuste nos campeões de "
                     "venda primeiro."
                 ),
-                base_evidencia="calculado",
-                confianca=ctx.nota("calculado"),
+                # o ganho depende da premissa de volume constante: pela
+                # rubrica isso é evidência ESTIMADA, não calculada
+                base_evidencia="estimado",
+                confianca=ctx.nota("estimado"),
                 esperado=f"margem de {limiar}% ou mais",
                 observado=f"{len(magros)} produto(s) abaixo do limiar",
                 metodo=(
@@ -473,8 +502,10 @@ class FretePorPedido(AnaliseInsight):
                     "Confira tabela de frete, mix de regiões e peso dos "
                     "pedidos do mês; renegocie a faixa com a transportadora."
                 ),
-                base_evidencia="calculado",
-                confianca=ctx.nota("calculado"),
+                # o "esperado" é a média móvel de 3 meses — uma projeção,
+                # não um valor que os dados afirmem: evidência ESTIMADA
+                base_evidencia="estimado",
+                confianca=ctx.nota("estimado"),
                 esperado=f"R$ {_q2(esperado)}/pedido",
                 observado=f"R$ {_q2(observado)}/pedido",
                 desvio_pct=_desvio_pct(esperado, observado),
