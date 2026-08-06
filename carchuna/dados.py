@@ -24,6 +24,11 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from carchuna.margem import Transacao
+from carchuna.tipos import (
+    eh_ausente,
+    interpretar_devolucao,
+    normalizar_valor,
+)
 
 COLUNAS_OBRIGATORIAS = (
     "data",
@@ -38,9 +43,6 @@ COLUNAS_OPCIONAIS = (
     "comissao_cobrada",
     "produto",
 )
-
-_VERDADEIRO = {"1", "true", "sim", "s", "verdadeiro", "yes"}
-_FALSO = {"", "0", "false", "nao", "não", "n", "falso", "no"}
 
 
 def _para_decimal(texto: str) -> Decimal:
@@ -113,13 +115,47 @@ def _data_br(texto: str, linha: int) -> date:
     )
 
 
-def _bool_br(texto: str, linha: int) -> bool:
-    normal = str(texto).strip().lower()
-    if normal in _VERDADEIRO:
-        return True
-    if normal in _FALSO:
+def _devolvida_de(texto, linha: int, interpretacao: dict[str, bool] | None) -> bool:
+    """Converte a coluna de devolução para o booleano do motor.
+
+    Três camadas, nesta ordem (léxicos centralizados em ``tipos.py``):
+
+    1. ausente → ``False`` (sem informação de devolução = venda normal —
+       premissa documentada, distinta de valor inválido);
+    2. decisão do USUÁRIO (``interpretacao``: valor normalizado → bool),
+       que sobrepõe qualquer inferência;
+    3. semântica de negócio: booleanos e status conclusivos
+       ("Solicitação aprovada" → devolvida; "Solicitação recusada" →
+       não). Estado intermediário ("Em análise") ou fora do léxico NUNCA
+       vira sim/não em silêncio: o erro explica como decidir.
+
+    Quem chama pelo caminho do relatório (``carregar_com_relatorio``,
+    ``relatorio_de_mapa``) recolhe esse erro como ``LinhaRejeitada``: a
+    linha ambígua fica de fora e aparece na lista, em vez de derrubar a
+    importação inteira.
+    """
+    if eh_ausente(texto):
         return False
-    raise ValueError(f"linha {linha}: `devolvida` = {texto!r} não é sim/não.")
+    if interpretacao is not None:
+        decidido = interpretacao.get(normalizar_valor(texto))
+        if decidido is not None:
+            return decidido
+    estado = interpretar_devolucao(texto)
+    if estado == "devolvida":
+        return True
+    if estado == "nao_devolvida":
+        return False
+    motivo = (
+        "é um status intermediário (a devolução ainda não se resolveu)"
+        if estado == "indefinido"
+        else "não está no léxico de devolução"
+    )
+    raise ValueError(
+        f"linha {linha}: `devolvida` = {texto!r} {motivo}. A Carchuna não "
+        "adivinha: diga como tratar esta categoria — no dashboard, o "
+        "mapeador de colunas pergunta; na biblioteca, passe "
+        f"`interpretacao_devolvida={{{normalizar_valor(texto)!r}: True/False}}`."
+    )
 
 
 def _campos_normalizados(linha: dict) -> dict:
@@ -133,7 +169,9 @@ def _campos_normalizados(linha: dict) -> dict:
     return {_normalizar_nome(chave).strip(): valor for chave, valor in linha.items()}
 
 
-def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
+def _linha_para_transacao(
+    linha: dict, numero: int, interpretacao_devolvida: dict[str, bool] | None = None
+) -> Transacao:
     linha = _campos_normalizados(linha)
     faltando = [c for c in COLUNAS_OBRIGATORIAS if linha.get(c) in (None, "")]
     if faltando:
@@ -148,13 +186,14 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
         c for c in unicodedata.normalize("NFKD", canal) if not unicodedata.combining(c)
     )
     comissao = linha.get("comissao_cobrada")
+    devolucao_bruta = linha.get("devolvida", "")
     return Transacao(
         data=_data_br(linha["data"], numero),
         canal=canal,
         valor_bruto=_decimal_br(linha["valor_bruto"], "valor_bruto", numero),
         custo_produto=_decimal_br(linha["custo_produto"], "custo_produto", numero),
         frete_pago=_decimal_br(linha["frete_pago"], "frete_pago", numero),
-        devolvida=_bool_br(linha.get("devolvida", ""), numero),
+        devolvida=_devolvida_de(devolucao_bruta, numero, interpretacao_devolvida),
         prazo_recebimento_dias=int(linha.get("prazo_recebimento_dias") or 0),
         comissao_cobrada=(
             _decimal_br(comissao, "comissao_cobrada", numero)
@@ -162,6 +201,10 @@ def _linha_para_transacao(linha: dict, numero: int) -> Transacao:
             else None
         ),
         produto=(str(linha.get("produto") or "").strip() or None),
+        # o valor ORIGINAL do arquivo fica preservado (linhagem/auditoria)
+        devolucao_status=(
+            None if eh_ausente(devolucao_bruta) else str(devolucao_bruta).strip()
+        ),
     )
 
 
@@ -299,12 +342,21 @@ class ResultadoImportacao:
         )
 
 
-def carregar_com_relatorio(source, name: str | None = None) -> ResultadoImportacao:
+def carregar_com_relatorio(
+    source,
+    name: str | None = None,
+    interpretacao_devolvida: dict[str, bool] | None = None,
+) -> ResultadoImportacao:
     """Importa o que der e explica o que não deu.
 
     É o caminho do dashboard: o lojista sobe o arquivo cru e vê o raio-X
     das linhas boas mais um relatório das linhas recusadas. Quem precisa
     de tudo-ou-nada usa ``carregar_transacoes``.
+
+    ``interpretacao_devolvida`` é a decisão do lojista por categoria da
+    coluna de devolução (valor normalizado → conta como devolvida?). Sem
+    ela, um status ambíguo ("Em análise") não vira sim/não em silêncio:
+    a linha entra na lista de recusadas com o motivo.
     """
     linhas = ler_linhas_brutas(source, name=name)
     _conferir_colunas(linhas)
@@ -312,7 +364,9 @@ def carregar_com_relatorio(source, name: str | None = None) -> ResultadoImportac
     rejeitadas: list[LinhaRejeitada] = []
     for numero, linha in enumerate(linhas, 2):
         try:
-            transacoes.append(_linha_para_transacao(linha, numero))
+            transacoes.append(
+                _linha_para_transacao(linha, numero, interpretacao_devolvida)
+            )
         except (ValueError, TypeError) as erro:
             rejeitadas.append(
                 LinhaRejeitada(numero=numero, motivo=str(erro), conteudo=dict(linha))
@@ -320,13 +374,19 @@ def carregar_com_relatorio(source, name: str | None = None) -> ResultadoImportac
     return ResultadoImportacao(transacoes=transacoes, rejeitadas=rejeitadas)
 
 
-def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:
+def carregar_transacoes(
+    source,
+    name: str | None = None,
+    interpretacao_devolvida: dict[str, bool] | None = None,
+) -> list[Transacao]:
     """Importa transações de CSV, JSON ou Excel (.xlsx).
 
     O arquivo precisa das colunas ``data, canal, valor_bruto,
     custo_produto, frete_pago`` (e opcionalmente ``devolvida,
     prazo_recebimento_dias, comissao_cobrada``). CSV aceita separador
-    ``,`` ou ``;`` e vírgula decimal brasileira.
+    ``,`` ou ``;`` e vírgula decimal brasileira. A coluna de devolução
+    aceita booleano ("Sim"/"Não"/True/1) OU status categórico
+    ("Solicitação aprovada"); ver ``tipos.interpretar_devolucao``.
 
     Parameters
     ----------
@@ -335,10 +395,18 @@ def carregar_transacoes(source, name: str | None = None) -> list[Transacao]:
     name : str | None
         Nome do arquivo, para detectar a extensão quando ``source`` é um
         buffer. ``None`` usa ``source.name``.
+    interpretacao_devolvida : dict[str, bool] | None
+        Decisão do usuário por categoria da coluna de devolução (chave
+        normalizada → conta como devolvida?). Necessária quando o
+        arquivo traz status indefinidos ("Em análise") ou fora do léxico
+        — a Carchuna não decide sozinha.
     """
     linhas = ler_linhas_brutas(source, name=name)
     _conferir_colunas(linhas)
-    transacoes = [_linha_para_transacao(linha, i) for i, linha in enumerate(linhas, 2)]
+    transacoes = [
+        _linha_para_transacao(linha, i, interpretacao_devolvida)
+        for i, linha in enumerate(linhas, 2)
+    ]
     if not transacoes:
         raise ValueError("Arquivo sem nenhuma transação válida.")
     return transacoes
@@ -485,19 +553,29 @@ def _aplicar_mapa(linha: dict, mapa: dict[str, str]) -> dict:
     return convertida
 
 
-def relatorio_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> ResultadoImportacao:
+def relatorio_de_mapa(
+    linhas: list[dict],
+    mapa: dict[str, str],
+    interpretacao_devolvida: dict[str, bool] | None = None,
+) -> ResultadoImportacao:
     """Como ``transacoes_de_mapa``, mas importando o que der.
 
     É o caminho do mapeador no dashboard: o relatório do marketplace
     quase sempre tem alguma linha estragada (pedido sem data, valor
     escrito por extenso), e recusar o arquivo inteiro por causa dela
-    seria o mesmo erro que o importador cometia antes.
+    seria o mesmo erro que o importador cometia antes. Um status de
+    devolução ambíguo entra aqui pela mesma porta: vira linha recusada
+    com o motivo, não exceção que estoura o arquivo.
     """
     transacoes: list[Transacao] = []
     rejeitadas: list[LinhaRejeitada] = []
     for numero, linha in enumerate(linhas, 2):
         try:
-            transacoes.append(_linha_para_transacao(_aplicar_mapa(linha, mapa), numero))
+            transacoes.append(
+                _linha_para_transacao(
+                    _aplicar_mapa(linha, mapa), numero, interpretacao_devolvida
+                )
+            )
         except (ValueError, TypeError) as erro:
             rejeitadas.append(
                 LinhaRejeitada(numero=numero, motivo=str(erro), conteudo=dict(linha))
@@ -505,19 +583,28 @@ def relatorio_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> ResultadoImpo
     return ResultadoImportacao(transacoes=transacoes, rejeitadas=rejeitadas)
 
 
-def transacoes_de_mapa(linhas: list[dict], mapa: dict[str, str]) -> list[Transacao]:
+def transacoes_de_mapa(
+    linhas: list[dict],
+    mapa: dict[str, str],
+    interpretacao_devolvida: dict[str, bool] | None = None,
+) -> list[Transacao]:
     """Converte linhas cruas em transações usando o de-para do usuário.
 
     ``mapa`` liga cada campo da Carchuna a uma coluna do arquivo; valores
     iniciados em ``=`` são constantes para o arquivo inteiro (ex.:
     ``{"canal": "=shopee"}`` quando o relatório todo veio da Shopee, ou
     ``{"frete_pago": "=0"}`` quando o arquivo não traz frete).
+    ``interpretacao_devolvida`` é a decisão do usuário por categoria da
+    coluna de devolução (chave normalizada → conta como devolvida?) —
+    obrigatória quando há status indefinidos ("Em análise").
 
     Tudo-ou-nada: a primeira linha ruim derruba o lote. Para importar o
     que der e listar as recusadas, use ``relatorio_de_mapa``.
     """
     transacoes = [
-        _linha_para_transacao(_aplicar_mapa(linha, mapa), numero)
+        _linha_para_transacao(
+            _aplicar_mapa(linha, mapa), numero, interpretacao_devolvida
+        )
         for numero, linha in enumerate(linhas, 2)
     ]
     if not transacoes:

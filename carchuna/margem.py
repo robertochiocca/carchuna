@@ -143,6 +143,10 @@ class Transacao:
     # Nome do produto (opcional): habilita o ranking de campeões e vilões
     # de margem por produto no dashboard.
     produto: str | None = None
+    # Valor ORIGINAL da coluna de devolução no arquivo (ex.: "Solicitação
+    # aprovada"). O motor calcula com o booleano `devolvida`; o status
+    # preserva a semântica do dado bruto (linhagem/auditoria).
+    devolucao_status: str | None = None
 
     def __post_init__(self):
         if self.canal not in CANAIS_VALIDOS:
