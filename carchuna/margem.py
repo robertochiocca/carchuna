@@ -10,8 +10,12 @@ Regras inegociáveis deste módulo:
 
 - **Dinheiro é ``Decimal``, nunca ``float``** — valores em ``float`` são
   rejeitados com ``TypeError``.
-- **Invariante contábil** — soma das deduções + margem líquida == receita
-  bruta, centavo a centavo (verificado por teste).
+- **Identidade estrutural** — soma das deduções + margem líquida == receita
+  bruta. Ela prova que o código não perdeu nem duplicou termo na soma, e
+  **não** prova que os números são válidos: a margem é construída como
+  resíduo, então a igualdade fecha até com entrada absurda. Quem valida o
+  número é ``reconciliar()``, que refaz a conta por outro caminho; quem
+  pega absurdo é ``conferir_plausibilidade()``.
 - **Nenhuma alíquota sem lastro** — a alíquota efetiva do Simples segue a
   fórmula oficial do art. 18, § 1º-A, da LC 123/2006, com as tabelas dos
   Anexos transcritas da redação da LC 155/2016.
@@ -22,6 +26,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+
+from carchuna.validade import (
+    FATOR_DEDUCAO_SOBRE_RECEITA,
+    MARGEM_MAXIMA_PLAUSIVEL,
+    MARGEM_MINIMA_PLAUSIVEL,
+    TOLERANCIA_RECONCILIACAO,
+    Resultado,
+)
 
 # ---------------------------------------------------------------------------
 # Fontes oficiais
@@ -283,6 +295,24 @@ class DecomposicaoMargem:
             f"dedução {nome!r} não existe; há {[d.nome for d in self.deducoes]}."
         )
 
+    def identidade_estrutural_fecha(self) -> bool:
+        """A soma dos termos bate com a receita — e só isso.
+
+        **Leia o que esta conferência NÃO é.** A margem é construída como
+        ``receita − Σ deduções``, então esta igualdade não pode falhar por
+        causa de dado ruim: ela falha apenas se alguém perder ou duplicar
+        um termo ao mexer no código. É teste de regressão de implementação,
+        não validação de número.
+
+        Rodando o motor com uma comissão de 900% da receita, a margem sai
+        em −1854% e esta conferência fecha normalmente. Quem valida o
+        número é ``reconciliar()``, que refaz a conta por outro caminho; e
+        quem pega absurdo é ``conferir_plausibilidade()``.
+        """
+        return sum(d.valor for d in self.deducoes) + self.margem_liquida == (
+            self.receita_bruta
+        )
+
 
 # ---------------------------------------------------------------------------
 # Alíquota efetiva do Simples Nacional
@@ -481,4 +511,122 @@ def decompor_margem(
         margem_liquida=margem,
         margem_pct=_pct(margem, receita),
         aliquota_efetiva=aliquota,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Plausibilidade e reconciliação — as duas coisas que a identidade não faz
+# ---------------------------------------------------------------------------
+
+
+def conferir_plausibilidade(
+    decomposicao: DecomposicaoMargem,
+) -> Resultado:
+    """A margem do período cabe em alguma realidade contábil?
+
+    Confere os dois lados, porque eles denunciam coisas diferentes:
+
+    - **entrada**: uma dedução isolada maior que a receita bruta do período
+      é quase sempre coluna trocada no mapeamento ou unidade errada
+      (centavos lidos como reais), não um mês muito ruim;
+    - **saída**: margem fora da faixa de ``validade.py`` — acima de 100% é
+      impossível, abaixo de −100% quer dizer gastar mais que o dobro do que
+      se faturou.
+
+    Devolve a margem em % carimbada. Não corrige, não limita e não zera o
+    valor: um número absurdo escondido atrás de um teto continua absurdo e
+    passa a ser também invisível.
+    """
+    receita = decomposicao.receita_bruta
+    if receita > 0:
+        for d in decomposicao.deducoes:
+            if d.valor > receita * FATOR_DEDUCAO_SOBRE_RECEITA:
+                rotulo = ROTULOS_DEDUCOES.get(d.nome, d.nome)
+                return Resultado.implausivel(
+                    decomposicao.margem_pct,
+                    f"{rotulo} soma R$ {d.valor}, mais que todo o faturamento "
+                    f"do período (R$ {receita}). Isso não é um mês ruim: é "
+                    "quase sempre coluna trocada no mapeamento, ou valor em "
+                    "outra unidade. Confira essa coluna antes de usar o "
+                    "número.",
+                )
+    if decomposicao.margem_pct > MARGEM_MAXIMA_PLAUSIVEL:
+        return Resultado.implausivel(
+            decomposicao.margem_pct,
+            f"A margem deu {decomposicao.margem_pct}% da receita, e mais de "
+            "100% é impossível — sobrar mais do que entrou significa dedução "
+            "com sinal trocado no arquivo.",
+        )
+    if decomposicao.margem_pct < MARGEM_MINIMA_PLAUSIVEL:
+        return Resultado.implausivel(
+            decomposicao.margem_pct,
+            f"A margem deu {decomposicao.margem_pct}% da receita: os custos "
+            "passaram do dobro do faturamento do período. Prejuízo acontece, "
+            "mas nessa ordem de grandeza é erro de dado antes de ser "
+            "prejuízo — confira as colunas de custo e de comissão.",
+        )
+    return Resultado.de_valor(decomposicao.margem_pct)
+
+
+def reconciliar(
+    transacoes: list[Transacao],
+    config: ConfigTributaria,
+    decomposicao: DecomposicaoMargem,
+    tabela: TabelaCustos | None = None,
+) -> Resultado:
+    """Refaz o lucro pelos lançamentos e compara com o do motor.
+
+    Esta é a asserção que **pode** falhar, e é por isso que ela existe. A
+    identidade estrutural confere a soma que o próprio motor montou; aqui a
+    margem é reconstruída lançamento a lançamento, a partir dos campos
+    crus, sem passar por ``decompor_margem`` — dois caminhos, duas somas.
+    Se o motor esquecer de excluir uma venda devolvida do CMV, ou trocar a
+    base do tributo, a identidade continua fechando e esta conta não.
+
+    Devolve a diferença entre os dois caminhos, ``ok`` quando cabe em
+    ``TOLERANCIA_RECONCILIACAO`` e ``implausivel`` quando não cabe.
+    """
+    tabela = tabela or TabelaCustos()
+    efetivas = [t for t in transacoes if not t.devolvida]
+
+    receita = sum((t.valor_bruto for t in transacoes), Decimal("0"))
+    devolvido = sum((t.valor_bruto for t in transacoes if t.devolvida), Decimal("0"))
+
+    if config.regime == "simples":
+        aliquota = aliquota_efetiva_simples(config.rbt12, config.anexo_simples)
+        tributo = (receita - devolvido) * aliquota
+    else:
+        meses = {(t.data.year, t.data.month) for t in transacoes}
+        tributo = config.das_mei_mensal * len(meses)
+
+    perdido = devolvido + tributo
+    for t in efetivas:
+        perdido += (
+            t.comissao_cobrada
+            if t.comissao_cobrada is not None
+            else t.valor_bruto * tabela.comissao_canal.get(t.canal, Decimal("0"))
+        )
+        perdido += t.custo_produto
+        if t.canal in tabela.canais_com_adquirencia:
+            perdido += t.valor_bruto * tabela.taxa_adquirencia
+            if t.prazo_recebimento_dias > 0:
+                perdido += (
+                    t.valor_bruto
+                    * tabela.taxa_antecipacao_mensal
+                    * Decimal(t.prazo_recebimento_dias)
+                    / Decimal(30)
+                )
+    perdido += sum((t.frete_pago for t in transacoes), Decimal("0"))
+
+    lucro_reconstruido = _q(receita - perdido)
+    diferenca = abs(lucro_reconstruido - decomposicao.margem_liquida)
+    if diferenca <= TOLERANCIA_RECONCILIACAO:
+        return Resultado.de_valor(diferenca)
+    return Resultado.implausivel(
+        diferenca,
+        f"Os dois caminhos de cálculo da margem não fecham: o motor devolveu "
+        f"R$ {decomposicao.margem_liquida} e a reconferência lançamento a "
+        f"lançamento deu R$ {lucro_reconstruido}, uma diferença de "
+        f"R$ {diferenca} — acima da tolerância de "
+        f"R$ {TOLERANCIA_RECONCILIACAO}, que só cobre arredondamento.",
     )

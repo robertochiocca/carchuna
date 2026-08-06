@@ -42,6 +42,7 @@ from carchuna.dados import (
     sugerir_mapeamento,
     transacoes_de_mapa,
 )
+from carchuna.margem import conferir_plausibilidade
 from carchuna.rag.llm import gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
 
@@ -280,6 +281,7 @@ T = {
             "sua taxa real para ficar exato."
         ),
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
+        "implausivel_titulo": "Estes números não fecham com a realidade.",
         "wf_receita": "Faturamento",
         "cachoeira_dica": (
             "Toque numa barra de custo para abrir de onde ela vem — por "
@@ -600,6 +602,7 @@ T = {
             "one in the sidebar."
         ),
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
+        "implausivel_titulo": "These numbers don't add up.",
         "wf_receita": "Revenue",
         "cachoeira_dica": (
             "Click a cost bar to see where it comes from — by channel "
@@ -902,6 +905,7 @@ def _resultados_cacheados(
         "radar": analise.radar(),
         "linhagem": analise.linhagem(),
         "confianca": avaliar_confianca(list(transacoes), base="calculado"),
+        "plausibilidade": conferir_plausibilidade(analise.decomposicao),
     }
 
 
@@ -1375,6 +1379,12 @@ resumo = res["resumo"]
 
 # ---------------------------------------------------------------------------
 with aba_resumo:
+    # Faixa de plausibilidade: quando o número não cabe em realidade
+    # contábil nenhuma, o motivo vem ANTES dos números — e os números
+    # continuam na tela, porque escondê-los não conserta o dado de origem.
+    if not res["plausibilidade"].ok:
+        st.error(f"**{t['implausivel_titulo']}** {res['plausibilidade'].motivo}")
+
     if lang == "pt":
         st.info(resumo.frase())
     else:

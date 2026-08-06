@@ -38,6 +38,7 @@ from carchuna.margem import (
     Transacao,
     decompor_margem,
 )
+from carchuna.validade import Resultado, variacao_percentual
 
 
 def _mes_de(data) -> str:
@@ -207,30 +208,52 @@ class Contribuicao:
     nome: str
     rotulo: str
     delta_reais: Decimal  # sinal do efeito no LUCRO (negativo = pressionou)
+    delta_pp: Decimal  # o mesmo efeito em pontos de margem — sempre definido
     pct_da_pressao: Decimal  # fatia entre os fatores que empurraram no
     # sentido da variação (0 quando empurrou contra)
 
 
 @dataclass(frozen=True)
 class ExplicacaoVariacao:
-    """Δlucro entre dois meses decomposto pela identidade contábil."""
+    """Por que o lucro mudou entre dois meses, em três moedas.
+
+    A moeda principal são **pontos de margem** (p.p.), e a escolha tem
+    motivo. Margem é lucro sobre receita, e receita é estritamente
+    positiva, então a diferença entre duas margens está sempre definida —
+    inclusive quando o lucro atravessa o zero, que é justamente onde o
+    percentual de lucro passa a mentir. Além disso ela é aditiva: a soma
+    dos ``delta_pp`` das contribuições reproduz o ``delta_margem_pp``
+    exatamente, porque ``margem% = 100 − Σ (dedução como % da receita)``.
+    E é a linguagem que o lojista já usa: "caí três pontos de margem".
+
+    ``delta_lucro`` em reais também está sempre definido.
+
+    ``var_lucro_pct`` e ``var_receita_pct`` são ``Resultado``: viram
+    ``indefinido`` quando a base do mês anterior não é estritamente
+    positiva, em vez de devolver um percentual com o sinal trocado.
+    """
 
     mes_a: str
     mes_b: str
-    var_receita_pct: Decimal
-    var_lucro_pct: Decimal
-    delta_lucro: Decimal
+    var_receita_pct: Resultado
+    var_lucro_pct: Resultado
+    delta_lucro: Decimal  # R$ — sempre definido
+    delta_margem_pp: Decimal  # pontos de margem — sempre definido
     contribuicoes: tuple[Contribuicao, ...]  # ordenadas pelo efeito
 
     def frase(self) -> str:
         """O resumo no formato do CFO: causa principal e secundária."""
         direcao = "caiu" if self.delta_lucro < 0 else "subiu"
-        pressoes = [c for c in self.contribuicoes if c.pct_da_pressao > 0]
+        if self.var_lucro_pct.ok:
+            quanto = f"{abs(self.var_lucro_pct.valor)}%"
+        else:
+            # base não positiva: o percentual mentiria, então some da frase
+            quanto = f"{abs(self.delta_margem_pp)} ponto(s) de margem"
         frase = (
-            f"De {self.mes_a} para {self.mes_b}, a receita variou "
-            f"{self.var_receita_pct:+}% e o lucro {direcao} "
-            f"{abs(self.var_lucro_pct)}% (R$ {abs(self.delta_lucro)})."
+            f"De {self.mes_a} para {self.mes_b}, o lucro {direcao} {quanto} "
+            f"(R$ {abs(self.delta_lucro)})."
         )
+        pressoes = [c for c in self.contribuicoes if c.pct_da_pressao > 0]
         if pressoes:
             principal = pressoes[0]
             frase += (
@@ -249,11 +272,18 @@ def explicar_variacao(
 ) -> ExplicacaoVariacao:
     """Decompõe a variação do lucro de ``mes_b`` contra o mês anterior.
 
-    Identidade contábil: Δlucro = Δreceita − Σ Δdeduções — a soma das
-    contribuições fecha exatamente com a variação do lucro. A "pressão"
-    é a fatia de cada fator ENTRE os que empurraram o lucro no sentido
-    observado (queda ou alta); fatores que empurraram contra aparecem
-    com o delta em reais e pressão 0.
+    Duas decomposições, ambas exatas:
+
+    - **em reais**, pela identidade contábil ``Δlucro = Δreceita −
+      Σ Δdeduções``: a soma dos ``delta_reais`` fecha com ``delta_lucro``;
+    - **em pontos de margem**, por ``margem% = 100 − Σ pct_receita``: a
+      soma dos ``delta_pp`` fecha com ``delta_margem_pp``. A receita não
+      aparece aqui, e não é omissão — margem é razão, então crescer
+      faturando o mesmo por real não move a margem. O que move são as
+      fatias.
+
+    A "pressão" é a fatia de cada fator ENTRE os que empurraram o lucro no
+    sentido observado; quem empurrou contra aparece com o delta e pressão 0.
     """
     meses = list(mensal.items())
     if len(meses) < 2:
@@ -270,18 +300,29 @@ def explicar_variacao(
     (mes_a, dec_a), (mes_b, dec_b) = meses[idx - 1], meses[idx]
 
     delta_lucro = dec_b.margem_liquida - dec_a.margem_liquida
-    contribs = [("receita", "Receita", dec_b.receita_bruta - dec_a.receita_bruta)]
+    # A receita move o lucro em reais, mas não move a margem por si só:
+    # entra com delta_pp zero de propósito, e o comentário existe para
+    # ninguém "consertar" isso depois achando que faltou um termo.
+    contribs = [
+        (
+            "receita",
+            "Receita",
+            dec_b.receita_bruta - dec_a.receita_bruta,
+            Decimal("0"),
+        )
+    ]
     contribs += [
         (
             d.nome,
             ROTULOS_DEDUCOES.get(d.nome, d.nome),
             -(d.valor - dec_a.deducao(d.nome).valor),
+            -(d.pct_receita - dec_a.deducao(d.nome).pct_receita),
         )
         for d in dec_b.deducoes
     ]
     sentido = -1 if delta_lucro < 0 else 1
     pressao_total = sum(
-        (abs(delta) for _, _, delta in contribs if delta * sentido > 0),
+        (abs(delta) for _, _, delta, _ in contribs if delta * sentido > 0),
         Decimal("0"),
     )
     contribuicoes = tuple(
@@ -291,32 +332,28 @@ def explicar_variacao(
                     nome=nome,
                     rotulo=rotulo,
                     delta_reais=_q2(delta),
+                    delta_pp=delta_pp,
                     pct_da_pressao=(
                         _q1(abs(delta) / pressao_total * 100)
                         if pressao_total > 0 and delta * sentido > 0
                         else Decimal("0")
                     ),
                 )
-                for nome, rotulo, delta in contribs
+                for nome, rotulo, delta, delta_pp in contribs
             ),
             key=lambda c: (-c.pct_da_pressao, -abs(c.delta_reais)),
         )
     )
-    var_receita = (
-        _q1((dec_b.receita_bruta - dec_a.receita_bruta) / dec_a.receita_bruta * 100)
-        if dec_a.receita_bruta
-        else Decimal("0")
-    )
-    var_lucro = (
-        _q1(delta_lucro / abs(dec_a.margem_liquida) * 100)
-        if dec_a.margem_liquida
-        else Decimal("0")
-    )
     return ExplicacaoVariacao(
         mes_a=mes_a,
         mes_b=mes_b,
-        var_receita_pct=var_receita,
-        var_lucro_pct=var_lucro,
+        var_receita_pct=variacao_percentual(
+            dec_a.receita_bruta, dec_b.receita_bruta, "faturamento"
+        ),
+        var_lucro_pct=variacao_percentual(
+            dec_a.margem_liquida, dec_b.margem_liquida, "lucro"
+        ),
         delta_lucro=_q2(delta_lucro),
+        delta_margem_pp=dec_b.margem_pct - dec_a.margem_pct,
         contribuicoes=contribuicoes,
     )

@@ -52,6 +52,7 @@ from carchuna.margem import (
     decompor_margem,
 )
 from carchuna.metricas import margem_mensal
+from carchuna.validade import conferir_receita, variacao_percentual
 
 AVISO_INSIGHTS = (
     "Sinais calculados dos seus números por regras transparentes, com o "
@@ -123,8 +124,13 @@ class ParametrosInsights:
     limiar_pp_historico_constante: Decimal = Decimal("0.5")
     # -- economia unitária contra a média móvel de 3 meses
     limiar_var_unitaria: Decimal = Decimal("0.25")  # 25%
-    # -- divergência: receita sobe ≥ +5% e lucro cai ≥ −5%
-    limiar_divergencia: Decimal = Decimal("0.05")
+    # -- divergência: faturamento sobe e MARGEM cai, no mesmo mês.
+    # O crescimento segue em % (receita é sempre positiva, então o
+    # percentual não mente aqui). A queda vai em pontos de margem: 1 p.p.
+    # num mês é o menor movimento que sobrevive ao ruído de mix de
+    # produtos e ainda aparece no extrato do lojista.
+    limiar_crescimento_receita_pct: Decimal = Decimal("5")
+    limiar_queda_margem_pp: Decimal = Decimal("1")
 
 
 def _q2(valor: Decimal) -> Decimal:
@@ -519,22 +525,43 @@ class FretePorPedido(AnaliseInsight):
 
 
 class ReceitaSobeLucroCai(AnaliseInsight):
-    """A divergência que mais denuncia custo comendo o crescimento."""
+    """A divergência que mais denuncia custo comendo o crescimento.
+
+    A regra opera em **pontos de margem**, não em percentual de lucro. A
+    versão antiga dividia pela margem do mês anterior e por isso precisava
+    de um guard ``margem_liquida <= 0`` que a deixava cega exatamente onde
+    ela mais serve: a loja que já estava no vermelho e cresce afundando
+    mais. Com base negativa o percentual ainda inverte o sinal — melhorar
+    de −100 para −50 vira "−50%", que se lê como piora.
+
+    Margem é razão sobre receita, e receita é estritamente positiva; a
+    diferença entre duas margens está sempre definida, atravessa o zero
+    sem trocar de sinal e é a linguagem que o lojista já usa.
+    """
 
     def avaliar(self, ctx: ContextoInsights) -> list[Insight]:
         meses = list(ctx.mensal.items())
         if len(meses) < 2:
             return []
         (mes_a, dec_a), (mes_b, dec_b) = meses[-2], meses[-1]
-        if dec_a.receita_bruta == 0 or dec_a.margem_liquida <= 0:
+        # receita precisa ser positiva nos dois meses — é o denominador da
+        # margem, e sem ela não existe ponto de margem para comparar
+        for mes, dec in ((mes_a, dec_a), (mes_b, dec_b)):
+            if not conferir_receita(dec.receita_bruta, mes).ok:
+                return []
+
+        var_receita = variacao_percentual(
+            dec_a.receita_bruta, dec_b.receita_bruta, "faturamento"
+        )
+        queda_pp = dec_b.margem_pct - dec_a.margem_pct
+        if var_receita.valor < ctx.parametros.limiar_crescimento_receita_pct:
             return []
-        var_receita = (dec_b.receita_bruta - dec_a.receita_bruta) / dec_a.receita_bruta
-        var_lucro = (dec_b.margem_liquida - dec_a.margem_liquida) / dec_a.margem_liquida
-        limiar = ctx.parametros.limiar_divergencia
-        if var_receita < limiar or var_lucro > -limiar:
+        if queda_pp > -ctx.parametros.limiar_queda_margem_pp:
             return []
-        # lucro esperado se a margem tivesse acompanhado a receita
-        esperado = _q2(dec_a.margem_liquida * (1 + var_receita))
+
+        # lucro que o mês teria se a MARGEM do mês anterior tivesse se
+        # mantido sobre o faturamento novo — sem dividir por lucro nenhum
+        esperado = _q2(dec_b.receita_bruta * dec_a.margem_pct / 100)
         impacto = _q2(esperado - dec_b.margem_liquida)
         # a dedução que mais subiu como % da receita é a principal suspeita
         difs = {
@@ -547,13 +574,13 @@ class ReceitaSobeLucroCai(AnaliseInsight):
             Insight(
                 categoria="receita_x_lucro",
                 severidade="critico",
-                titulo=f"Receita subiu e o lucro caiu em {mes_b}",
+                titulo=f"Receita subiu e a margem caiu em {mes_b}",
                 explicacao=(
-                    f"De {mes_a} para {mes_b} a receita variou "
-                    f"{_q1(var_receita * 100)}% e o lucro variou "
-                    f"{_q1(var_lucro * 100)}%. Principal suspeita: "
-                    f"{rotulo_causa}, que subiu {_q2(difs[causa])} p.p. como "
-                    "fatia da receita."
+                    f"De {mes_a} para {mes_b} o faturamento subiu "
+                    f"{var_receita.valor}% e a margem caiu {abs(queda_pp)} "
+                    f"ponto(s), de {dec_a.margem_pct}% para {dec_b.margem_pct}%. "
+                    f"Principal suspeita: {rotulo_causa}, que subiu "
+                    f"{_q2(difs[causa])} p.p. como fatia da receita."
                 ),
                 impacto_mensal=impacto,
                 caminho_pratico=(
@@ -564,16 +591,19 @@ class ReceitaSobeLucroCai(AnaliseInsight):
                 base_evidencia="calculado",
                 confianca=ctx.nota("calculado"),
                 esperado=(
-                    f"R$ {esperado} de lucro (se a margem tivesse "
-                    "acompanhado a receita)"
+                    f"R$ {esperado} de lucro (se a margem de {mes_a} tivesse "
+                    "se mantido sobre o faturamento novo)"
                 ),
                 observado=f"R$ {dec_b.margem_liquida} de lucro",
                 desvio_pct=_desvio_pct(esperado, dec_b.margem_liquida),
                 metodo=(
-                    f"regra de divergência: receita +{_q1(var_receita * 100)}% "
-                    f"e lucro {_q1(var_lucro * 100)}% no mesmo mês (limiar "
-                    f"±{_q1(limiar * 100)}%); causa apontada pela maior alta "
-                    "entre as deduções"
+                    f"regra de divergência em pontos de margem: faturamento "
+                    f"+{var_receita.valor}% e margem {queda_pp} p.p. no mesmo "
+                    f"mês (limiares: "
+                    f"+{ctx.parametros.limiar_crescimento_receita_pct}% de "
+                    f"receita e −{ctx.parametros.limiar_queda_margem_pp} p.p. "
+                    "de margem); causa apontada pela maior alta entre as "
+                    "deduções"
                 ),
             )
         ]
