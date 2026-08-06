@@ -21,6 +21,7 @@ Uso típico::
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from functools import cached_property
 
@@ -152,6 +153,7 @@ class AnalisadorMargem:
         parametros: ParametrosDiagnostico | None = None,
         retriever: Retriever | None = None,
         rbt12_movel: bool = False,
+        origem: str | None = None,
     ):
         if not transacoes:
             raise ValueError("`transacoes` não pode ser vazio.")
@@ -160,6 +162,9 @@ class AnalisadorMargem:
         self.tabela = tabela or TabelaCustos()
         self.parametros = parametros or ParametrosDiagnostico()
         self._retriever = retriever
+        # Rastreabilidade: de onde os dados vieram e quando o cálculo rodou.
+        self.origem = origem or "origem não informada"
+        self.criado_em = datetime.now()
         # Tributar cada mês pela RBT12 dos seus 12 meses anteriores
         # (LC 123/2006, art. 18, § 1º) em vez de repetir a informada.
         # Só afeta a série mensal; o total do período segue a informada,
@@ -178,6 +183,7 @@ class AnalisadorMargem:
         **kwargs,
     ) -> AnalisadorMargem:
         """Cria o analisador direto de um CSV/JSON/XLSX de vendas."""
+        kwargs.setdefault("origem", name or str(source))
         return cls(carregar_transacoes(source, name=name), config, tabela, **kwargs)
 
     @classmethod
@@ -193,6 +199,7 @@ class AnalisadorMargem:
         config = config or ConfigTributaria(
             regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
         )
+        kwargs.setdefault("origem", f"dados sintéticos de exemplo (seed {seed})")
         return cls(
             transacoes_sinteticas(meses=meses, seed=seed), config, tabela, **kwargs
         )
@@ -356,6 +363,27 @@ class AnalisadorMargem:
 
         motor = MotorCrescimento(retriever=self.retriever)
         return motor.sugerir(self.transacoes, self.config, self.tabela)
+
+    # -- linhagem: como chegamos a cada número -------------------------------
+
+    def linhagem(self, nome: str | None = None):
+        """Ficha de rastreabilidade dos números (todas, ou uma por nome).
+
+        Responde "como a Carchuna chegou a este número?": arquivo de
+        origem, colunas, transformações, fórmula com os parâmetros do
+        caso, premissas, limitações e o momento do cálculo.
+        """
+        from carchuna.linhagem import montar_linhagem
+
+        fichas = montar_linhagem(
+            self.decomposicao,
+            self.transacoes,
+            self.config,
+            self.tabela,
+            origem_dados=self.origem,
+            calculado_em=self.criado_em,
+        )
+        return fichas if nome is None else fichas[nome]
 
     def preco_sugerido(
         self,
