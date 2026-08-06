@@ -27,10 +27,11 @@ acesso automatizado, o mesmo que já havia acontecido com os Anexos em
 
 from __future__ import annotations
 
-from dataclasses import replace
-from decimal import Decimal
+from dataclasses import dataclass, replace
+from decimal import ROUND_HALF_UP, Decimal
 
 from carchuna.margem import (
+    ROTULOS_DEDUCOES,
     ConfigTributaria,
     DecomposicaoMargem,
     TabelaCustos,
@@ -184,3 +185,138 @@ def lucro_acumulado(
         acumulado += d.margem_liquida
         curva.append((mes, acumulado))
     return curva
+
+
+# ---------------------------------------------------------------------------
+# Por que o lucro mudou de um mês para o outro
+# ---------------------------------------------------------------------------
+
+
+def _q1(v: Decimal) -> Decimal:
+    return v.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+
+
+def _q2(v: Decimal) -> Decimal:
+    return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+@dataclass(frozen=True)
+class Contribuicao:
+    """Quanto um fator empurrou o lucro entre dois meses."""
+
+    nome: str
+    rotulo: str
+    delta_reais: Decimal  # sinal do efeito no LUCRO (negativo = pressionou)
+    pct_da_pressao: Decimal  # fatia entre os fatores que empurraram no
+    # sentido da variação (0 quando empurrou contra)
+
+
+@dataclass(frozen=True)
+class ExplicacaoVariacao:
+    """Δlucro entre dois meses decomposto pela identidade contábil."""
+
+    mes_a: str
+    mes_b: str
+    var_receita_pct: Decimal
+    var_lucro_pct: Decimal
+    delta_lucro: Decimal
+    contribuicoes: tuple[Contribuicao, ...]  # ordenadas pelo efeito
+
+    def frase(self) -> str:
+        """O resumo no formato do CFO: causa principal e secundária."""
+        direcao = "caiu" if self.delta_lucro < 0 else "subiu"
+        pressoes = [c for c in self.contribuicoes if c.pct_da_pressao > 0]
+        frase = (
+            f"De {self.mes_a} para {self.mes_b}, a receita variou "
+            f"{self.var_receita_pct:+}% e o lucro {direcao} "
+            f"{abs(self.var_lucro_pct)}% (R$ {abs(self.delta_lucro)})."
+        )
+        if pressoes:
+            principal = pressoes[0]
+            frase += (
+                f" Principal causa: {principal.rotulo}, respondendo por "
+                f"{principal.pct_da_pressao}% da pressão."
+            )
+        if len(pressoes) > 1:
+            segunda = pressoes[1]
+            frase += f" Causa secundária: {segunda.rotulo} ({segunda.pct_da_pressao}%)."
+        return frase
+
+
+def explicar_variacao(
+    mensal: dict[str, DecomposicaoMargem],
+    mes_b: str | None = None,
+) -> ExplicacaoVariacao:
+    """Decompõe a variação do lucro de ``mes_b`` contra o mês anterior.
+
+    Identidade contábil: Δlucro = Δreceita − Σ Δdeduções — a soma das
+    contribuições fecha exatamente com a variação do lucro. A "pressão"
+    é a fatia de cada fator ENTRE os que empurraram o lucro no sentido
+    observado (queda ou alta); fatores que empurraram contra aparecem
+    com o delta em reais e pressão 0.
+    """
+    meses = list(mensal.items())
+    if len(meses) < 2:
+        raise ValueError("preciso de pelo menos 2 meses para comparar.")
+    nomes = [m for m, _ in meses]
+    if mes_b is None:
+        idx = len(meses) - 1
+    else:
+        if mes_b not in nomes:
+            raise ValueError(f"mês {mes_b!r} não está na base ({nomes}).")
+        idx = nomes.index(mes_b)
+        if idx == 0:
+            raise ValueError(f"{mes_b} é o primeiro mês da base — sem anterior.")
+    (mes_a, dec_a), (mes_b, dec_b) = meses[idx - 1], meses[idx]
+
+    delta_lucro = dec_b.margem_liquida - dec_a.margem_liquida
+    contribs = [("receita", "Receita", dec_b.receita_bruta - dec_a.receita_bruta)]
+    contribs += [
+        (
+            d.nome,
+            ROTULOS_DEDUCOES.get(d.nome, d.nome),
+            -(d.valor - dec_a.deducao(d.nome).valor),
+        )
+        for d in dec_b.deducoes
+    ]
+    sentido = -1 if delta_lucro < 0 else 1
+    pressao_total = sum(
+        (abs(delta) for _, _, delta in contribs if delta * sentido > 0),
+        Decimal("0"),
+    )
+    contribuicoes = tuple(
+        sorted(
+            (
+                Contribuicao(
+                    nome=nome,
+                    rotulo=rotulo,
+                    delta_reais=_q2(delta),
+                    pct_da_pressao=(
+                        _q1(abs(delta) / pressao_total * 100)
+                        if pressao_total > 0 and delta * sentido > 0
+                        else Decimal("0")
+                    ),
+                )
+                for nome, rotulo, delta in contribs
+            ),
+            key=lambda c: (-c.pct_da_pressao, -abs(c.delta_reais)),
+        )
+    )
+    var_receita = (
+        _q1((dec_b.receita_bruta - dec_a.receita_bruta) / dec_a.receita_bruta * 100)
+        if dec_a.receita_bruta
+        else Decimal("0")
+    )
+    var_lucro = (
+        _q1(delta_lucro / abs(dec_a.margem_liquida) * 100)
+        if dec_a.margem_liquida
+        else Decimal("0")
+    )
+    return ExplicacaoVariacao(
+        mes_a=mes_a,
+        mes_b=mes_b,
+        var_receita_pct=var_receita,
+        var_lucro_pct=var_lucro,
+        delta_lucro=_q2(delta_lucro),
+        contribuicoes=contribuicoes,
+    )
