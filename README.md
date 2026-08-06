@@ -18,6 +18,10 @@
 
 [Português](#o-problema) · [English](#english-version)
 
+<br>
+
+<img src="docs/img/cunha-tributaria.svg" alt="Dois caminhos até a margem real: nas outras ferramentas a alíquota vem de um campo em branco que o lojista digita; na Carchuna ela é derivada da RBT12 do próprio arquivo pela fórmula do art. 18, § 1º-A da LC 123/2006." width="880">
+
 </div>
 
 > **Conceito / projeto de portfólio — não é uma empresa nem aconselhamento jurídico/contábil.** Este repositório estuda como uma plataforma de inteligência de margem para PMEs brasileiras *poderia* funcionar. O que está implementado tem teste e CI; o que não está é roadmap explicitamente sinalizado.
@@ -67,7 +71,15 @@ A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot
    legal/IA        Bacen…) — depois do cálculo, com aviso em toda resposta
 ```
 
-A venda de R$ 100 decomposta pelo motor (caso conferido à mão nos testes):
+A venda de R$ 100 decomposta pelo motor — caso conferido à mão nos testes, e as barras do desenho estão em escala (250 px valem R$ 100):
+
+<div align="center">
+
+<img src="docs/img/raio-x-de-cem-reais.svg" alt="A conta ingênua de uma venda de R$ 100 dá 60% de margem; a conta real, depois de tributo, comissão, frete e custo do produto, deixa R$ 32,35 — 32,35%." width="880">
+
+</div>
+
+Os mesmos números, com a fonte de cada dedução anotada:
 
 ```
 Receita bruta:                 R$ 100,00
@@ -201,6 +213,12 @@ Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrati
 - **App ao vivo**: [carchuna.streamlit.app](https://carchuna.streamlit.app), publicado no Streamlit Community Cloud a partir da `main` — cada mescla atualiza o app sozinho.
 
 ## Como cada número ganha lastro
+
+<div align="center">
+
+<img src="docs/img/tres-conferencias.svg" alt="Três conferências diferentes: a identidade estrutural fecha por definição e não pode falhar; a reconciliação refaz a margem por um segundo caminho e pode falhar; a faixa de plausibilidade carimba o valor que não cabe em realidade contábil." width="880">
+
+</div>
 
 - **Tributos**: fórmula oficial da alíquota efetiva (LC 123/2006, art. 18, § 1º-A) com os Anexos I–V na redação da LC 155/2016, validada por testes calculados à mão — inclusive o degrau da 6ª faixa, em que o ICMS/ISS saem da guia pelo sublimite (arts. 19 e 20). A conferência automática no Planalto foi tentada em 19/07/2026 (portal retornou HTTP 503 a robôs); a data e a ressalva estão documentadas em `carchuna/margem.py`.
 - **Comissões/adquirência/antecipação**: tabelas **editáveis pelo usuário**, com defaults documentados com fonte e marcados `estimado` — o seu contrato prevalece.
