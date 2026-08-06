@@ -30,12 +30,13 @@ from carchuna import (
     ConfigTributaria,
     ParametrosDiagnostico,
     TabelaCustos,
-    carregar_transacoes,
+    carregar_com_relatorio,
     transacoes_sinteticas,
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO
 from carchuna.dados import (
     COLUNAS_OBRIGATORIAS,
+    decimal_de_texto,
     ler_linhas_brutas,
     sugerir_mapeamento,
     transacoes_de_mapa,
@@ -179,6 +180,17 @@ T = {
         "monitorando": "Acompanhando o arquivo — salve a planilha e veja aqui.",
         "importadas": "vendas importadas.",
         "falha_importacao": "Não consegui ler o arquivo:",
+        "percentual_invalido": (
+            "Não entendi o valor de '{campo}': {valor}. Digite só o "
+            "número, com vírgula nos centavos (ex.: 2,49)."
+        ),
+        "linhas_de_fora": (
+            "{ok} vendas importadas. {fora} de {total} linhas ficaram de fora "
+            "e não entram em nenhum número desta tela — veja quais abaixo."
+        ),
+        "ver_de_fora": "Ver as linhas que ficaram de fora",
+        "col_linha": "Linha na sua planilha",
+        "col_motivo": "Por que ficou de fora",
         "meses_demo": "Meses de dados de exemplo",
         "aviso_demo": (
             "Você está vendo DADOS DE EXEMPLO. Envie sua planilha na barra "
@@ -197,6 +209,23 @@ T = {
             "Serviços = III a V. Seu contador sabe o seu."
         ),
         "rbt12": "Faturamento dos últimos 12 meses (R$)",
+        "rbt12_movel": "Calcular a alíquota mês a mês (RBT12 móvel)",
+        "rbt12_movel_ajuda": (
+            "No Simples a alíquota de cada mês sai do faturamento dos 12 "
+            "meses ANTERIORES a ele (LC 123/2006, art. 18, § 1º) — quem "
+            "cresceu paga mais no fim do ano. Só é possível nos meses em "
+            "que o seu arquivo cobre esses 12 meses inteiros; nos outros "
+            "vale o valor que você informou acima."
+        ),
+        "rbt12_movel_aplicada": (
+            "Alíquota calculada do próprio arquivo em {n} de {total} meses; "
+            "nos demais vale o faturamento que você informou."
+        ),
+        "rbt12_movel_sem_janela": (
+            "O seu arquivo ainda não cobre 12 meses anteriores a nenhum mês, "
+            "então a alíquota de todos eles vem do valor informado acima. "
+            "Com 13 meses de histórico este cálculo liga sozinho."
+        ),
         "rbt12_ajuda": (
             "Soma de tudo que a empresa faturou nos últimos 12 meses "
             "(o 'RBT12'). Está no extrato do Simples (PGDAS-D) que o "
@@ -416,6 +445,17 @@ T = {
         "monitorando": "Watching the file — save the spreadsheet and see it here.",
         "importadas": "sales imported.",
         "falha_importacao": "Could not read the file:",
+        "percentual_invalido": (
+            "I could not read '{campo}': {valor}. Type just the number, "
+            "using a comma or dot for decimals (e.g. 2.49)."
+        ),
+        "linhas_de_fora": (
+            "{ok} sales imported. {fora} of {total} rows were left out "
+            "and are in none of the numbers on this screen — see which below."
+        ),
+        "ver_de_fora": "See the rows that were left out",
+        "col_linha": "Row in your spreadsheet",
+        "col_motivo": "Why it was left out",
         "meses_demo": "Months of sample data",
         "aviso_demo": (
             "You are looking at SAMPLE DATA. Upload your spreadsheet in "
@@ -433,6 +473,22 @@ T = {
             "Services = III to V. Your accountant knows yours."
         ),
         "rbt12": "Revenue over the last 12 months (R$)",
+        "rbt12_movel": "Compute the tax rate month by month (rolling RBT12)",
+        "rbt12_movel_ajuda": (
+            "Under Simples, each month's rate comes from the revenue of the "
+            "12 months BEFORE it (LC 123/2006, art. 18, § 1). Only possible "
+            "for months where your file covers those 12 months in full; for "
+            "the others the value you entered above applies."
+        ),
+        "rbt12_movel_aplicada": (
+            "Rate computed from your own file for {n} of {total} months; "
+            "the rest use the revenue you entered."
+        ),
+        "rbt12_movel_sem_janela": (
+            "Your file does not yet cover 12 months before any month, so "
+            "every month uses the value entered above. With 13 months of "
+            "history this turns on by itself."
+        ),
         "rbt12_ajuda": (
             "Everything the company billed in the last 12 months (the "
             "'RBT12'). Found in the monthly Simples statement (PGDAS-D). "
@@ -597,7 +653,7 @@ T = {
 }
 
 with st.sidebar:
-    idioma = st.radio("Idioma / Language", ["PT", "EN"], horizontal=True)
+    idioma = st.radio("Idioma / Language", ["PT", "EN"], horizontal=True, key="idioma")
 lang = "pt" if idioma == "PT" else "en"
 t = T[lang]
 rotulos = ROTULOS_SIMPLES_PT if lang == "pt" else ROTULOS_EN
@@ -632,13 +688,70 @@ def _rotulo_opcao(opcao: str, textos: dict) -> str:
     return opcao
 
 
+def _percentual(rotulo: str, padrao: str, ajuda: str, textos: dict, chave: str):
+    """Lê um percentual da barra lateral como texto e devolve ``Decimal``.
+
+    O `st.number_input` devolveria `float` — e float em número que
+    multiplica dinheiro é justamente o que a regra da casa proíbe.
+
+    Não pode ser cacheada: desenha um widget, e widget dentro de função
+    com cache é erro do Streamlit.
+    """
+    bruto = st.text_input(rotulo, value=padrao, help=ajuda, key=chave)
+    try:
+        return decimal_de_texto(bruto, rotulo)
+    except ValueError:
+        st.error(textos["percentual_invalido"].format(campo=rotulo, valor=bruto))
+        st.stop()
+
+
+def _transacoes_do_resultado(resultado, textos: dict) -> list:
+    """Mostra o que entrou, o que ficou de fora e devolve as vendas boas.
+
+    A regra da casa é que nenhuma linha suma em silêncio: quando o
+    arquivo tem linha estragada, o lojista vê quantas ficaram de fora, o
+    número de cada uma na planilha dele e o motivo — e os totais da tela
+    são só das linhas que entraram.
+    """
+    if not resultado.transacoes:
+        st.error(f"{textos['falha_importacao']} {resultado.resumo()}")
+        st.stop()
+    if not resultado.rejeitadas:
+        st.success(f"{len(resultado.transacoes)} {textos['importadas']}")
+        return resultado.transacoes
+    st.warning(
+        textos["linhas_de_fora"].format(
+            ok=len(resultado.transacoes),
+            fora=len(resultado.rejeitadas),
+            total=resultado.total_lidas,
+        )
+    )
+    with st.expander(textos["ver_de_fora"]):
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        textos["col_linha"]: r.numero,
+                        textos["col_motivo"]: r.motivo,
+                    }
+                    for r in resultado.rejeitadas
+                ]
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+    return resultado.transacoes
+
+
 @st.cache_resource(show_spinner=False)
 def _retriever_cacheado() -> Retriever:
     return Retriever()
 
 
 @st.cache_data(show_spinner=False)
-def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> dict:
+def _resultados_cacheados(
+    transacoes: tuple, config, tabela, atividade: str, rbt12_movel: bool = False
+) -> dict:
     """Roda os quatro motores uma vez por (dados, config) — não por clique.
 
     Com bases reais (dezenas de milhares de vendas), decompor venda a
@@ -651,9 +764,11 @@ def _resultados_cacheados(transacoes: tuple, config, tabela, atividade: str) -> 
         tabela,
         ParametrosDiagnostico(atividade=atividade),
         retriever=_retriever_cacheado(),
+        rbt12_movel=rbt12_movel,
     )
     return {
         "decomposicao": analise.decomposicao,
+        "rbt12_mensal": analise.rbt12_mensal,
         "resumo": analise.resumo_executivo(),
         "mensal": analise.mensal,
         "lucro": analise.lucro_acumulado(),
@@ -833,14 +948,15 @@ with st.sidebar:
     monitorar = False
     with st.expander(t["tempo_real"]):
         caminho_arquivo = st.text_input(
-            t["caminho_arquivo"], help=t["tempo_real_ajuda"]
+            t["caminho_arquivo"], help=t["tempo_real_ajuda"], key="caminho_arquivo"
         ).strip()
         monitorar = st.toggle(t["monitorar"], value=bool(caminho_arquivo))
     linhas_brutas = None
     if upload is not None:
         try:
-            transacoes = carregar_transacoes(upload, name=upload.name)
-            st.success(f"{len(transacoes)} {t['importadas']}")
+            transacoes = _transacoes_do_resultado(
+                carregar_com_relatorio(upload, name=upload.name), t
+            )
         except (ValueError, TypeError) as erro:
             upload.seek(0)
             try:
@@ -850,8 +966,9 @@ with st.sidebar:
                 st.stop()
     elif caminho_arquivo:
         try:
-            transacoes = carregar_transacoes(caminho_arquivo)
-            st.success(f"{len(transacoes)} {t['importadas']}")
+            transacoes = _transacoes_do_resultado(
+                carregar_com_relatorio(caminho_arquivo), t
+            )
             if monitorar:
                 st.info(t["monitorando"])
         except (ValueError, TypeError, OSError, ImportError) as erro:
@@ -931,23 +1048,30 @@ with st.sidebar:
         )
         if rbt12_sugerida:
             st.caption(t["rbt12_sugerida"])
+        usar_rbt12_movel = st.toggle(
+            t["rbt12_movel"],
+            value=False,
+            help=t["rbt12_movel_ajuda"],
+            key="rbt12_movel",
+        )
         config = ConfigTributaria(
             regime="simples", anexo_simples=anexo, rbt12=Decimal(int(rbt12))
         )
     else:
+        usar_rbt12_movel = False
         das = st.number_input(t["das"], 1, 500, 76, help=t["das_ajuda"])
         config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal(int(das)))
 
     st.header(t["passo3"])
-    taxa_adq = st.number_input(
-        t["taxa_adq"], 0.0, 10.0, 2.0, 0.1, help=t["taxa_adq_ajuda"]
-    )
-    taxa_ant = st.number_input(
-        t["taxa_ant"], 0.0, 10.0, 1.99, 0.01, help=t["taxa_ant_ajuda"]
-    )
+    # Percentual entra como TEXTO, não `st.number_input`: aquele widget
+    # devolve `float`, e este número multiplica cada venda da base. Com o
+    # parser da planilha (`decimal_de_texto`) o valor vira Decimal direto,
+    # e a regra da casa segue com uma exceção só — a do openpyxl.
+    taxa_adq = _percentual(t["taxa_adq"], "2,00", t["taxa_adq_ajuda"], t, "taxa_adq")
+    taxa_ant = _percentual(t["taxa_ant"], "1,99", t["taxa_ant_ajuda"], t, "taxa_ant")
     tabela = TabelaCustos(
-        taxa_adquirencia=Decimal(str(taxa_adq)) / 100,
-        taxa_antecipacao_mensal=Decimal(str(taxa_ant)) / 100,
+        taxa_adquirencia=taxa_adq / 100,
+        taxa_antecipacao_mensal=taxa_ant / 100,
     )
     atividade = st.selectbox(
         t["atividade"],
@@ -978,14 +1102,29 @@ if monitorar and caminho_arquivo:
 
 # Motores rodam uma vez por (dados, config) via cache; a fachada fica
 # disponível para as ações sob demanda (simular, preço, PDF, busca legal).
-res = _resultados_cacheados(tuple(transacoes), config, tabela, atividade)
+res = _resultados_cacheados(
+    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel
+)
 analise = AnalisadorMargem(
     transacoes,
     config,
     tabela,
     ParametrosDiagnostico(atividade=atividade),
     retriever=_retriever_cacheado(),
+    rbt12_movel=usar_rbt12_movel,
 )
+if usar_rbt12_movel:
+    # Honestidade na tela: dizer em quantos meses a alíquota saiu do
+    # próprio arquivo e em quantos veio do valor que o lojista digitou.
+    _com_janela = sum(1 for v in res["rbt12_mensal"].values() if v)
+    if _com_janela:
+        st.caption(
+            t["rbt12_movel_aplicada"].format(
+                n=_com_janela, total=len(res["rbt12_mensal"])
+            )
+        )
+    else:
+        st.info(t["rbt12_movel_sem_janela"])
 decomposicao = res["decomposicao"]
 resumo = res["resumo"]
 
@@ -1022,9 +1161,7 @@ with aba_resumo:
     )
 
     st.subheader(t["para_onde"])
-    st.altair_chart(
-        _grafico_destino(decomposicao, rotulos, t), use_container_width=True
-    )
+    st.altair_chart(_grafico_destino(decomposicao, rotulos, t), width="stretch")
 
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
@@ -1112,7 +1249,7 @@ with aba_vendas:
                 for p in produtos
             ]
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader(t["receita_por_canal"])
@@ -1128,7 +1265,7 @@ with aba_vendas:
                 for canal, valor in por_canal.items()
             ]
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     with st.expander(t["todas_vendas"]):
@@ -1136,7 +1273,7 @@ with aba_vendas:
             por_venda = res["por_venda"]
             frame["margem"] = [float(v.margem_liquida) for v in por_venda]
             frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
-        st.dataframe(frame, use_container_width=True, height=320)
+        st.dataframe(frame, width="stretch", height=320)
 
 # ---------------------------------------------------------------------------
 with aba_historico:
@@ -1195,7 +1332,7 @@ with aba_historico:
                     for mes, d in mensal.items()
                 ]
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.subheader(t["hist_margem"])
         st.altair_chart(
@@ -1210,7 +1347,7 @@ with aba_historico:
                 ],
                 modo="linha",
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.subheader(t["hist_lucro"])
         st.altair_chart(
@@ -1221,7 +1358,7 @@ with aba_historico:
                 ],
                 modo="area",
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
         st.subheader(t["hist_tabela"])
@@ -1239,7 +1376,7 @@ with aba_historico:
                 for mes, d in mensal.items()
             ]
         )
-        st.dataframe(historico, use_container_width=True)
+        st.dataframe(historico, width="stretch")
         st.download_button(
             t["baixar_hist"],
             data=historico.to_csv(index=False).encode("utf-8"),

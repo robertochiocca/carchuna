@@ -44,6 +44,7 @@ from carchuna.metricas import (
     lucro_acumulado,
     maior_queda_margem,
     margem_mensal,
+    rbt12_por_mes,
     serie_margem_pct,
 )
 from carchuna.rag.retrieval import Retriever
@@ -150,6 +151,7 @@ class AnalisadorMargem:
         tabela: TabelaCustos | None = None,
         parametros: ParametrosDiagnostico | None = None,
         retriever: Retriever | None = None,
+        rbt12_movel: bool = False,
     ):
         if not transacoes:
             raise ValueError("`transacoes` não pode ser vazio.")
@@ -158,6 +160,11 @@ class AnalisadorMargem:
         self.tabela = tabela or TabelaCustos()
         self.parametros = parametros or ParametrosDiagnostico()
         self._retriever = retriever
+        # Tributar cada mês pela RBT12 dos seus 12 meses anteriores
+        # (LC 123/2006, art. 18, § 1º) em vez de repetir a informada.
+        # Só afeta a série mensal; o total do período segue a informada,
+        # porque a janela de 12 meses do período inteiro não existe.
+        self.rbt12_movel = rbt12_movel
 
     # -- construtores alternativos ------------------------------------------
 
@@ -200,7 +207,18 @@ class AnalisadorMargem:
     @cached_property
     def mensal(self) -> dict[str, DecomposicaoMargem]:
         """Decomposição mês a mês ("AAAA-MM")."""
-        return margem_mensal(self.transacoes, self.config, self.tabela)
+        return margem_mensal(
+            self.transacoes, self.config, self.tabela, rbt12_movel=self.rbt12_movel
+        )
+
+    @cached_property
+    def rbt12_mensal(self) -> dict[str, Decimal | None]:
+        """RBT12 móvel de cada mês; ``None`` onde o arquivo não cobre a janela.
+
+        Serve para a tela dizer de onde veio a alíquota de cada mês em
+        vez de o lojista ter que adivinhar.
+        """
+        return rbt12_por_mes(self.transacoes)
 
     def margem_por_venda(self) -> list[MargemVenda]:
         """A margem real de cada venda, decomposta pelo mesmo motor testado.

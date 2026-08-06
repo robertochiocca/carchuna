@@ -84,7 +84,8 @@ def test_erros_de_importacao(tmp_path):
 
     sem_coluna = tmp_path / "sem_coluna.csv"
     sem_coluna.write_text("data,canal\n2026-05-01,shopee\n")
-    with pytest.raises(ValueError, match="obrigatórias"):
+    # colunas ausentes do cabeçalho: erro do arquivo, com dica de onde achar
+    with pytest.raises(ValueError, match="valor_bruto"):
         carregar_transacoes(sem_coluna)
 
     formato = tmp_path / "vendas.txt"
@@ -146,7 +147,8 @@ def test_transacoes_de_mapa_com_constantes():
     assert transacoes[0].valor_bruto == Decimal("129.90")
     assert transacoes[0].frete_pago == Decimal("0")
 
-    with pytest.raises(ValueError, match="obrigatórias"):
+    # mapa incompleto: as células chegam vazias, erro por linha
+    with pytest.raises(ValueError, match="vazia"):
         transacoes_de_mapa(linhas, {"data": "data do pedido"})
 
 
