@@ -291,6 +291,28 @@ T = {
             "O DAS do MEI é fixo por mês — dividi-lo por canal seria "
             "inventar número. A quebra por mês ao lado é a real."
         ),
+        "radar_titulo": "Radar do CFO",
+        "radar_caption": (
+            "Sinais achados automaticamente nos seus números — cada um "
+            "com o impacto em R$/mês, o método que o detectou e o que "
+            "fazer a respeito."
+        ),
+        "radar_vazio": (
+            "Nenhum sinal no radar — margens estáveis e sem vazamento "
+            "novo entre os meses."
+        ),
+        "radar_sev": {
+            "critico": "CRÍTICO",
+            "atencao": "ATENÇÃO",
+            "oportunidade": "OPORTUNIDADE",
+        },
+        "radar_esperado": "esperado",
+        "radar_observado": "observado",
+        "radar_metodo": "Como foi detectado:",
+        "radar_aviso": (
+            "Sinais calculados por regras transparentes, sem IA — são "
+            "pistas para investigar com seu contador, não veredito."
+        ),
         "vendas_metricas": ["Vendas", "Faturamento", "Canais", "Devoluções"],
         "campeoes": "Campeões de margem — venda mais destes",
         "campeoes_caption": (
@@ -567,6 +589,28 @@ T = {
             "channel would be making numbers up. The monthly breakdown "
             "beside is the real one."
         ),
+        "radar_titulo": "CFO radar",
+        "radar_caption": (
+            "Signals found automatically in your numbers — each with its "
+            "R$/month impact, the method that caught it and what to do "
+            "about it."
+        ),
+        "radar_vazio": (
+            "Nothing on the radar — stable margins and no new leak between months."
+        ),
+        "radar_sev": {
+            "critico": "CRITICAL",
+            "atencao": "WARNING",
+            "oportunidade": "OPPORTUNITY",
+        },
+        "radar_esperado": "expected",
+        "radar_observado": "observed",
+        "radar_metodo": "How it was detected:",
+        "radar_aviso": (
+            "Signals computed by transparent rules, no AI — leads to "
+            "investigate with your accountant, not verdicts. Narratives "
+            "are in Portuguese (the audience's language)."
+        ),
         "vendas_metricas": ["Sales", "Revenue", "Channels", "Returns"],
         "campeoes": "Margin champions — sell more of these",
         "campeoes_caption": (
@@ -802,6 +846,7 @@ def _resultados_cacheados(
         "cenarios": analise.cenarios(),
         "achados": analise.diagnosticar(),
         "oportunidades": analise.crescimento(),
+        "radar": analise.radar(),
     }
 
 
@@ -1336,6 +1381,31 @@ with aba_resumo:
             )
     else:
         st.caption(t["cachoeira_dica"])
+
+    st.subheader(t["radar_titulo"])
+    st.caption(t["radar_caption"])
+    radar = res["radar"]
+    if not radar:
+        st.success(t["radar_vazio"])
+    estilo_sev = {
+        "critico": st.error,
+        "atencao": st.warning,
+        "oportunidade": st.success,
+    }
+    for sinal in radar:
+        corpo = (
+            f"**{t['radar_sev'][sinal.severidade]} · {sinal.titulo}** — "
+            f"~{_brl(sinal.impacto_mensal)}/{t['por_mes']}\n\n{sinal.explicacao}"
+        )
+        if sinal.esperado and sinal.observado:
+            corpo += (
+                f"\n\n{t['radar_esperado']}: {sinal.esperado} · "
+                f"{t['radar_observado']}: {sinal.observado}"
+            )
+        estilo_sev[sinal.severidade](corpo)
+        st.caption(f"{t['radar_metodo']} {sinal.metodo}")
+        st.caption(sinal.caminho_pratico)
+    st.caption(t["radar_aviso"])
 
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])

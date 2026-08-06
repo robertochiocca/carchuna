@@ -484,6 +484,90 @@ def test_a_cachoeira_so_deixa_clicar_no_que_tem_composicao(app_demo):
     assert "para abrir de onde ela vem" in legendas
 
 
+def _csv_com_salto_de_comissao(caminho: Path) -> Path:
+    """Comissão em 12% da receita por 3 meses e 20% no quarto.
+
+    O salto é medido contra a própria série do arquivo, então o impacto
+    de 8 p.p. sobre R$ 1.000 = R$ 80,00/mês não depende do regime nem da
+    RBT12 escolhidos na barra lateral — o que deixa o teste conferir o
+    número exato sem replicar a configuração da tela.
+    """
+    linhas = [
+        "data;canal;produto;valor_bruto;custo_produto;frete_pago;comissao_cobrada"
+    ]
+    for mes in (1, 2, 3):
+        linhas.append(f"15/{mes:02d}/2026;shopee;Capa;1000,00;0,00;0,00;120,00")
+    linhas.append("15/04/2026;shopee;Capa;1000,00;0,00;0,00;200,00")
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    return caminho
+
+
+def test_o_radar_mostra_os_mesmos_sinais_que_o_motor(tmp_path):
+    """Todo sinal do motor chega à tela, com impacto, método e caminho.
+
+    Mesmo espírito do teste da cachoeira: não basta a seção existir. Cada
+    sinal que o motor produz tem que aparecer com o seu título e o seu
+    impacto, e nenhum pode chegar sem dizer como foi detectado — que é a
+    diferença entre um radar e um palpite com cara de alerta.
+    """
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.dados import carregar_com_relatorio
+    from carchuna.margem import ConfigTributaria
+
+    arquivo = _csv_com_salto_de_comissao(tmp_path / "vendas.csv")
+    teste = _rodar_com_arquivo(arquivo)
+    assert not teste.exception
+
+    resultado = carregar_com_relatorio(arquivo)
+    radar = AnalisadorMargem(
+        resultado.transacoes,
+        ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("4200000")),
+    ).radar()
+    assert radar, "o arquivo foi montado para acender o radar"
+
+    tela = " ".join(
+        [e.value for e in teste.error]
+        + [w.value for w in teste.warning]
+        + [s.value for s in teste.success]
+        + [str(c.value) for c in teste.caption]
+    )
+    for sinal in radar:
+        assert sinal.titulo in tela
+        assert sinal.metodo in tela
+        assert sinal.caminho_pratico in tela
+
+    # o salto de comissão: 8 p.p. sobre R$ 1.000 no mês = R$ 80,00/mês
+    salto = [s for s in radar if s.categoria == "comissoes_canal_pct"]
+    assert [s.impacto_mensal for s in salto] == [Decimal("80.00")]
+    assert "R$ 80,00" in tela
+
+
+def test_nenhum_sinal_do_radar_chega_sem_metodo_e_sem_nota_de_confianca(tmp_path):
+    """A regra da casa, cobrada na fronteira da tela."""
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.dados import carregar_com_relatorio
+    from carchuna.margem import ConfigTributaria
+
+    arquivo = _csv_com_salto_de_comissao(tmp_path / "vendas.csv")
+    radar = AnalisadorMargem(
+        carregar_com_relatorio(arquivo).transacoes,
+        ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("4200000")),
+    ).radar()
+    for sinal in radar:
+        assert sinal.metodo
+        assert sinal.confianca.pct > 0
+        assert sinal.aviso
+
+
+def test_sem_sinal_o_radar_diz_que_esta_limpo(app_demo):
+    """Seção vazia é pior que seção ausente: o radar fala quando cala."""
+    from carchuna.analise import AnalisadorMargem
+
+    assert AnalisadorMargem.demo(meses=6).radar() == []
+    sucessos = " ".join(s.value for s in app_demo.success)
+    assert "Nenhum sinal no radar" in sucessos
+
+
 def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     """'dois e meio' vira frase de lojista, não ValueError na tela."""
     teste = _rodar()
