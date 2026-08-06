@@ -2,13 +2,13 @@
 
 # Carchuna
 
-**Inteligência de margem para o PME brasileiro. Você fatura 400; a Carchuna mostra, com prova, por que sobra 8 — e onde está o caminho para sobrar (e faturar) mais.**
+**Toda calculadora de lucro de marketplace pede que você digite o seu percentual de imposto; a Carchuna calcula esse percentual a partir da lei — pelo seu anexo, pela sua faixa e pelo mês de apuração — e é por isso que dá para ver o fundo da sua margem.**
 
 *(Como a praia de Carchuna, na costa de Granada: águas transparentes onde se vê o fundo.)*
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-214%2F214-2ee6d6.svg)](tests/)
+[![Testes](https://img.shields.io/badge/testes-290%2F290-2ee6d6.svg)](tests/)
 [![Cobertura](https://img.shields.io/badge/cobertura-98%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -26,9 +26,22 @@
 
 ## O problema
 
-O lojista faz a conta ingênua — **receita − custo do produto = "lucro"** — mas o lucro morre no caminho: impostos, comissão de marketplace, taxa da maquininha, antecipação de recebíveis, frete, devoluções. O CNPJ típico deste estudo fatura **~R$ 400 mil/mês e lucra ~2%**, vende no Mercado Livre/Shopee/Amazon, está no Simples Nacional e **não sabe exatamente onde a margem morre**. Não pode pagar CFO (R$ 15–30 mil/mês) nem tributarista por hora.
+O lojista faz a conta ingênua — **receita − custo do produto = "lucro"** — mas o lucro morre no caminho: impostos, comissão de marketplace, taxa da maquininha, antecipação, frete, devoluções. O CNPJ típico deste estudo fatura **~R$ 400 mil/mês e lucra ~2%**, vende no Mercado Livre/Shopee/Amazon, está no Simples Nacional e não pode pagar CFO nem tributarista por hora.
 
-A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot — todo número sai de um motor determinístico testado, e **a IA entra depois do cálculo, nunca antes**.
+Refazer essa conta com as taxas certas é a parte que o mercado brasileiro já resolve: conciliadores pedido a pedido e calculadoras gratuitas de lucro de marketplace fazem isso. Só que todos eles pedem uma coisa que o lojista não tem — **o percentual de imposto**. As ferramentas de precificação e conciliação que consultei trazem esse número como *entrada do usuário*: um campo em branco, com um rótulo do tipo "Imposto cobrado (%): Simples Nacional, etc.".
+
+O lojista digita 6% porque "está no Simples", e o resto da conta herda esse chute com aparência de cálculo. E ele não erra por descuido: **a alíquota efetiva não é um número que se saiba de cabeça**. Ela muda por anexo, muda por faixa de faturamento e muda **de um mês para o outro**, porque a lei manda calcular cada mês de apuração sobre a receita dos doze meses anteriores àquele mês (LC 123/2006, art. 18, § 1º e § 1º-A). Só dentro do Anexo I, a alíquota efetiva sai de 4,00% com RBT12 de R$ 180 mil e chega a 11,88% com RBT12 de R$ 3,6 milhões (números do próprio motor, conferíveis em `margem.py`) — a mesma loja, crescendo, paga percentuais diferentes ao longo do próprio ano. Quem digitou 6% e paga 11,88% errou quase seis pontos percentuais, e esse erro não estraga um item do relatório: ele incide sobre o faturamento inteiro e contamina todo número que vier depois.
+
+É por isso que a Carchuna não tem esse campo. A alíquota é derivada da fórmula do art. 18, § 1º-A, com os Anexos I–V (redação da LC 155/2016), e a RBT12 é sugerida a partir do próprio arquivo de vendas — mês a mês, com recusa honesta nos meses em que o arquivo não cobre a janela inteira dos doze meses.
+
+> Todo mundo reconcilia o que o marketplace já te cobrou.
+> A Carchuna calcula o que **a lei** te cobra.
+
+A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot — todo número sai de um motor determinístico testado, e **a IA entra depois do cálculo, nunca antes**. Três coisas sustentam isso:
+
+- **O motor é reversível.** `crescimento.py` inverte o mesmo `decompor_margem` para dar preço de equilíbrio e preço-alvo. Diagnóstico e precificação não podem divergir: é o mesmo código nas duas direções.
+- **O crescimento é amarrado à faixa do Simples.** Sublimite de ICMS/ISS, fim de faixa, teto de exclusão — quanto ainda cabe faturar antes de a conta mudar.
+- **Dinheiro é `Decimal`, e a identidade contábil é testada.** Deduções + margem == receita, centavo a centavo, em cada mês e no período inteiro. Auditabilidade, não estética.
 
 ## O fluxo do produto
 
@@ -121,11 +134,16 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 
 | Módulo | Status |
 |---|---|
-| `margem.py` — decomposição com alíquota efetiva do Simples (LC 123/2006, art. 18, § 1º-A; Anexos I–V) | pronto — implementado e testado |
-| `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio"), **margem venda a venda** e **margem por produto** (campeões e vilões do catálogo) | pronto — implementado e testado |
+| `margem.py` — **a alíquota não é digitada, é derivada**: fórmula do art. 18, § 1º-A da LC 123/2006 com os Anexos I–V (redação da LC 155/2016), RBT12 sugerida do próprio arquivo de vendas e **alíquota por mês de apuração**, calculada sobre os doze meses anteriores àquele mês | pronto — implementado e testado |
+| `metricas.py` — **RBT12 móvel mês a mês** (art. 18, § 1º): cada mês é tributado pela receita dos seus doze meses anteriores; nos meses em que o arquivo não cobre a janela inteira vale a RBT12 informada, e a tela diz quantos meses foram de cada tipo — em vez de completar o buraco com zero. Também: margem mês a mês, maior queda, instabilidade, lucro acumulado e a decomposição do Δlucro entre dois meses pela identidade contábil | pronto — implementado e testado |
+| `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio"), **margem venda a venda**, **margem por produto** (campeões e vilões do catálogo) e a composição de cada dedução por canal e por mês | pronto — implementado e testado |
 | `dados.py` — importação de export CRU de marketplace: encoding do Excel BR (latin-1/cp1252), linhas de título antes do cabeçalho, separador `;`/`,`/tab, vírgula decimal, datas em formatos mistos, **relatório de linhas recusadas** e mensagem que diz onde achar a coluna que faltou + PDF com tabela no layout do modelo (beta) + dados sintéticos reprodutíveis | pronto — implementado e testado (fixtures cruas em `tests/fixtures/reais/`) |
-| `metricas.py` — margem mês a mês, maior queda, instabilidade, lucro acumulado | pronto — implementado e testado |
-| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal** | pronto — implementado e testado |
+| `tipos.py` — a coluna de devolução do marketplace vem como **status** ("Solicitação aprovada", "Em análise"), não como sim/não: separa tipo físico, tipo estatístico e significado de negócio, e nunca converte status intermediário em silêncio | pronto — implementado e testado |
+| `linhagem.py` — a ficha de "como chegamos a este número": arquivo de origem, colunas usadas, transformações da importação, fórmula com os parâmetros do caso, premissas, limitações, base legal e hora do cálculo | pronto — implementado e testado |
+| `confianca.py` — nota 0–100 explicável (evidência, histórico, amostra, completude), com o motivo de cada componente em texto; separa "os dados mostram isso" de "esta é uma hipótese" | pronto — implementado e testado |
+| `insights.py` — radar de margem: detecção estatística (z-score com cerca de IQR, média móvel, divergência receita × lucro) e narrativa com esperado × observado, impacto em R$/mês e o **método declarado na tela** | pronto — implementado e testado |
+| `benchmarks.py` — comparações com `tipo_fonte` explícito, incluindo `indisponivel` quando não há fonte gratuita auditável | pronto — implementado e testado |
+| `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal**, **subir os preços X%** (com a premissa de volume constante no nome do cenário) | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
 | `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | bloqueado por humano — conferir cada dispositivo na fonte oficial e virar `revisado: true` no arquivo; só o Roberto (ou um advogado) pode fazer isso |
@@ -139,7 +157,6 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `app.py` — dashboard Streamlit com 7 abas em linguagem de lojista (Resumo, Vendas e Produtos, Histórico, E se…?, Crescer, Diagnóstico Legal, Relatório), bilíngue PT/EN | pronto — implementado e testado (`streamlit.testing.v1.AppTest`) |
 | Autenticação da API (PBKDF2 + Bearer) e persistência (SQLAlchemy; SQLite → PostgreSQL via env) | roadmap — quando houver piloto multiusuário |
 | Regime **Lucro Presumido** | roadmap — cada alíquota de ICMS/ISS depende do estado e do município, e a regra da casa é não publicar alíquota que não foi validada em fonte oficial |
-| RBT12 móvel mês a mês nas séries (LC 123/2006, art. 18, § 1º) | pronto — implementado e testado: cada mês é tributado pela receita dos seus 12 meses anteriores, e nos meses em que o arquivo não cobre a janela inteira vale a RBT12 informada — a tela diz quantos meses foram de cada tipo, em vez de completar o buraco com zero |
 | Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano — depende de contrato com o agregador e de credenciais; sem isso não se escreve integração |
 | MCP server (consultar a Carchuna por assistentes de IA) | roadmap — a API `/api/v1` já expõe o motor; o MCP só faz sentido depois de um piloto que peça esse acesso |
 | Busca semântica (embeddings/ChromaDB, opt-in) | roadmap — o BM25 com sinônimos do lojista responde o corpus de 21 dispositivos; embeddings só se pagam com corpus grande |
@@ -155,7 +172,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 214 testes
+pip install pytest && pytest          # 290 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -195,7 +212,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (214 testes, cobertura 98%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (290 testes, cobertura 98,40%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -203,7 +220,11 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## English version
 
-**Carchuna** — verifiable margin intelligence for Brazilian SMBs. It rebuilds a seller's real margin deterministically (taxes, marketplace fees, card acquiring, receivables prepayment, freight, returns, COGS) — for the period, per month and **per sale** — quantifies where profit died ("R$ 833k of margin lost; 35% came from marketplace fees"), simulates alternatives (channel migration, fee shocks, tax bracket changes) and only then uses RAG over official legal sources to explain, with citations. **AI comes after the math, never before.** Third project of an Andalusian trilogy ([Calahonda](https://github.com/robertochiocca/calahonda) → quant, [DireitoAberto](https://github.com/robertochiocca/direitoaberto) → legal RAG).
+**Carchuna** — every marketplace profit calculator asks the seller to *type in* their tax rate. Carchuna **derives** it from the statute: the formula in art. 18, § 1º-A of Brazil's LC 123/2006, annexes I–V, with the twelve-month revenue base read from the seller's own sales file — and a **separate rate for each accrual month**, computed over the twelve months preceding that month, refusing to guess when the file doesn't cover the full window.
+
+Everybody reconciles what the marketplace already charged you. Carchuna computes what **the law** charges you.
+
+From there it rebuilds the real margin deterministically (taxes, marketplace fees, card acquiring, receivables prepayment, freight, returns, COGS) — for the period, per month and **per sale** — quantifies where profit died ("R$ 833k of margin lost; 35% came from marketplace fees"), simulates alternatives (channel migration, fee shocks, price increases, tax bracket changes) and only then uses RAG over official legal sources to explain, with citations. **AI comes after the math, never before.** Third project of an Andalusian trilogy ([Calahonda](https://github.com/robertochiocca/calahonda) → quant, [DireitoAberto](https://github.com/robertochiocca/direitoaberto) → legal RAG).
 
 Core principles: every output is either computed by tested code or cited from an official source with a link; graceful degradation (fully functional without any API key); money is `Decimal`, never `float` (serialized as strings over the API); legal corpus entries ship with `"revisado": false` until human review; object-oriented engines behind stable interfaces (`AnalisadorMargem` facade, `Cenario`/`RegraDeteccao` class hierarchies); honest README separating implemented (tests + CI) from roadmap.
 
@@ -211,7 +232,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 214 tests, 98% coverage
+pytest                                        # 290 tests, 98.40% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```
