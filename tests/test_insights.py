@@ -375,5 +375,142 @@ def test_radar_ordena_por_severidade_e_todo_sinal_traz_metodo_e_confianca():
         assert i.aviso
 
 
+# ---------------------------------------------------------------------------
+# Evidência calculada × estimada
+# ---------------------------------------------------------------------------
+
+
+def test_sinal_que_depende_de_premissa_se_declara_estimado():
+    """Quem assume uma coisa que os dados não dizem vale 15 pontos a menos.
+
+    A margem magra promete um ganho que só existe se o volume não cair
+    com o reajuste — premissa, não dado. Pela rubrica isso é evidência
+    ``estimado``: 25 pontos em vez de 40.
+    """
+    vendas = [
+        _venda(
+            "100", 5, custo=Decimal("66.35"), frete=Decimal("10"), produto="Capinha"
+        ),
+        _venda("100", 5, custo=Decimal("20"), frete=Decimal("5"), produto="Fone"),
+    ]
+    (i,) = MotorInsights().radar(vendas, CONFIG)
+    assert i.categoria == "margem_magra"
+    assert i.base_evidencia == "estimado"
+    evidencia = next(c for c in i.confianca.componentes if c.nome == "evidencia")
+    assert evidencia.pontos == 25
+    assert "premissa" in evidencia.motivo
+
+
+def test_o_frete_por_pedido_tambem_e_estimado_porque_compara_com_media_movel():
+    """O "esperado" é uma média móvel — projeção, não afirmação dos dados."""
+    vendas = []
+    for m in (1, 2, 3):
+        vendas += [_venda("1000", m, frete=Decimal("10")) for _ in range(2)]
+    vendas += [_venda("1000", 4, frete=Decimal("15")) for _ in range(2)]
+    (i,) = MotorInsights().radar(vendas, CONFIG)
+    assert i.categoria == "frete_por_pedido"
+    assert i.base_evidencia == "estimado"
+    assert (
+        next(c for c in i.confianca.componentes if c.nome == "evidencia").pontos == 25
+    )
+
+
+def test_sinal_que_sai_do_extrato_e_da_lei_se_declara_calculado():
+    """O contraste: nada aqui foi assumido, então vale os 40 pontos."""
+    vendas = [_venda("1000", m, comissao_cobrada=Decimal("120")) for m in (1, 2, 3)] + [
+        _venda("1000", 4, comissao_cobrada=Decimal("200"))
+    ]
+    (i,) = DeducaoForaDoPadrao().avaliar(_ctx(vendas))
+    assert i.base_evidencia == "calculado"
+    assert (
+        next(c for c in i.confianca.componentes if c.nome == "evidencia").pontos == 40
+    )
+
+
+def test_a_rubrica_nao_tem_ramo_inalcancavel_no_radar():
+    """As duas naturezas de evidência existem de verdade em produção.
+
+    Antes desta correção todo sinal se declarava `calculado`, e o ramo
+    `estimado` da rubrica só era exercitado por teste — uma regra viva no
+    papel e morta no código.
+    """
+    import inspect
+
+    from carchuna import insights
+
+    fonte = inspect.getsource(insights)
+    assert 'base_evidencia="calculado"' in fonte
+    assert 'base_evidencia="estimado"' in fonte
+
+
+# ---------------------------------------------------------------------------
+# O radar não repete trabalho
+# ---------------------------------------------------------------------------
+
+
+def test_a_serie_mensal_e_decomposta_uma_vez_por_radar(monkeypatch):
+    """Cinco análises, uma decomposição — não uma por quem perguntar.
+
+    Três análises leem `ctx.mensal`. Enquanto isso era `@property`, a base
+    inteira era redecomposta a cada leitura: o mesmo trabalho, três vezes,
+    invisível em teste e visível só na base de um lojista de verdade.
+    """
+    from carchuna import insights as modulo
+
+    chamadas = []
+    original = modulo.margem_mensal
+
+    def contando(*args, **kwargs):
+        chamadas.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(modulo, "margem_mensal", contando)
+
+    vendas = [
+        _venda("1000", m, comissao_cobrada=Decimal("120"), frete=Decimal("10"))
+        for m in range(1, 6)
+    ]
+    MotorInsights().radar(vendas, CONFIG)
+    assert len(chamadas) == 1
+
+
+def test_a_nota_de_confianca_nao_e_recalculada_por_sinal(monkeypatch):
+    """A rubrica varre a base inteira; varrer uma vez por linha da tela é desperdício.
+
+    São no máximo duas notas por radar — uma por natureza de evidência —
+    por mais sinais que a tela mostre.
+    """
+    from carchuna import insights as modulo
+
+    chamadas = []
+    original = modulo.avaliar_confianca
+
+    def contando(transacoes, base="calculado"):
+        chamadas.append(base)
+        return original(transacoes, base=base)
+
+    monkeypatch.setattr(modulo, "avaliar_confianca", contando)
+
+    # base montada para acender vários sinais de uma vez
+    vendas = [
+        _venda("1000", m, comissao_cobrada=Decimal("120"), frete=Decimal("10"))
+        for m in (1, 2, 3)
+    ]
+    vendas += [
+        _venda(
+            "1000",
+            4,
+            comissao_cobrada=Decimal("300"),
+            frete=Decimal("40"),
+            custo=Decimal("900"),
+            produto="Capinha",
+        )
+    ]
+    sinais = MotorInsights().radar(vendas, CONFIG)
+    assert len(sinais) >= 2
+    assert len(chamadas) <= 2
+    assert len(set(chamadas)) == len(chamadas)  # nenhuma natureza repetida
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

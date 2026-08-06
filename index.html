@@ -196,16 +196,22 @@ footer a:hover{color:var(--agua-suave)}
     <span lang-en>Carchuna · Portfolio project · Fintech + Legaltech · Python</span>
   </div>
   <h1>
-    <span lang-pt>Você fatura 400.<br>Sobra 8. A <span class="acc">Carchuna</span><br><span class="dim">mostra por quê — com prova.</span></span>
-    <span lang-en>You bill 400.<br>8 is left. <span class="acc">Carchuna</span><br><span class="dim">shows why — with proof.</span></span>
+    <span lang-pt>Todo mundo pede<br>a sua alíquota. A <span class="acc">Carchuna</span><br><span class="dim">calcula ela pela lei.</span></span>
+    <span lang-en>Everyone asks you<br>to type your tax rate. <span class="acc">Carchuna</span><br><span class="dim">derives it from the statute.</span></span>
   </h1>
   <p>
-    <span lang-pt>Inteligência de margem <strong>verificável</strong> para o PME brasileiro que vende em
-     marketplace, usa maquininha e está no Simples Nacional. Todo número é
+    <span lang-pt>As calculadoras de lucro de marketplace têm um campo em branco escrito
+     "Imposto (%)" — e o lojista não sabe a própria alíquota efetiva, porque ela muda
+     por anexo, por faixa e <strong>por mês</strong>. A Carchuna <strong>deriva</strong> esse
+     percentual da lei (LC 123/2006, art. 18, § 1º-A, Anexos I–V), com a receita dos doze
+     meses anteriores tirada do seu próprio arquivo de vendas. Todo número é
      <strong>calculado por código testado</strong>; toda base legal é
      <strong>citada de fonte oficial</strong>. A IA entra depois do cálculo, nunca antes.</span>
-    <span lang-en><strong>Verifiable</strong> margin intelligence for Brazilian SMBs selling on
-     marketplaces, using card machines, taxed under Simples Nacional. Every number is
+    <span lang-en>Marketplace profit calculators have a blank field labelled "Tax (%)" — and the
+     seller doesn't know their own effective rate, because it changes by annex, by revenue
+     bracket and <strong>by month</strong>. Carchuna <strong>derives</strong> that rate from
+     the statute (Brazil's LC 123/2006, art. 18, § 1º-A, annexes I–V), reading the trailing
+     twelve-month revenue from the seller's own sales file. Every number is
      <strong>computed by tested code</strong>; every legal claim is
      <strong>cited from an official source</strong>. AI comes after the math, never before.</span>
   </p>
@@ -215,8 +221,8 @@ footer a:hover{color:var(--agua-suave)}
     <a class="btn btn-ghost" href="https://github.com/robertochiocca/carchuna" target="_blank" rel="noopener"><span lang-pt>Código no GitHub</span><span lang-en>Code on GitHub</span></a>
   </div>
   <div class="hero-metricas">
-    <div class="m"><b>94</b><span lang-pt>testes, todos verdes</span><span lang-en>tests, all green</span></div>
-    <div class="m"><b>97%</b><span lang-pt>cobertura de código</span><span lang-en>code coverage</span></div>
+    <div class="m"><b>315</b><span lang-pt>testes, todos verdes</span><span lang-en>tests, all green</span></div>
+    <div class="m"><b>98%</b><span lang-pt>cobertura de código</span><span lang-en>code coverage</span></div>
     <div class="m"><b>21</b><span lang-pt>dispositivos legais citados</span><span lang-en>cited legal provisions</span></div>
     <div class="m"><b>0</b><span lang-pt>floats em campo de dinheiro</span><span lang-en>floats in money fields</span></div>
   </div>
@@ -232,9 +238,13 @@ footer a:hover{color:var(--agua-suave)}
   <h2><span lang-pt>O raio-X de uma venda de R$ 100</span><span lang-en>The X-ray of a R$ 100 sale</span></h2>
   <p class="sub">
     <span lang-pt>A conta que o lojista faz é "100 − 40 de custo = 60 de lucro". A conta real,
-     dedução a dedução — cada linha com fonte (lei, contrato ou tabela editável):</span>
+     dedução a dedução — cada linha com fonte (lei, contrato ou tabela editável). Repare na
+     primeira: ela é a única que ninguém digitou. A alíquota do Simples sai da fórmula do
+     art. 18, § 1º-A, e não de um campo em branco:</span>
     <span lang-en>The seller's mental math is "100 − 40 cost = 60 profit". The real math,
-     deduction by deduction — each line with a source (law, contract or editable table):</span>
+     deduction by deduction — each line with a source (law, contract or editable table).
+     Look at the first one: it's the only figure nobody typed in. The Simples rate comes out
+     of the formula in art. 18, § 1º-A — not out of a blank field:</span>
   </p>
   <div class="tabela-raio">
     <table>
