@@ -412,6 +412,78 @@ def test_a_taxa_digitada_chega_inteira_ao_motor(tmp_path):
     assert _foi_embora("2,49") - _foi_embora("2,00") == Decimal("4.90")
 
 
+def _dados_do_grafico(elemento) -> dict:
+    """Os números que o gráfico realmente mandou para a tela."""
+    import io
+
+    import pyarrow as pa
+
+    fluxo = io.BytesIO(elemento.proto.datasets[0].data.data)
+    return pa.ipc.open_stream(fluxo).read_all().to_pydict()
+
+
+def _cachoeira(teste):
+    """A cachoeira do Resumo, achada pela seleção que só ela tem."""
+    graficos = [
+        el
+        for el in teste.main
+        if el.type == "vega_lite_chart" and "ponto" in list(el.proto.selection_mode)
+    ]
+    assert len(graficos) == 1, "a cachoeira clicável tem que existir, uma só"
+    return graficos[0]
+
+
+def test_a_cachoeira_da_margem_bate_degrau_a_degrau_com_o_motor(app_demo):
+    """Cada degrau da cachoeira é uma dedução do motor, na ordem do motor.
+
+    Não basta o gráfico aparecer: o primeiro degrau tem que sair do
+    faturamento, cada dedução tem que descer exatamente o seu valor, e o
+    último degrau tem que pousar na margem líquida. Se a UI e o motor
+    discordarem em um centavo, o desenho está contando outra história.
+    """
+    from carchuna.analise import AnalisadorMargem
+
+    decomposicao = AnalisadorMargem.demo(meses=6).decomposicao
+    dados = _dados_do_grafico(_cachoeira(app_demo))
+
+    esperado = ["receita"] + [d.nome for d in decomposicao.deducoes] + ["margem"]
+    assert dados["nome"] == esperado
+
+    # a barra do faturamento vai de zero ao total do motor
+    assert Decimal(str(dados["fim"][0])) == decomposicao.receita_bruta
+
+    # cada degrau desce exatamente o valor da sua dedução, partindo de onde
+    # o degrau anterior parou
+    acumulado = decomposicao.receita_bruta
+    for passo, deducao in enumerate(decomposicao.deducoes, start=1):
+        assert Decimal(str(dados["fim"][passo])) == acumulado
+        acumulado -= deducao.valor
+        assert Decimal(str(dados["inicio"][passo])) == acumulado
+
+    # e o que sobra depois do último degrau é a margem líquida
+    assert acumulado == decomposicao.margem_liquida
+    assert Decimal(str(dados["fim"][-1])) == decomposicao.margem_liquida
+
+
+def test_a_cachoeira_so_deixa_clicar_no_que_tem_composicao(app_demo):
+    """Faturamento e margem não são deduções: não abrem drill-down.
+
+    O clique nelas é ignorado no app; aqui a garantia é que elas estão
+    marcadas com um `tipo` diferente, que é o que a tela usa para
+    distinguir — e que a dica de uso aparece enquanto nada foi clicado.
+    """
+    dados = _dados_do_grafico(_cachoeira(app_demo))
+    tipos = dict(zip(dados["nome"], dados["tipo"], strict=True))
+    assert tipos["receita"] == "receita"
+    assert tipos["margem"] == "margem"
+    assert {tipos[n] for n in dados["nome"] if n not in ("receita", "margem")} == {
+        "deducao"
+    }
+
+    legendas = " ".join(c.value for c in app_demo.caption)
+    assert "para abrir de onde ela vem" in legendas
+
+
 def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     """'dois e meio' vira frase de lojista, não ValueError na tela."""
     teste = _rodar()
