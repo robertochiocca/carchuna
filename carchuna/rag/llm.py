@@ -16,7 +16,187 @@ try:
 except ImportError:  # dependência opcional
     anthropic = None
 
-MODEL = os.environ.get("CARCHUNA_MODEL", "claude-opus-4-8")
+# O modelo é configurável por ambiente; este é o padrão de quem clona o
+# repositório e não configura nada. Escolha deliberada de um modelo da
+# faixa intermediária: a tarefa aqui é redigir, em português, um texto
+# que já vem com os dispositivos legais e os números prontos no contexto
+# — não é raciocínio pesado, e o padrão não deve queimar o crédito de
+# quem só quer ver o projeto rodando.
+MODELO_PADRAO = "claude-sonnet-5"
+
+
+def modelo_configurado() -> str:
+    """Qual modelo a narrativa vai usar (lido do ambiente a cada chamada).
+
+    Lido na hora, e não uma vez na importação, para que trocar
+    ``CARCHUNA_MODEL`` valha sem reimportar o módulo — o dashboard e a
+    API vivem em processos longos.
+    """
+    return os.environ.get("CARCHUNA_MODEL") or MODELO_PADRAO
+
+
+def _credencial_no_ambiente() -> bool:
+    """Se há credencial da API exportada no ambiente.
+
+    Vale como diagnóstico, **não** como porteiro: o SDK também aceita
+    perfil de credencial gravado em disco, e barrar a chamada por
+    ausência das variáveis recusaria quem autenticou por esse caminho.
+    Por isso a geração continua sendo tentada; o que esta função alimenta
+    é a mensagem de `/api/v1/saude`.
+    """
+    return bool(
+        os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    )
+
+
+# A última falha da geração, guardada para a tela poder dizer o que houve.
+# É diagnóstico de processo, não estado de negócio: some quando o
+# processo morre, e a próxima chamada bem-sucedida a limpa.
+_ULTIMA_FALHA: str | None = None
+
+# Erro conhecido do SDK → o que o lojista (ou quem operou a subida) faz a
+# respeito. O que não estiver aqui cai na rede de segurança, que nomeia a
+# classe em vez de engolir o erro.
+_MOTIVO_POR_ERRO: dict[str, str] = {
+    "AuthenticationError": (
+        "a credencial da API foi recusada. Confira o valor de "
+        "`ANTHROPIC_API_KEY` — ela pode ter expirado ou sido revogada."
+    ),
+    "PermissionDeniedError": (
+        "a credencial não tem permissão para este modelo. Confira o plano "
+        "da conta ou troque `CARCHUNA_MODEL`."
+    ),
+    "NotFoundError": (
+        "o modelo configurado não existe para esta credencial. Confira "
+        "`CARCHUNA_MODEL` — o padrão da Carchuna é `{padrao}`."
+    ),
+    "RateLimitError": (
+        "a API recusou por limite de uso. Tente de novo em instantes; o "
+        "diagnóstico continua saindo em modo extrativo enquanto isso."
+    ),
+    "APIConnectionError": (
+        "não consegui falar com a API (rede, proxy ou DNS). O diagnóstico "
+        "não depende disto e continua saindo."
+    ),
+    "APITimeoutError": (
+        "a API demorou demais para responder. Tente de novo; o cálculo "
+        "não depende disto."
+    ),
+}
+
+
+def _erros_do_sdk() -> tuple[type[BaseException], ...]:
+    """As classes de erro que o SDK levanta, resolvidas em tempo de execução.
+
+    Resolvidas por nome, e não importadas no topo, por duas razões: o
+    pacote é dependência opcional (pode não existir), e a hierarquia de
+    erros dele já mudou de nome entre versões. Uma classe que não exista
+    na versão instalada simplesmente não entra na tupla, e o erro
+    correspondente cai na rede de segurança — que registra em vez de
+    engolir.
+    """
+    if anthropic is None:
+        return ()
+    nomes = ("APIError", "APIConnectionError", "APIStatusError", "AnthropicError")
+    return tuple(
+        classe
+        for nome in nomes
+        if isinstance(classe := getattr(anthropic, nome, None), type)
+        and issubclass(classe, BaseException)
+    )
+
+
+def _registrar_falha(erro: BaseException, *, prevista: bool) -> None:
+    """Guarda por que a narrativa não saiu, em português e sem segredo.
+
+    Registra a CLASSE da exceção e uma frase escrita por nós — nunca a
+    mensagem crua do SDK, que é texto de terceiro e pode carregar
+    fragmento de credencial, URL interna ou payload.
+    """
+    global _ULTIMA_FALHA
+    classe = type(erro).__name__
+    motivo = _MOTIVO_POR_ERRO.get(classe)
+    if motivo:
+        _ULTIMA_FALHA = motivo.format(padrao=MODELO_PADRAO)
+    elif prevista:
+        _ULTIMA_FALHA = (
+            f"a API respondeu com erro ({classe}). O diagnóstico continua "
+            "saindo em modo extrativo, com os dispositivos legais citados."
+        )
+    else:
+        # A rede de segurança. Cair aqui é sinal de que algo mudou por
+        # baixo (assinatura do SDK, dependência) — por isso a classe
+        # aparece: some do silêncio e vira coisa investigável.
+        _ULTIMA_FALHA = (
+            f"falha inesperada na geração ({classe}). Isto não deveria "
+            "acontecer: vale abrir uma issue. O cálculo da margem não "
+            "depende da narrativa e continua correto."
+        )
+
+
+def _limpar_falha() -> None:
+    global _ULTIMA_FALHA
+    _ULTIMA_FALHA = None
+
+
+def ultima_falha() -> str | None:
+    """A última falha da geração, ou ``None`` se a última chamada deu certo."""
+    return _ULTIMA_FALHA
+
+
+def _ligada() -> bool:
+    """Se a Carchuna vai sequer tentar gerar a narrativa.
+
+    Duas condições, e credencial não é uma delas — ver
+    ``_credencial_no_ambiente``.
+    """
+    return anthropic is not None and os.environ.get("CARCHUNA_USAR_LLM", "1") == "1"
+
+
+def estado_da_geracao() -> dict:
+    """O que a Carchuna sabe dizer sobre a narrativa opcional, sem chamá-la.
+
+    Existe porque "a narrativa não apareceu" tinha exatamente uma
+    explicação visível — nenhuma. Sem pacote, sem credencial, desligada
+    por variável ou com modelo trocado, o efeito na tela era o mesmo
+    texto extrativo, e quem estava subindo a Carchuna não tinha como
+    saber em qual dos casos estava. O ``motivo`` diz qual é e o que
+    fazer a respeito.
+
+    Nunca devolve a credencial nem parte dela — só se existe.
+    """
+    if anthropic is None:
+        motivo = (
+            "O pacote `anthropic` não está instalado. A Carchuna funciona "
+            "inteira sem ele (modo extrativo, com os dispositivos legais "
+            "citados); para ligar a narrativa em linguagem natural, instale "
+            "o extra: `pip install -e .[llm]`."
+        )
+    elif os.environ.get("CARCHUNA_USAR_LLM", "1") != "1":
+        motivo = (
+            "A narrativa está desligada por `CARCHUNA_USAR_LLM`. Defina "
+            "`CARCHUNA_USAR_LLM=1` para ligá-la."
+        )
+    elif not _credencial_no_ambiente():
+        motivo = (
+            "Não encontrei credencial da API nas variáveis de ambiente. "
+            "Exporte `ANTHROPIC_API_KEY` antes de subir a Carchuna. Se você "
+            "autenticou por perfil gravado em disco, ignore este aviso: a "
+            "chamada será tentada assim mesmo. De todo modo o diagnóstico "
+            "sai igual, em modo extrativo — o cálculo nunca dependeu disto."
+        )
+    else:
+        # Nada falta na configuração: se a narrativa não saiu, foi a
+        # chamada que falhou — e aí o motivo é o da última tentativa.
+        motivo = _ULTIMA_FALHA
+    return {
+        "disponivel": _ligada(),
+        "credencial_no_ambiente": _credencial_no_ambiente(),
+        "modelo": modelo_configurado(),
+        "motivo": motivo,
+        "ultima_falha": _ULTIMA_FALHA,
+    }
+
 
 SYSTEM_PROMPT = """\
 Você é o assistente da Carchuna, plataforma de diagnóstico de margem para \
@@ -50,14 +230,12 @@ def _montar_contexto(dispositivos) -> str:
 
 def gerar_resposta(pergunta: str, dispositivos) -> str | None:
     """Gera a resposta com o LLM. Retorna ``None`` se ele estiver indisponível."""
-    if anthropic is None or not dispositivos:
-        return None
-    if os.environ.get("CARCHUNA_USAR_LLM", "1") != "1":
+    if not dispositivos or not _ligada():
         return None
     try:
         client = anthropic.Anthropic()
         response = client.messages.create(
-            model=MODEL,
+            model=modelo_configurado(),
             max_tokens=2048,
             system=[
                 {
@@ -80,9 +258,17 @@ def gerar_resposta(pergunta: str, dispositivos) -> str | None:
         if response.stop_reason == "refusal":
             return None
         texto = "".join(b.text for b in response.content if b.type == "text").strip()
+        _limpar_falha()
         return texto or None
-    except Exception:
-        # Sem credenciais, sem rede ou erro da API: cai no modo extrativo.
+    except _erros_do_sdk() as erro:
+        # Erro previsto do SDK: cai no modo extrativo, mas dizendo por quê.
+        _registrar_falha(erro, prevista=True)
+        return None
+    except Exception as erro:
+        # Rede de segurança: o app não pode cair porque a narrativa OPCIONAL
+        # falhou. Mas silêncio aqui foi o defeito original — o erro fica
+        # registrado com o nome da classe e aparece na tela.
+        _registrar_falha(erro, prevista=False)
         return None
 
 

@@ -8,7 +8,7 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-315%2F315-2ee6d6.svg)](tests/)
+[![Testes](https://img.shields.io/badge/testes-339%2F339-2ee6d6.svg)](tests/)
 [![Cobertura](https://img.shields.io/badge/cobertura-98%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
@@ -17,6 +17,10 @@
 **[App ao vivo / Live app](https://carchuna.streamlit.app)** · **[Site do projeto](https://robertochiocca.github.io/carchuna/)** · **[Tutorial para leigos (do zero)](TUTORIAL.md)** · **[Tutorial em PDF](docs/TUTORIAL.pdf)**
 
 [Português](#o-problema) · [English](#english-version)
+
+<br>
+
+<img src="docs/img/cunha-tributaria.svg" alt="Dois caminhos até a margem real: nas outras ferramentas a alíquota vem de um campo em branco que o lojista digita; na Carchuna ela é derivada da RBT12 do próprio arquivo pela fórmula do art. 18, § 1º-A da LC 123/2006." width="880">
 
 </div>
 
@@ -41,7 +45,7 @@ A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot
 
 - **O motor é reversível.** `crescimento.py` inverte o mesmo `decompor_margem` para dar preço de equilíbrio e preço-alvo. Diagnóstico e precificação não podem divergir: é o mesmo código nas duas direções.
 - **O crescimento é amarrado à faixa do Simples.** Sublimite de ICMS/ISS, fim de faixa, teto de exclusão — quanto ainda cabe faturar antes de a conta mudar.
-- **Dinheiro é `Decimal`, e a identidade contábil é testada.** Deduções + margem == receita, centavo a centavo, em cada mês e no período inteiro. Auditabilidade, não estética.
+- **Dinheiro é `Decimal`, e o número é reconferido por outro caminho.** A margem é recomposta lançamento a lançamento e comparada com a do motor, dentro de tolerância declarada — dois caminhos, duas somas. É essa conferência que pode falhar, e é por isso que ela vale.
 
 ## O fluxo do produto
 
@@ -67,7 +71,15 @@ A palavra-chave do produto é **verificável**: nenhum número sai de um chatbot
    legal/IA        Bacen…) — depois do cálculo, com aviso em toda resposta
 ```
 
-A venda de R$ 100 decomposta pelo motor (caso conferido à mão nos testes):
+A venda de R$ 100 decomposta pelo motor — caso conferido à mão nos testes, e as barras do desenho estão em escala (250 px valem R$ 100):
+
+<div align="center">
+
+<img src="docs/img/raio-x-de-cem-reais.svg" alt="A conta ingênua de uma venda de R$ 100 dá 60% de margem; a conta real, depois de tributo, comissão, frete e custo do produto, deixa R$ 32,35 — 32,35%." width="880">
+
+</div>
+
+Os mesmos números, com a fonte de cada dedução anotada:
 
 ```
 Receita bruta:                 R$ 100,00
@@ -134,10 +146,11 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 
 | Módulo | Status |
 |---|---|
-| `margem.py` — **a alíquota não é digitada, é derivada**: fórmula do art. 18, § 1º-A da LC 123/2006 com os Anexos I–V (redação da LC 155/2016), RBT12 sugerida do próprio arquivo de vendas e **alíquota por mês de apuração**, calculada sobre os doze meses anteriores àquele mês | pronto — implementado e testado |
+| `margem.py` — **a alíquota não é digitada, é derivada**: fórmula do art. 18, § 1º-A da LC 123/2006 com os Anexos I–V (redação da LC 155/2016), RBT12 sugerida do próprio arquivo de vendas e **alíquota por mês de apuração**, calculada sobre os doze meses anteriores àquele mês. Traz também as três conferências (identidade estrutural, reconciliação independente e faixa de plausibilidade) | pronto — implementado e testado |
 | `metricas.py` — **RBT12 móvel mês a mês** (art. 18, § 1º): cada mês é tributado pela receita dos seus doze meses anteriores; nos meses em que o arquivo não cobre a janela inteira vale a RBT12 informada, e a tela diz quantos meses foram de cada tipo — em vez de completar o buraco com zero. Também: margem mês a mês, maior queda, instabilidade, lucro acumulado e a decomposição do Δlucro entre dois meses pela identidade contábil | pronto — implementado e testado |
 | `analise.py` — fachada `AnalisadorMargem`, resumo executivo ("quanto se perdeu e de onde veio"), **margem venda a venda**, **margem por produto** (campeões e vilões do catálogo) e a composição de cada dedução por canal e por mês | pronto — implementado e testado |
 | `dados.py` — importação de export CRU de marketplace: encoding do Excel BR (latin-1/cp1252), linhas de título antes do cabeçalho, separador `;`/`,`/tab, vírgula decimal, datas em formatos mistos, **relatório de linhas recusadas** e mensagem que diz onde achar a coluna que faltou + PDF com tabela no layout do modelo (beta) + dados sintéticos reprodutíveis | pronto — implementado e testado (fixtures cruas em `tests/fixtures/reais/`) |
+| `validade.py` — o motor se recusa a responder onde não há resposta: `ok`, `indefinido` e `implausivel` com motivo em PT-BR, mais os limiares de plausibilidade e as tolerâncias de arredondamento, todos num lugar só | pronto — implementado e testado |
 | `tipos.py` — a coluna de devolução do marketplace vem como **status** ("Solicitação aprovada", "Em análise"), não como sim/não: separa tipo físico, tipo estatístico e significado de negócio, e nunca converte status intermediário em silêncio | pronto — implementado e testado |
 | `linhagem.py` — a ficha de "como chegamos a este número": arquivo de origem, colunas usadas, transformações da importação, fórmula com os parâmetros do caso, premissas, limitações, base legal e hora do cálculo | pronto — implementado e testado |
 | `confianca.py` — nota 0–100 explicável (evidência, histórico, amostra, completude), com o motivo de cada componente em texto; separa "os dados mostram isso" de "esta é uma hipótese" | pronto — implementado e testado |
@@ -173,7 +186,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 315 testes
+pip install pytest && pytest          # 339 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -201,11 +214,21 @@ Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrati
 
 ## Como cada número ganha lastro
 
+<div align="center">
+
+<img src="docs/img/tres-conferencias.svg" alt="Três conferências diferentes: a identidade estrutural fecha por definição e não pode falhar; a reconciliação refaz a margem por um segundo caminho e pode falhar; a faixa de plausibilidade carimba o valor que não cabe em realidade contábil." width="880">
+
+</div>
+
 - **Tributos**: fórmula oficial da alíquota efetiva (LC 123/2006, art. 18, § 1º-A) com os Anexos I–V na redação da LC 155/2016, validada por testes calculados à mão — inclusive o degrau da 6ª faixa, em que o ICMS/ISS saem da guia pelo sublimite (arts. 19 e 20). A conferência automática no Planalto foi tentada em 19/07/2026 (portal retornou HTTP 503 a robôs); a data e a ressalva estão documentadas em `carchuna/margem.py`.
 - **Comissões/adquirência/antecipação**: tabelas **editáveis pelo usuário**, com defaults documentados com fonte e marcados `estimado` — o seu contrato prevalece.
-- **Invariante contábil testado**: soma das deduções + margem líquida == receita bruta, centavo a centavo.
+- **Três conferências diferentes, e cada uma responde por uma coisa só** — a distinção existe porque durante muito tempo eu chamei a primeira de "validação", e ela não é:
+  - **Identidade estrutural** (deduções + margem == receita). Prova que o código não perdeu nem duplicou um termo na soma. **Não** prova que os números são válidos e **não** detecta entrada absurda: a margem é construída como resíduo, então a igualdade fecha por definição. Rodando o motor com uma comissão de 900% da receita, a margem sai em −1854% e a identidade fecha normalmente. É teste de regressão de implementação, e é só isso.
+  - **Reconciliação independente** (`margem.reconciliar`). Recompõe a margem lançamento a lançamento, a partir dos campos crus, sem passar pela decomposição — dois caminhos, duas somas — e compara com tolerância de **R$ 0,07**, que é meio centavo por linha arredondada e nada além disso. Esta asserção **pode** falhar, e é ela que valida o número: se o motor cobrar CMV sobre uma venda devolvida, a identidade continua fechando e esta não.
+  - **Faixa de plausibilidade** (`margem.conferir_plausibilidade`). Dedução isolada maior que o faturamento do período, ou margem fora da faixa de −100% a 100%, saem carimbadas como `implausivel`, com o motivo em português na tela — sem limitar, zerar ou esconder o valor. Os limiares vivem todos em `carchuna/validade.py`, com o porquê de cada um escrito ao lado.
+- **Quando não há número, o motor diz isso.** Variação percentual sobre base zero ou negativa é `indefinido`, não um percentual com o sinal trocado: melhorar de −100 para −50 apareceria como queda de 50%. Onde o percentual não vale, respondem a variação em reais e em pontos de margem, que atravessam o zero sem mentir.
 - **Base legal dos achados**: apenas o que o `Retriever` recuperou do corpus versionado — com link oficial e status de revisão em cada citação. Fluxo: pergunta → busca no corpus → recuperação dos trechos → LLM interpreta (opcional) → cita fonte → aviso.
-- **Excel**: células numéricas chegam como `float` do openpyxl; a conversão passa por `str()` e esta é a única exceção documentada à regra do `Decimal` — prefira CSV. Os campos de percentual da barra lateral do dashboard **não** são a segunda exceção: eles são lidos como texto e convertidos pelo mesmo parser das planilhas (`decimal_de_texto`), justamente porque `st.number_input` devolveria `float` — e esse número multiplica cada venda da base. Os `float()` que aparecem no `app.py` e no `relatorio.py` são de desenho de gráfico e de PDF: recebem um `Decimal` já calculado e não voltam para o cálculo.
+- **Excel**: o arquivo `.xlsx` guarda a célula em ponto flutuante — o erro é anterior à Carchuna, e nenhuma conversão desfaz o que já foi arredondado. O que dá para fazer é não deixá-lo entrar: todo `float` que vem de planilha é quantizado a centavos com `ROUND_HALF_UP` na fronteira, antes de virar `Decimal`. Então a garantia é **"o motor nunca calcula em `float`"** — e ela não se estende ao que o Excel arredondou antes de o arquivo chegar. Para dinheiro com mais de duas casas, prefira CSV. Os campos de percentual da barra lateral do dashboard **não** são a segunda exceção: eles são lidos como texto e convertidos pelo mesmo parser das planilhas (`decimal_de_texto`), justamente porque `st.number_input` devolveria `float` — e esse número multiplica cada venda da base. Os `float()` que aparecem no `app.py` e no `relatorio.py` são de desenho de gráfico e de PDF: recebem um `Decimal` já calculado e não voltam para o cálculo.
 
 ## O que a Carchuna **não** é (anti-escopo)
 
@@ -213,7 +236,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (315 testes, cobertura 98,52%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), invariantes contábeis e a API respondida com os mesmos centavos do motor.
+`pytest` (339 testes, cobertura 98,58%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), reconciliação da margem por um segundo caminho e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -233,7 +256,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 315 tests, 98.52% coverage
+pytest                                        # 339 tests, 98.58% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```

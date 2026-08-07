@@ -38,6 +38,7 @@ from carchuna.margem import (
     Transacao,
     decompor_margem,
 )
+from carchuna.validade import Resultado, variacao_percentual
 
 
 def _mes_de(data) -> str:
@@ -51,7 +52,49 @@ def _mes_anterior(mes: str, quantos: int = 1) -> str:
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
 
 
-def rbt12_movel(transacoes: list[Transacao], mes: str) -> Decimal | None:
+@dataclass(frozen=True)
+class JanelaRBT12:
+    """De onde saiu a RBT12 de um mês — e o que o lojista decidiu a respeito.
+
+    A recusa de calcular a RBT12 do arquivo é conservadora de propósito
+    (ver ``rbt12_movel``), mas conservadora e silenciosa é uma combinação
+    ruim: o lojista via a alíquota informada valer em meses que ele acha
+    que o arquivo cobria, sem nada explicando a diferença. Este registro é
+    o que permite dizer, mês a mês, qual caminho a conta tomou.
+    """
+
+    mes: str
+    valor: Decimal | None
+    origem: str  # "arquivo" ou "informada"
+    lacunas: tuple[str, ...] = ()
+    confirmada: bool = False
+
+    @property
+    def tem_lacuna(self) -> bool:
+        return bool(self.lacunas)
+
+
+def lacunas_na_janela(transacoes: list[Transacao], mes: str) -> tuple[str, ...]:
+    """Meses da janela sem nenhum lançamento **entre** dois que têm.
+
+    A distinção é o ponto. Um arquivo que começa tarde não tem lacuna:
+    ele simplesmente não alcança o começo da janela, e ninguém pode
+    confirmar como "venda zero" um período que o arquivo nunca cobriu. Já
+    o buraco no meio é uma pergunta respondível — o lojista sabe se
+    faturou naquele mês —, e é a única coisa que ele pode confirmar.
+    """
+    janela = [_mes_anterior(mes, n) for n in range(12, 0, -1)]  # em ordem
+    presentes = {_mes_de(t.data) for t in transacoes}
+    dentro = [m for m in janela if m in presentes]
+    if len(dentro) < 2:
+        return ()
+    primeiro, ultimo = dentro[0], dentro[-1]
+    return tuple(m for m in janela if primeiro < m < ultimo and m not in presentes)
+
+
+def rbt12_movel(
+    transacoes: list[Transacao], mes: str, confirmar_lacunas: bool = False
+) -> Decimal | None:
     """Receita bruta acumulada nos 12 meses ANTERIORES a ``mes`` ("AAAA-MM").
 
     É a RBT12 do art. 18, § 1º, da LC 123/2006: o mês de apuração não
@@ -59,38 +102,84 @@ def rbt12_movel(transacoes: list[Transacao], mes: str) -> Decimal | None:
     da receita bruta (art. 3º, § 1º) — a mesma base que
     ``decompor_margem`` usa para o tributo do mês.
 
-    Devolve ``None`` quando o arquivo **não cobre os 12 meses inteiros**
-    da janela. Essa recusa é o ponto: um arquivo que começa no meio faria
-    os meses ausentes valerem zero, e zero puxaria a alíquota para baixo
-    sem que ninguém percebesse. A Carchuna não sabe distinguir "não
-    vendeu" de "o dado não veio" — então não chuta, e quem chama usa a
-    RBT12 que o lojista informou.
+    Devolve ``None`` quando o arquivo **não tem linha em cada um dos 12
+    meses** da janela. Essa recusa é o ponto: mês ausente valeria zero, e
+    zero puxa a alíquota para baixo sem que ninguém perceba. A Carchuna
+    não sabe distinguir "não vendeu" de "o dado não veio" — então não
+    chuta, e quem chama usa a RBT12 que o lojista informou.
+
+    Não basta o arquivo COMEÇAR antes da janela: exportar "os últimos 3
+    meses" e juntar com um arquivo velho produz um arquivo que começa
+    cedo e tem dez meses faltando no meio. Por isso a conferência é mês a
+    mês, e não pela primeira data.
+
+    ``confirmar_lacunas=True`` é o lojista respondendo à pergunta que a
+    Carchuna não sabe responder: os meses vazios do MEIO da janela são
+    faturamento zero, e não dado que faltou. Só isso ele pode confirmar —
+    um arquivo que começa depois do início da janela continua devolvendo
+    ``None`` mesmo com a confirmação, porque ali não há nada para
+    confirmar (ver ``lacunas_na_janela``).
     """
     if not transacoes:
         return None
-    inicio = _mes_anterior(mes, 12)
-    fim = _mes_anterior(mes, 1)
-    primeiro_do_arquivo = min(_mes_de(t.data) for t in transacoes)
-    if primeiro_do_arquivo > inicio:
+    janela = {_mes_anterior(mes, n) for n in range(1, 13)}
+    meses_do_arquivo = {_mes_de(t.data) for t in transacoes}
+    faltando = janela - meses_do_arquivo
+    if faltando and not (
+        confirmar_lacunas and faltando <= set(lacunas_na_janela(transacoes, mes))
+    ):
         return None
     return sum(
         (
             t.valor_bruto
             for t in transacoes
-            if inicio <= _mes_de(t.data) <= fim and not t.devolvida
+            if _mes_de(t.data) in janela and not t.devolvida
         ),
         Decimal("0"),
     )
 
 
-def rbt12_por_mes(transacoes: list[Transacao]) -> dict[str, Decimal | None]:
+def procedencia_rbt12(
+    transacoes: list[Transacao], confirmar_lacunas: bool = False
+) -> dict[str, JanelaRBT12]:
+    """A RBT12 de cada mês do arquivo, com a procedência ao lado do número.
+
+    É esta função que a tela usa para avisar o lojista: ela sabe quais
+    meses estão vazios no meio da janela, e portanto qual pergunta fazer
+    ("foi mês sem faturamento ou o arquivo está incompleto?").
+    """
+    resultado: dict[str, JanelaRBT12] = {}
+    for mes in sorted({_mes_de(t.data) for t in transacoes}):
+        valor = rbt12_movel(transacoes, mes, confirmar_lacunas=confirmar_lacunas)
+        lacunas = lacunas_na_janela(transacoes, mes)
+        # RBT12 zerada não serve para a fórmula, que divide por ela — nesse
+        # caso a conta usa a informada, e a procedência tem de dizer isso.
+        do_arquivo = valor is not None and valor > 0
+        resultado[mes] = JanelaRBT12(
+            mes=mes,
+            valor=valor,
+            origem="arquivo" if do_arquivo else "informada",
+            lacunas=lacunas,
+            confirmada=bool(lacunas) and confirmar_lacunas and do_arquivo,
+        )
+    return resultado
+
+
+def rbt12_por_mes(
+    transacoes: list[Transacao], confirmar_lacunas: bool = False
+) -> dict[str, Decimal | None]:
     """RBT12 móvel de cada mês do arquivo, em ordem cronológica.
 
     ``None`` no mês significa "não dá para calcular do arquivo" — quem
-    mostra isso na tela deve dizer que ali vale a RBT12 informada.
+    mostra isso na tela deve dizer que ali vale a RBT12 informada. Para
+    saber POR QUE deu ``None``, use ``procedencia_rbt12``.
     """
-    meses = sorted({_mes_de(t.data) for t in transacoes})
-    return {mes: rbt12_movel(transacoes, mes) for mes in meses}
+    return {
+        mes: janela.valor
+        for mes, janela in procedencia_rbt12(
+            transacoes, confirmar_lacunas=confirmar_lacunas
+        ).items()
+    }
 
 
 def margem_mensal(
@@ -98,6 +187,7 @@ def margem_mensal(
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
     rbt12_movel: bool = False,
+    confirmar_lacunas: bool = False,
 ) -> dict[str, DecomposicaoMargem]:
     """Decomposição completa da margem para cada mês ("AAAA-MM"), em ordem.
 
@@ -121,7 +211,7 @@ def margem_mensal(
             for mes, grupo in sorted(por_mes.items())
         }
 
-    janelas = rbt12_por_mes(transacoes)
+    janelas = rbt12_por_mes(transacoes, confirmar_lacunas=confirmar_lacunas)
     series = {}
     for mes, grupo in sorted(por_mes.items()):
         janela = janelas.get(mes)
@@ -207,30 +297,52 @@ class Contribuicao:
     nome: str
     rotulo: str
     delta_reais: Decimal  # sinal do efeito no LUCRO (negativo = pressionou)
+    delta_pp: Decimal  # o mesmo efeito em pontos de margem — sempre definido
     pct_da_pressao: Decimal  # fatia entre os fatores que empurraram no
     # sentido da variação (0 quando empurrou contra)
 
 
 @dataclass(frozen=True)
 class ExplicacaoVariacao:
-    """Δlucro entre dois meses decomposto pela identidade contábil."""
+    """Por que o lucro mudou entre dois meses, em três moedas.
+
+    A moeda principal são **pontos de margem** (p.p.), e a escolha tem
+    motivo. Margem é lucro sobre receita, e receita é estritamente
+    positiva, então a diferença entre duas margens está sempre definida —
+    inclusive quando o lucro atravessa o zero, que é justamente onde o
+    percentual de lucro passa a mentir. Além disso ela é aditiva: a soma
+    dos ``delta_pp`` das contribuições reproduz o ``delta_margem_pp``
+    exatamente, porque ``margem% = 100 − Σ (dedução como % da receita)``.
+    E é a linguagem que o lojista já usa: "caí três pontos de margem".
+
+    ``delta_lucro`` em reais também está sempre definido.
+
+    ``var_lucro_pct`` e ``var_receita_pct`` são ``Resultado``: viram
+    ``indefinido`` quando a base do mês anterior não é estritamente
+    positiva, em vez de devolver um percentual com o sinal trocado.
+    """
 
     mes_a: str
     mes_b: str
-    var_receita_pct: Decimal
-    var_lucro_pct: Decimal
-    delta_lucro: Decimal
+    var_receita_pct: Resultado
+    var_lucro_pct: Resultado
+    delta_lucro: Decimal  # R$ — sempre definido
+    delta_margem_pp: Decimal  # pontos de margem — sempre definido
     contribuicoes: tuple[Contribuicao, ...]  # ordenadas pelo efeito
 
     def frase(self) -> str:
         """O resumo no formato do CFO: causa principal e secundária."""
         direcao = "caiu" if self.delta_lucro < 0 else "subiu"
-        pressoes = [c for c in self.contribuicoes if c.pct_da_pressao > 0]
+        if self.var_lucro_pct.ok:
+            quanto = f"{abs(self.var_lucro_pct.valor)}%"
+        else:
+            # base não positiva: o percentual mentiria, então some da frase
+            quanto = f"{abs(self.delta_margem_pp)} ponto(s) de margem"
         frase = (
-            f"De {self.mes_a} para {self.mes_b}, a receita variou "
-            f"{self.var_receita_pct:+}% e o lucro {direcao} "
-            f"{abs(self.var_lucro_pct)}% (R$ {abs(self.delta_lucro)})."
+            f"De {self.mes_a} para {self.mes_b}, o lucro {direcao} {quanto} "
+            f"(R$ {abs(self.delta_lucro)})."
         )
+        pressoes = [c for c in self.contribuicoes if c.pct_da_pressao > 0]
         if pressoes:
             principal = pressoes[0]
             frase += (
@@ -249,11 +361,18 @@ def explicar_variacao(
 ) -> ExplicacaoVariacao:
     """Decompõe a variação do lucro de ``mes_b`` contra o mês anterior.
 
-    Identidade contábil: Δlucro = Δreceita − Σ Δdeduções — a soma das
-    contribuições fecha exatamente com a variação do lucro. A "pressão"
-    é a fatia de cada fator ENTRE os que empurraram o lucro no sentido
-    observado (queda ou alta); fatores que empurraram contra aparecem
-    com o delta em reais e pressão 0.
+    Duas decomposições, ambas exatas:
+
+    - **em reais**, pela identidade contábil ``Δlucro = Δreceita −
+      Σ Δdeduções``: a soma dos ``delta_reais`` fecha com ``delta_lucro``;
+    - **em pontos de margem**, por ``margem% = 100 − Σ pct_receita``: a
+      soma dos ``delta_pp`` fecha com ``delta_margem_pp``. A receita não
+      aparece aqui, e não é omissão — margem é razão, então crescer
+      faturando o mesmo por real não move a margem. O que move são as
+      fatias.
+
+    A "pressão" é a fatia de cada fator ENTRE os que empurraram o lucro no
+    sentido observado; quem empurrou contra aparece com o delta e pressão 0.
     """
     meses = list(mensal.items())
     if len(meses) < 2:
@@ -270,18 +389,29 @@ def explicar_variacao(
     (mes_a, dec_a), (mes_b, dec_b) = meses[idx - 1], meses[idx]
 
     delta_lucro = dec_b.margem_liquida - dec_a.margem_liquida
-    contribs = [("receita", "Receita", dec_b.receita_bruta - dec_a.receita_bruta)]
+    # A receita move o lucro em reais, mas não move a margem por si só:
+    # entra com delta_pp zero de propósito, e o comentário existe para
+    # ninguém "consertar" isso depois achando que faltou um termo.
+    contribs = [
+        (
+            "receita",
+            "Receita",
+            dec_b.receita_bruta - dec_a.receita_bruta,
+            Decimal("0"),
+        )
+    ]
     contribs += [
         (
             d.nome,
             ROTULOS_DEDUCOES.get(d.nome, d.nome),
             -(d.valor - dec_a.deducao(d.nome).valor),
+            -(d.pct_receita - dec_a.deducao(d.nome).pct_receita),
         )
         for d in dec_b.deducoes
     ]
     sentido = -1 if delta_lucro < 0 else 1
     pressao_total = sum(
-        (abs(delta) for _, _, delta in contribs if delta * sentido > 0),
+        (abs(delta) for _, _, delta, _ in contribs if delta * sentido > 0),
         Decimal("0"),
     )
     contribuicoes = tuple(
@@ -291,32 +421,28 @@ def explicar_variacao(
                     nome=nome,
                     rotulo=rotulo,
                     delta_reais=_q2(delta),
+                    delta_pp=delta_pp,
                     pct_da_pressao=(
                         _q1(abs(delta) / pressao_total * 100)
                         if pressao_total > 0 and delta * sentido > 0
                         else Decimal("0")
                     ),
                 )
-                for nome, rotulo, delta in contribs
+                for nome, rotulo, delta, delta_pp in contribs
             ),
             key=lambda c: (-c.pct_da_pressao, -abs(c.delta_reais)),
         )
     )
-    var_receita = (
-        _q1((dec_b.receita_bruta - dec_a.receita_bruta) / dec_a.receita_bruta * 100)
-        if dec_a.receita_bruta
-        else Decimal("0")
-    )
-    var_lucro = (
-        _q1(delta_lucro / abs(dec_a.margem_liquida) * 100)
-        if dec_a.margem_liquida
-        else Decimal("0")
-    )
     return ExplicacaoVariacao(
         mes_a=mes_a,
         mes_b=mes_b,
-        var_receita_pct=var_receita,
-        var_lucro_pct=var_lucro,
+        var_receita_pct=variacao_percentual(
+            dec_a.receita_bruta, dec_b.receita_bruta, "faturamento"
+        ),
+        var_lucro_pct=variacao_percentual(
+            dec_a.margem_liquida, dec_b.margem_liquida, "lucro"
+        ),
         delta_lucro=_q2(delta_lucro),
+        delta_margem_pp=dec_b.margem_pct - dec_a.margem_pct,
         contribuicoes=contribuicoes,
     )

@@ -8,10 +8,12 @@ mesma RBT12 informada em todos os meses da série, o que achatava
 justamente a variação que o lojista quer ver.
 
 A regra de honestidade aqui: **só se calcula a RBT12 do próprio arquivo
-quando o arquivo cobre os 12 meses inteiros da janela.** Se ele começa
-no meio, os meses que faltam não valem zero — a Carchuna não sabe se
-não houve venda ou se o dado não veio. Nesses meses vale a RBT12 que o
-lojista informou, e a série diz qual foi qual.
+quando existe linha em cada um dos 12 meses da janela.** Mês que falta
+não vale zero — a Carchuna não sabe se não houve venda ou se o dado não
+veio, e as duas leituras mudam a alíquota. Vale para o arquivo que
+começa tarde e vale igual para o buraco no meio, que é a forma que sai
+de exportar "os últimos 3 meses" e juntar com um arquivo velho. Nesses
+meses vale a RBT12 que o lojista informou, e a série diz qual foi qual.
 """
 
 import sys
@@ -88,16 +90,65 @@ def test_o_primeiro_mes_com_janela_inteira_e_o_13o():
     assert rbt12_movel(vendas, "2026-01") == Decimal("120000.00")
 
 
-def test_mes_sem_venda_dentro_da_janela_conta_como_zero():
-    """Buraco no MEIO da janela é zero de verdade: o arquivo cobre o mês.
+def test_arquivo_sem_nenhuma_venda_e_none_e_nao_zero():
+    """Zero de receita e ausência de dado são coisas diferentes.
 
-    Diferente do arquivo que começa tarde — aqui o lojista tem dado de
-    antes e de depois, então o mês vazio é venda zero, não dado ausente.
+    Se esta função devolvesse `Decimal("0")` aqui, o zero cairia na
+    primeira faixa do Anexo I e o motor tributaria a 4% um arquivo sobre
+    o qual não se sabe nada.
+    """
+    assert rbt12_movel([], "2026-01") is None
+
+
+def test_buraco_no_meio_da_janela_devolve_none_como_o_arquivo_curto():
+    """Mês sem nenhuma linha no meio da janela também é dado ausente.
+
+    Esta asserção já foi o contrário, e o contrário estava errado. O
+    argumento de antes era: "tem dado antes e depois, então o mês vazio é
+    venda zero". Ele supõe que o arquivo é uma exportação COMPLETA do
+    período — e a Carchuna não tem como saber disso. Quem exporta "os
+    últimos 3 meses" e junta com um arquivo velho produz exatamente esta
+    forma, com meses que faltam por recorte e não por falta de venda.
+
+    Ausência de linha é ausência de informação nos dois casos, e a regra
+    da casa para informação ausente é não chutar. O custo é real — quem
+    de fato passou um mês sem vender perde a RBT12 do arquivo por doze
+    meses e cai na informada — e é o lado certo de errar: a informada é
+    conferível pelo lojista, o zero inventado não.
     """
     vendas = _vendas(13, "10000.00", inicio=(2025, 1))
-    # tira as vendas de 2025-06: sobram 11 meses com venda na janela
+    # tira as vendas de 2025-06: sobram 11 dos 12 meses da janela
     vendas = [v for v in vendas if not (v.data.year == 2025 and v.data.month == 6)]
-    assert rbt12_movel(vendas, "2026-01") == Decimal("110000.00")
+    assert rbt12_movel(vendas, "2026-01") is None
+
+
+def test_o_arquivo_recortado_nao_derruba_a_aliquota_em_silencio():
+    """O caso que a regra antiga deixava passar, com a conta do prejuízo.
+
+    Arquivo com 2025-01, 2025-12 e 2026-01 — dez meses faltando no meio.
+    A regra antiga só olhava o PRIMEIRO mês do arquivo: 2025-01 cobre o
+    começo da janela, então ela somava R$ 20.000 e tratava os dez meses
+    ausentes como zero.
+
+    R$ 20.000 cai na 1ª faixa do Anexo I (≤ 180.000, 4% e nada a
+    deduzir); a RBT12 informada de R$ 4.200.000 cai na 6ª (10% efetivos).
+    Sobre os R$ 30.000 de 2026-01 isso é R$ 1.200 de imposto em vez de
+    R$ 3.000: a margem do mês aparecia R$ 1.800 maior do que é, e para
+    mais — o lado que ninguém contesta olhando a tela.
+    """
+    vendas = _vendas(1, "10000.00", inicio=(2025, 1)) + _vendas(
+        2, "10000.00", inicio=(2025, 12)
+    )
+    assert sorted({f"{v.data.year}-{v.data.month:02d}" for v in vendas}) == [
+        "2025-01",
+        "2025-12",
+        "2026-01",
+    ]
+    assert rbt12_movel(vendas, "2026-01") is None
+
+    vendas_do_mes = _vendas(1, "30000.00", inicio=(2026, 1))
+    serie = margem_mensal(vendas + vendas_do_mes, CONFIG, rbt12_movel=True)
+    assert serie["2026-01"].aliquota_efetiva == Decimal("0.10")  # a informada
 
 
 def test_devolucao_sai_da_rbt12():

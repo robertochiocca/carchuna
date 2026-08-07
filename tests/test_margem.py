@@ -213,5 +213,82 @@ def test_validacoes_de_config_e_transacao():
         decompor_margem([], CONFIG_SIMPLES)
 
 
+# ---------------------------------------------------------------------------
+# Teto do MEI — o número que erra para cima
+# ---------------------------------------------------------------------------
+
+
+def _mei(valor_mensal, meses, ano=2026):
+    from carchuna.margem import Transacao
+
+    return [
+        Transacao(
+            data=date(ano, m, 15),
+            canal="loja_propria",
+            valor_bruto=Decimal(valor_mensal),
+            custo_produto=Decimal("0"),
+            frete_pago=Decimal("0"),
+        )
+        for m in range(1, meses + 1)
+    ]
+
+
+CONFIG_MEI = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76.00"))
+
+
+def test_mei_acima_do_teto_anual_e_recusado_com_base_legal():
+    """R$ 480 mil no MEI dava margem linda e nenhum aviso.
+
+    É o pior número que este produto pode emitir: erra para cima, no campo
+    em que o lojista mais confia, e o erro é de enquadramento — o custo do
+    desenquadramento retroativo é ordens de grandeza maior que a diferença
+    de imposto que a tela mostrava.
+    """
+    with pytest.raises(ValueError) as erro:
+        decompor_margem(_mei("40000", 12), CONFIG_MEI)
+    mensagem = str(erro.value)
+    assert "81.000" in mensagem or "81000" in mensagem
+    assert "art. 18-A" in mensagem
+    assert "480.000" in mensagem or "480000" in mensagem
+
+
+def test_mei_dentro_do_teto_continua_calculando():
+    d = decompor_margem(_mei("6000", 12), CONFIG_MEI)
+    assert d.receita_bruta == Decimal("72000.00")
+    assert d.deducao("tributos").valor == Decimal("912.00")  # 76 × 12
+
+
+def test_o_teto_do_mei_e_proporcional_aos_meses_do_arquivo():
+    """Arquivo de 2 meses: o teto que vale é o de 2 meses (art. 18-A, § 2º).
+
+    R$ 20 mil em dois meses é ritmo de R$ 120 mil por ano — passa do teto
+    muito antes de o ano fechar, e esperar dezembro para avisar seria
+    avisar tarde demais.
+    """
+    with pytest.raises(ValueError, match="art. 18-A"):
+        decompor_margem(_mei("10000", 2), CONFIG_MEI)
+    # o mesmo faturamento anualizado dentro do teto passa
+    assert decompor_margem(_mei("6750", 2), CONFIG_MEI).receita_bruta == Decimal(
+        "13500.00"
+    )
+
+
+def test_o_teto_do_mei_e_conferido_ano_a_ano_e_nao_no_total_do_arquivo():
+    """Dois anos de R$ 60 mil cada não é R$ 120 mil acima do teto.
+
+    O teto é anual. Somar o arquivo inteiro recusaria um MEI regular só
+    por ele ter histórico longo — que é o oposto do que se quer.
+    """
+    dois_anos = _mei("5000", 12, ano=2025) + _mei("5000", 12, ano=2026)
+    d = decompor_margem(dois_anos, CONFIG_MEI)
+    assert d.receita_bruta == Decimal("120000.00")
+
+
+def test_o_simples_nao_e_afetado_pelo_teto_do_mei():
+    assert decompor_margem(_mei("40000", 12), CONFIG_SIMPLES).receita_bruta == Decimal(
+        "480000.00"
+    )
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

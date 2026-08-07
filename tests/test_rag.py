@@ -183,15 +183,36 @@ class _ClienteFalso:
         return self._resposta
 
 
+class _APIError(Exception):
+    """A base da hierarquia de erros do SDK, no falso."""
+
+
+class _APIConnectionError(_APIError):
+    pass
+
+
+class _AuthenticationError(_APIError):
+    pass
+
+
 def _instalar_cliente(monkeypatch, resposta=None, erro=None):
-    """Põe um `anthropic` falso no lugar do módulo real."""
+    """Põe um `anthropic` falso no lugar do módulo real.
+
+    O falso carrega as classes de erro além do cliente: `gerar_resposta`
+    distingue erro previsto do SDK de falha inesperada, e sem elas o
+    caminho previsto não teria como ser exercitado.
+    """
     import types
 
     falso = types.SimpleNamespace(
-        Anthropic=lambda *a, **k: _ClienteFalso(resposta=resposta, erro=erro)
+        Anthropic=lambda *a, **k: _ClienteFalso(resposta=resposta, erro=erro),
+        APIError=_APIError,
+        APIConnectionError=_APIConnectionError,
+        AuthenticationError=_AuthenticationError,
     )
     monkeypatch.setattr(llm, "anthropic", falso)
     monkeypatch.setenv("CARCHUNA_USAR_LLM", "1")
+    llm._limpar_falha()
 
 
 def test_gerar_resposta_devolve_o_texto_do_modelo(monkeypatch):
@@ -256,8 +277,13 @@ def test_bloco_que_nao_e_texto_e_ignorado(monkeypatch):
 
 
 def test_erro_da_api_nao_derruba_o_app(monkeypatch):
-    """Degradação graciosa: sem rede, sem crédito ou API fora, cai para None."""
-    _instalar_cliente(monkeypatch, erro=RuntimeError("connection refused"))
+    """Degradação graciosa: sem rede, sem crédito ou API fora, cai para None.
+
+    O carimbo do erro mudou de `RuntimeError` para a classe do SDK: hoje
+    `gerar_resposta` distingue os dois casos, e usar uma exceção genérica
+    aqui exercitaria a rede de segurança em vez do caminho previsto.
+    """
+    _instalar_cliente(monkeypatch, erro=_APIConnectionError("connection refused"))
     dispositivos = RETRIEVER.buscar("limite do MEI", top_k=2)
     assert llm.gerar_resposta("qual o limite do MEI?", dispositivos) is None
 

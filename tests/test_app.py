@@ -283,6 +283,78 @@ def test_arquivo_curto_avisa_que_a_aliquota_veio_do_valor_informado(tmp_path):
     assert "não cobre 12 meses" in avisos
 
 
+def _csv_com_buraco(caminho: Path, meses: int, valor: str, sem: tuple) -> Path:
+    """Como `_csv_de_meses`, mas com meses de 2025 retirados do arquivo."""
+    linhas = ["data;canal;produto;valor_bruto;custo_produto;frete_pago"]
+    for i in range(meses):
+        a, m = 2025 + i // 12, i % 12 + 1
+        if (a, m) in sem:
+            continue
+        linhas.append(f"15/{m:02d}/{a};shopee;Capa;{valor};40,00;10,00")
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    return caminho
+
+
+def test_a_lacuna_no_meio_da_janela_e_nomeada_na_tela(tmp_path):
+    """A pergunta que só o lojista responde aparece com o mês em cheio.
+
+    Sem isto, o mês vazio derrubava a série inteira para a RBT12
+    informada e a tela não dava nenhuma pista do porquê.
+    """
+    vendas = _csv_com_buraco(tmp_path / "vendas.csv", 15, "30000,00", ((2025, 6),))
+    teste = _rodar()
+    teste.text_input(CAMINHO).set_value(str(vendas))
+    teste.run()
+    teste.toggle("rbt12_movel").set_value(True)
+    teste.run()
+    assert not teste.exception
+
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "Junho/2025" in avisos
+    assert "sem lançamentos" in avisos
+
+
+def test_o_lojista_confirma_a_lacuna_e_a_aliquota_passa_a_sair_do_arquivo(tmp_path):
+    """O caminho completo: pergunta na tela, resposta no checkbox, efeito na conta.
+
+    Sem confirmar, nenhum mês fecha janela (o buraco de 2025-06 derruba
+    as três que existiriam). Confirmando, os mesmos três meses de
+    `test_o_toggle_da_rbt12_movel_diz_quantos_meses_usou_o_arquivo`
+    voltam a ter alíquota tirada do próprio arquivo — agora sobre 14
+    meses no arquivo, e não 15, porque junho foi retirado.
+    """
+    vendas = _csv_com_buraco(tmp_path / "vendas.csv", 15, "30000,00", ((2025, 6),))
+    teste = _rodar()
+    teste.text_input(CAMINHO).set_value(str(vendas))
+    teste.run()
+    teste.toggle("rbt12_movel").set_value(True)
+    teste.run()
+
+    # antes de confirmar: a tela diz que nenhuma janela fechou
+    assert "não cobre 12 meses" in " ".join(i.value for i in teste.info)
+
+    teste.checkbox("confirmar_lacunas").set_value(True)
+    teste.run()
+    assert not teste.exception
+
+    legendas = " ".join(c.value for c in teste.caption)
+    assert "3 de 14 meses" in legendas
+    assert "confirmados como venda zero" in legendas
+
+
+def test_arquivo_sem_lacuna_nao_mostra_a_pergunta(tmp_path):
+    """O aviso só aparece onde há de fato um mês vazio para responder."""
+    vendas = _csv_de_meses(tmp_path / "vendas.csv", 15, "30000,00")
+    teste = _rodar()
+    teste.text_input(CAMINHO).set_value(str(vendas))
+    teste.run()
+    teste.toggle("rbt12_movel").set_value(True)
+    teste.run()
+    assert not teste.exception
+    assert "sem lançamentos" not in " ".join(w.value for w in teste.warning)
+    assert not [c for c in teste.checkbox if c.key == "confirmar_lacunas"]
+
+
 def test_nenhuma_funcao_que_desenha_widget_esta_cacheada():
     """Guarda estrutural — este erro passou por aqui e ninguém viu.
 
@@ -559,12 +631,21 @@ def test_nenhum_sinal_do_radar_chega_sem_metodo_e_sem_nota_de_confianca(tmp_path
         assert sinal.aviso
 
 
-def test_sem_sinal_o_radar_diz_que_esta_limpo(app_demo):
-    """Seção vazia é pior que seção ausente: o radar fala quando cala."""
-    from carchuna.analise import AnalisadorMargem
+def test_sem_sinal_o_radar_diz_que_esta_limpo(tmp_path):
+    """Seção vazia é pior que seção ausente: o radar fala quando cala.
 
-    assert AnalisadorMargem.demo(meses=6).radar() == []
-    sucessos = " ".join(s.value for s in app_demo.success)
+    A base limpa é construída aqui de propósito. Antes o teste usava os
+    dados sintéticos do `demo()`, que por acaso não tinham sinal nenhum
+    — e deixaram de não ter quando a antecipação passou a valer nos
+    marketplaces e as margens afinaram. Depender do acaso de um fixture
+    fazia este teste falhar por uma correção legítima do motor, sem que
+    nada do que ele afirma tivesse mudado.
+    """
+    vendas = _csv_de_meses(tmp_path / "limpas.csv", 6, "30000,00")
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    sucessos = " ".join(s.value for s in teste.success)
     assert "Nenhum sinal no radar" in sucessos
 
 
@@ -686,6 +767,39 @@ def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
     # o ganho não é 5% do faturamento: imposto e comissão comem parte
     receita = AnalisadorMargem.demo(meses=6).decomposicao.receita_bruta
     assert preco.impacto_reais < receita * Decimal("0.05")
+
+
+def test_numero_implausivel_aparece_com_motivo_no_topo_do_resumo(tmp_path):
+    """CMV acima do faturamento: a tela diz por que, antes dos números.
+
+    A regra é a do módulo: mostrar o motivo, e **não** esconder, limitar
+    nem zerar o valor. Um número absurdo com teto continua absurdo e passa
+    a ser também invisível.
+    """
+    vendas = tmp_path / "vendas.csv"
+    vendas.write_text(
+        "data;canal;produto;valor_bruto;custo_produto;frete_pago\n"
+        "01/05/2026;shopee;Capa;100,00;5000,00;10,00\n"
+        "02/05/2026;shopee;Fone;200,00;9000,00;12,00\n",
+        encoding="utf-8",
+    )
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    erros = " ".join(e.value for e in teste.error)
+    assert "não fecham com a realidade" in erros
+    assert "mais que todo o faturamento" in erros
+    # o número segue na tela: 300,00 de receita continua sendo mostrado
+    tela = " ".join(
+        [m.value for m in teste.metric] + [str(m.value) for m in teste.markdown]
+    )
+    assert "300,00" in tela
+
+
+def test_base_saudavel_nao_mostra_aviso_de_implausibilidade(app_demo):
+    """O aviso só aparece quando há o que avisar — senão vira ruído."""
+    erros = " ".join(e.value for e in app_demo.error)
+    assert "não fecham com a realidade" not in erros
 
 
 def test_taxa_digitada_errada_avisa_em_vez_de_estourar():

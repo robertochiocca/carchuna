@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 530" width="920" height="530" role="img" aria-label="Dois caminhos até a margem real: nas outras ferramentas a alíquota vem de um campo em branco que o lojista digita; na Carchuna ela é derivada da RBT12 do próprio arquivo pela fórmula do art. 18, § 1º-A da LC 123/2006.">
+  <defs>
+    <marker id="seta-coral" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ff6b52"/>
+    </marker>
+    <marker id="seta-agua" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2ee6d6"/>
+    </marker>
+    <marker id="seta-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#87a9a8"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="530" rx="16" fill="#06272e"/>
+
+  <text x="460" y="46" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="23" font-weight="700" fill="#ffffff">De onde vem a alíquota</text>
+  <text x="460" y="72" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13" fill="#87a9a8">o número mais escorregadio da conta — e o único que ninguém calcula</text>
+
+  <line x1="460" y1="100" x2="460" y2="400" stroke="#134d57" stroke-width="1.5" stroke-dasharray="6 7"/>
+
+  <!-- ===================== lado esquerdo ===================== -->
+  <text x="235" y="126" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="15" font-weight="700" fill="#ff6b52">As ferramentas que consultei</text>
+
+  <rect x="85" y="148" width="300" height="46" rx="10" fill="#0a3840" stroke="#134d57" stroke-width="1.5"/>
+  <text x="235" y="177" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13.5" fill="#d8e7e5">Relatório de vendas do canal</text>
+
+  <line x1="235" y1="196" x2="235" y2="232" stroke="#ff6b52" stroke-width="1.8" marker-end="url(#seta-coral)"/>
+
+  <rect x="85" y="236" width="300" height="62" rx="10" fill="#0a3840" stroke="#ff6b52" stroke-width="1.8"/>
+  <text x="235" y="262" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13" fill="#ead9b0">Imposto cobrado (%)</text>
+  <rect x="140" y="270" width="190" height="20" rx="5" fill="#06272e" stroke="#ff6b52" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <text x="235" y="285" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11" fill="#87a9a8">campo em branco</text>
+
+  <line x1="235" y1="300" x2="235" y2="336" stroke="#ff6b52" stroke-width="1.8" marker-end="url(#seta-coral)"/>
+  <text x="245" y="322" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">o lojista digita</text>
+
+  <rect x="85" y="340" width="300" height="52" rx="10" fill="#3a2020" stroke="#ff6b52" stroke-width="1.8"/>
+  <text x="235" y="362" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="16" font-weight="700" fill="#ff6b52">6%</text>
+  <text x="235" y="380" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">"estou no Simples" — um chute</text>
+
+  <!-- ===================== lado direito ===================== -->
+  <text x="685" y="126" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="15" font-weight="700" fill="#2ee6d6">A Carchuna</text>
+
+  <rect x="535" y="148" width="300" height="46" rx="10" fill="#0a3840" stroke="#134d57" stroke-width="1.5"/>
+  <text x="685" y="177" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13.5" fill="#d8e7e5">Relatório de vendas do canal</text>
+
+  <line x1="685" y1="196" x2="685" y2="232" stroke="#2ee6d6" stroke-width="1.8" marker-end="url(#seta-agua)"/>
+  <text x="695" y="218" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">soma os 12 meses anteriores</text>
+
+  <rect x="535" y="236" width="300" height="62" rx="10" fill="#0a3840" stroke="#134d57" stroke-width="1.5"/>
+  <text x="685" y="260" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13" fill="#ead9b0">RBT12 do próprio arquivo</text>
+  <text x="685" y="282" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11" fill="#87a9a8">janela incompleta? recusa e avisa</text>
+
+  <line x1="685" y1="300" x2="685" y2="336" stroke="#2ee6d6" stroke-width="1.8" marker-end="url(#seta-agua)"/>
+  <text x="695" y="322" font-family="ui-monospace,Consolas,monospace" font-size="11" fill="#87a9a8">art. 18, § 1º-A · Anexos I–V</text>
+
+  <rect x="535" y="340" width="300" height="52" rx="10" fill="#0d434c" stroke="#2ee6d6" stroke-width="1.8"/>
+  <text x="685" y="362" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="16" font-weight="700" fill="#2ee6d6">alíquota do mês</text>
+  <text x="685" y="380" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">derivada da lei, não digitada</text>
+
+  <!-- ===================== convergência ===================== -->
+  <path d="M235,396 L235,424 L400,424 L400,446" fill="none" stroke="#87a9a8" stroke-width="1.6" marker-end="url(#seta-dim)"/>
+  <path d="M685,396 L685,424 L520,424 L520,446" fill="none" stroke="#87a9a8" stroke-width="1.6" marker-end="url(#seta-dim)"/>
+
+  <rect x="270" y="450" width="380" height="44" rx="10" fill="#0a3840" stroke="#134d57" stroke-width="1.5"/>
+  <text x="460" y="478" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13.5" fill="#d8e7e5">Margem real de cada venda</text>
+
+  <text x="460" y="516" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">No Anexo I a alíquota efetiva vai de 4,00% (RBT12 R$ 180 mil) a 11,88% (RBT12 R$ 3,6 mi) — a mesma loja, crescendo</text>
+</svg>

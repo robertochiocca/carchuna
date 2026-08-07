@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" width="920" height="520" role="img" aria-label="A conta ingênua de uma venda de R$ 100 dá 60% de margem; a conta real, depois de tributo, comissão, frete e custo do produto, deixa R$ 32,35 — 32,35%.">
+  <defs>
+    <marker id="rx-seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#87a9a8"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="520" rx="16" fill="#06272e"/>
+
+  <text x="460" y="46" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="23" font-weight="700" fill="#ffffff">O raio-X de uma venda de R$ 100</text>
+  <text x="460" y="72" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="13" fill="#87a9a8">o mesmo pedido, contado de dois jeitos — caso conferido à mão nos testes</text>
+
+  <!-- ======== conta ingênua ======== -->
+  <text x="150" y="118" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="15" font-weight="700" fill="#87a9a8">A conta de cabeça</text>
+
+  <rect x="60" y="140" width="180" height="250" rx="10" fill="#8fd694" opacity="0.18"/>
+  <rect x="60" y="140" width="180" height="250" rx="10" fill="none" stroke="#134d57" stroke-width="1.5"/>
+  <text x="150" y="252" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="15" fill="#d8e7e5">100 − 40</text>
+  <text x="150" y="282" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="26" font-weight="700" fill="#8fd694">R$ 60</text>
+
+  <rect x="60" y="410" width="180" height="42" rx="9" fill="#0a3840" stroke="#134d57" stroke-width="1.5"/>
+  <text x="150" y="437" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="16" font-weight="700" fill="#87a9a8">60% de margem</text>
+
+  <line x1="290" y1="120" x2="290" y2="460" stroke="#134d57" stroke-width="1.5" stroke-dasharray="6 7"/>
+
+  <!-- ======== conta real: cachoeira ======== -->
+  <text x="605" y="118" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="15" font-weight="700" fill="#2ee6d6">A conta real, degrau a degrau</text>
+
+  <!-- receita -->
+  <rect x="340" y="140" width="92" height="250" rx="8" fill="#2ee6d6" opacity="0.28"/>
+  <rect x="340" y="140" width="92" height="250" rx="8" fill="none" stroke="#2ee6d6" stroke-width="1.5"/>
+  <text x="386" y="132" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="13" fill="#2ee6d6">100,00</text>
+  <text x="386" y="406" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#d8e7e5">Faturou</text>
+
+  <!-- tributos: 5,65 -->
+  <rect x="446" y="140" width="76" height="14" rx="4" fill="#ff6b52" opacity="0.85"/>
+  <text x="484" y="132" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="12" fill="#ff6b52">−5,65</text>
+  <text x="484" y="406" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">Imposto</text>
+  <text x="484" y="422" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="9.5" fill="#2ee6d6">da lei</text>
+
+  <!-- comissão: 12,00 (de 154 até 184) -->
+  <rect x="536" y="154" width="76" height="30" rx="4" fill="#ff6b52" opacity="0.85"/>
+  <text x="574" y="146" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="12" fill="#ff6b52">−12,00</text>
+  <text x="574" y="406" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">Comissão</text>
+  <text x="574" y="422" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="9.5" fill="#87a9a8">do canal</text>
+
+  <!-- frete: 10,00 (de 184 até 209) -->
+  <rect x="626" y="184" width="76" height="25" rx="4" fill="#ff6b52" opacity="0.85"/>
+  <text x="664" y="176" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="12" fill="#ff6b52">−10,00</text>
+  <text x="664" y="406" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">Frete</text>
+
+  <!-- CMV: 40,00 (de 209 até 309) -->
+  <rect x="716" y="209" width="76" height="100" rx="4" fill="#ff6b52" opacity="0.85"/>
+  <text x="754" y="201" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="12" fill="#ff6b52">−40,00</text>
+  <text x="754" y="406" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">Custo</text>
+  <text x="754" y="422" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="9.5" fill="#87a9a8">do produto</text>
+
+  <!-- margem: 32,35 (de 309 até 390) -->
+  <rect x="806" y="309" width="76" height="81" rx="4" fill="#8fd694" opacity="0.9"/>
+  <text x="844" y="301" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="13" font-weight="700" fill="#8fd694">32,35</text>
+  <text x="844" y="406" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#8fd694">Sobrou</text>
+
+  <!-- linha de base -->
+  <line x1="340" y1="390" x2="882" y2="390" stroke="#134d57" stroke-width="1.5"/>
+
+  <rect x="640" y="440" width="242" height="42" rx="9" fill="#0a3840" stroke="#8fd694" stroke-width="1.6"/>
+  <text x="761" y="467" text-anchor="middle" font-family="ui-monospace,Consolas,monospace" font-size="16" font-weight="700" fill="#8fd694">32,35% de margem</text>
+
+  <line x1="330" y1="461" x2="630" y2="461" stroke="#87a9a8" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#rx-seta)"/>
+  <text x="480" y="453" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="12" fill="#87a9a8">a diferença entre os dois números é o produto</text>
+
+  <text x="460" y="506" text-anchor="middle" font-family="Verdana,Geneva,sans-serif" font-size="11.5" fill="#87a9a8">Cada dedução carrega a sua fonte: lei, contrato ou tabela que você edita — e a soma fecha centavo a centavo</text>
+</svg>

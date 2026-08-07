@@ -53,8 +53,9 @@ def _analise():
 def test_decomposicao_da_queda_fecha_centavo_a_centavo():
     exp = explicar_variacao(_analise().mensal)
     assert (exp.mes_a, exp.mes_b) == ("2026-05", "2026-06")
-    assert exp.var_receita_pct == Decimal("20.0")
-    assert exp.var_lucro_pct == Decimal("-28.6")
+    # base positiva nos dois: o percentual está definido e vale
+    assert exp.var_receita_pct.ok and exp.var_receita_pct.valor == Decimal("20.0")
+    assert exp.var_lucro_pct.ok and exp.var_lucro_pct.valor == Decimal("-28.6")
     assert exp.delta_lucro == Decimal("-121.30")
     # a soma das contribuições é exatamente o delta do lucro
     soma = sum(c.delta_reais for c in exp.contribuicoes)

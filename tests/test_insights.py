@@ -307,9 +307,10 @@ def test_frete_por_pedido_contra_a_media_movel():
 
 
 def test_receita_sobe_lucro_cai_aponta_a_causa():
-    # Mês 1: receita 1.000, comissão 120, CMV 400 → lucro 423,50.
+    # Mês 1: receita 1.000, comissão 120, CMV 400 → lucro 423,50 (42,35%).
     # Mês 2: receita 1.200 (+20%), comissão 350, CMV 480 → lucro 302,20
-    # (−28,6%). Esperado se a margem acompanhasse: 423,50 × 1,2 = 508,20
+    # (25,18%) → a margem caiu 17,17 p.p. Se a margem de janeiro tivesse
+    # se mantido sobre o faturamento novo: 1.200 × 42,35% = 508,20
     # → impacto 206,00. Causa: comissão, de 12% para 29,17% da receita.
     vendas = [
         _venda("1000", 1, comissao_cobrada=Decimal("120"), custo=Decimal("400")),
@@ -323,7 +324,42 @@ def test_receita_sobe_lucro_cai_aponta_a_causa():
     assert i.observado.startswith("R$ 302.20")
     assert i.impacto_mensal == Decimal("206.00")
     assert "Comissões de canal" in i.explicacao
-    assert "divergência" in i.metodo
+    assert "divergência em pontos de margem" in i.metodo
+    assert "17.17 ponto(s)" in i.explicacao
+
+
+def test_a_divergencia_enxerga_a_loja_que_cresce_dentro_do_prejuizo():
+    """O caso em que a regra antiga era cega, e é onde ela mais serve.
+
+    A versão anterior dividia pela margem do mês anterior e por isso
+    carregava um guard `margem_liquida <= 0` que a desligava exatamente
+    aqui: loja já no vermelho, faturando 50% mais e afundando três vezes
+    mais fundo. Nenhum sinal de divergência era emitido.
+
+    Mês 1: receita 1.000, comissão 120, CMV 1.000 → lucro −176,50 (−17,65%).
+    Mês 2: receita 1.500, comissão 500, CMV 1.500 → lucro −584,75 (−38,98%).
+    A margem caiu 21,33 p.p. com o faturamento subindo 50%.
+    """
+    vendas = [
+        _venda("1000", 1, comissao_cobrada=Decimal("120"), custo=Decimal("1000")),
+        _venda("1500", 2, comissao_cobrada=Decimal("500"), custo=Decimal("1500")),
+    ]
+    insights = MotorInsights().radar(vendas, CONFIG)
+    (i,) = [x for x in insights if x.categoria == "receita_x_lucro"]
+    assert i.severidade == "critico"
+    assert "faturamento subiu 50.0%" in i.explicacao
+    assert "margem caiu 21.33 ponto(s)" in i.explicacao
+    assert "de -17.65% para -38.98%" in i.explicacao
+
+
+def test_a_divergencia_nao_dispara_quando_a_margem_se_mantem():
+    """Crescer mantendo a margem não é divergência — é só crescer."""
+    vendas = [
+        _venda("1000", 1, comissao_cobrada=Decimal("120"), custo=Decimal("400")),
+        _venda("1500", 2, comissao_cobrada=Decimal("180"), custo=Decimal("600")),
+    ]
+    insights = MotorInsights().radar(vendas, CONFIG)
+    assert [i for i in insights if i.categoria == "receita_x_lucro"] == []
 
 
 def test_meses_estaveis_nao_geram_sinal_e_lista_vazia_e_recusada():
