@@ -283,6 +283,78 @@ def test_arquivo_curto_avisa_que_a_aliquota_veio_do_valor_informado(tmp_path):
     assert "não cobre 12 meses" in avisos
 
 
+def _csv_com_buraco(caminho: Path, meses: int, valor: str, sem: tuple) -> Path:
+    """Como `_csv_de_meses`, mas com meses de 2025 retirados do arquivo."""
+    linhas = ["data;canal;produto;valor_bruto;custo_produto;frete_pago"]
+    for i in range(meses):
+        a, m = 2025 + i // 12, i % 12 + 1
+        if (a, m) in sem:
+            continue
+        linhas.append(f"15/{m:02d}/{a};shopee;Capa;{valor};40,00;10,00")
+    caminho.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    return caminho
+
+
+def test_a_lacuna_no_meio_da_janela_e_nomeada_na_tela(tmp_path):
+    """A pergunta que só o lojista responde aparece com o mês em cheio.
+
+    Sem isto, o mês vazio derrubava a série inteira para a RBT12
+    informada e a tela não dava nenhuma pista do porquê.
+    """
+    vendas = _csv_com_buraco(tmp_path / "vendas.csv", 15, "30000,00", ((2025, 6),))
+    teste = _rodar()
+    teste.text_input(CAMINHO).set_value(str(vendas))
+    teste.run()
+    teste.toggle("rbt12_movel").set_value(True)
+    teste.run()
+    assert not teste.exception
+
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "Junho/2025" in avisos
+    assert "sem lançamentos" in avisos
+
+
+def test_o_lojista_confirma_a_lacuna_e_a_aliquota_passa_a_sair_do_arquivo(tmp_path):
+    """O caminho completo: pergunta na tela, resposta no checkbox, efeito na conta.
+
+    Sem confirmar, nenhum mês fecha janela (o buraco de 2025-06 derruba
+    as três que existiriam). Confirmando, os mesmos três meses de
+    `test_o_toggle_da_rbt12_movel_diz_quantos_meses_usou_o_arquivo`
+    voltam a ter alíquota tirada do próprio arquivo — agora sobre 14
+    meses no arquivo, e não 15, porque junho foi retirado.
+    """
+    vendas = _csv_com_buraco(tmp_path / "vendas.csv", 15, "30000,00", ((2025, 6),))
+    teste = _rodar()
+    teste.text_input(CAMINHO).set_value(str(vendas))
+    teste.run()
+    teste.toggle("rbt12_movel").set_value(True)
+    teste.run()
+
+    # antes de confirmar: a tela diz que nenhuma janela fechou
+    assert "não cobre 12 meses" in " ".join(i.value for i in teste.info)
+
+    teste.checkbox("confirmar_lacunas").set_value(True)
+    teste.run()
+    assert not teste.exception
+
+    legendas = " ".join(c.value for c in teste.caption)
+    assert "3 de 14 meses" in legendas
+    assert "confirmados como venda zero" in legendas
+
+
+def test_arquivo_sem_lacuna_nao_mostra_a_pergunta(tmp_path):
+    """O aviso só aparece onde há de fato um mês vazio para responder."""
+    vendas = _csv_de_meses(tmp_path / "vendas.csv", 15, "30000,00")
+    teste = _rodar()
+    teste.text_input(CAMINHO).set_value(str(vendas))
+    teste.run()
+    teste.toggle("rbt12_movel").set_value(True)
+    teste.run()
+    assert not teste.exception
+    assert "sem lançamentos" not in " ".join(w.value for w in teste.warning)
+    assert not [c for c in teste.checkbox if c.key == "confirmar_lacunas"]
+
+
 def test_nenhuma_funcao_que_desenha_widget_esta_cacheada():
     """Guarda estrutural — este erro passou por aqui e ninguém viu.
 

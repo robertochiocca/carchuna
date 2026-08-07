@@ -43,7 +43,8 @@ from carchuna.dados import (
     transacoes_de_mapa,
 )
 from carchuna.margem import conferir_plausibilidade
-from carchuna.rag.llm import gerar_resposta, resposta_extrativa
+from carchuna.metricas import procedencia_rbt12
+from carchuna.rag.llm import estado_da_geracao, gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
 
 st.set_page_config(page_title="Carchuna", layout="wide")
@@ -228,6 +229,38 @@ T = {
             "então a alíquota de todos eles vem do valor informado acima. "
             "Com 13 meses de histórico este cálculo liga sozinho."
         ),
+        "rbt12_lacuna": (
+            "{meses} sem lançamentos. Foi mês sem faturamento ou o arquivo "
+            "está incompleto?"
+        ),
+        "rbt12_lacuna_confirmar": "Foram meses sem faturamento (venda zero)",
+        "rbt12_lacuna_ajuda": (
+            "Enquanto você não confirma, a Carchuna não usa a RBT12 do seu "
+            "arquivo nos meses afetados: um mês vazio pode ser venda zero ou "
+            "dado que não veio na exportação, e as duas leituras dão "
+            "alíquotas diferentes. Sem confirmação vale o faturamento que "
+            "você informou acima, que é o lado seguro — RBT12 menor do que a "
+            "real geraria alíquota menor e imposto a menos."
+        ),
+        "rbt12_lacuna_confirmada": (
+            "Meses vazios confirmados como venda zero: a alíquota deles "
+            "passa a sair do próprio arquivo."
+        ),
+        "meses_do_ano": (
+            "Janeiro",
+            "Fevereiro",
+            "Março",
+            "Abril",
+            "Maio",
+            "Junho",
+            "Julho",
+            "Agosto",
+            "Setembro",
+            "Outubro",
+            "Novembro",
+            "Dezembro",
+        ),
+        "narrativa_indisponivel": "Narrativa indisponível: {motivo}",
         "rbt12_ajuda": (
             "Soma de tudo que a empresa faturou nos últimos 12 meses "
             "(o 'RBT12'). Está no extrato do Simples (PGDAS-D) que o "
@@ -549,6 +582,38 @@ T = {
             "every month uses the value entered above. With 13 months of "
             "history this turns on by itself."
         ),
+        "rbt12_lacuna": (
+            "{meses} with no entries. Were these months without revenue, or "
+            "is the file incomplete?"
+        ),
+        "rbt12_lacuna_confirmar": "These were months with no revenue (zero sales)",
+        "rbt12_lacuna_ajuda": (
+            "Until you confirm, Carchuna will not use your file's RBT12 for "
+            "the affected months: an empty month may be zero sales or data "
+            "that did not make it into the export, and the two readings "
+            "yield different tax rates. Without confirmation the revenue you "
+            "entered above applies — the safe side, since an RBT12 lower "
+            "than the real one would understate the rate and the tax."
+        ),
+        "rbt12_lacuna_confirmada": (
+            "Empty months confirmed as zero sales: their tax rate now comes "
+            "from your own file."
+        ),
+        "meses_do_ano": (
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ),
+        "narrativa_indisponivel": "Narrative unavailable: {motivo}",
         "rbt12_ajuda": (
             "Everything the company billed in the last 12 months (the "
             "'RBT12'). Found in the monthly Simples statement (PGDAS-D). "
@@ -875,6 +940,7 @@ def _resultados_cacheados(
     atividade: str,
     rbt12_movel: bool = False,
     origem: str | None = None,
+    confirmar_lacunas: bool = False,
 ) -> dict:
     """Roda os quatro motores uma vez por (dados, config) — não por clique.
 
@@ -889,6 +955,7 @@ def _resultados_cacheados(
         ParametrosDiagnostico(atividade=atividade),
         retriever=_retriever_cacheado(),
         rbt12_movel=rbt12_movel,
+        confirmar_lacunas=confirmar_lacunas,
         origem=origem,
     )
     return {
@@ -907,6 +974,30 @@ def _resultados_cacheados(
         "confianca": avaliar_confianca(list(transacoes), base="calculado"),
         "plausibilidade": conferir_plausibilidade(analise.decomposicao),
     }
+
+
+def _lacunas_do_arquivo(transacoes) -> list[str]:
+    """Todos os meses vazios no meio de alguma janela de 12 meses.
+
+    Reúne as lacunas de todos os meses do arquivo numa lista só: para o
+    lojista a pergunta é sobre o mês ("março teve faturamento?"), não
+    sobre em quantas janelas ele entra.
+    """
+    return sorted(
+        {
+            mes
+            for janela in procedencia_rbt12(list(transacoes)).values()
+            for mes in janela.lacunas
+        }
+    )
+
+
+def _lista_de_meses(meses: list[str], t: dict) -> str:
+    """['2026-03', '2026-09'] → 'Março/2026 e Setembro/2026'."""
+    nomes = [f"{t['meses_do_ano'][int(mes[5:7]) - 1]}/{mes[:4]}" for mes in meses]
+    if len(nomes) == 1:
+        return nomes[0]
+    return f"{', '.join(nomes[:-1])} e {nomes[-1]}"
 
 
 @st.cache_data(show_spinner=False)
@@ -1281,11 +1372,26 @@ with st.sidebar:
             help=t["rbt12_movel_ajuda"],
             key="rbt12_movel",
         )
+        # Mês vazio no MEIO da janela é a única pergunta que o lojista sabe
+        # responder — e a Carchuna não. Fica na barra lateral, antes do
+        # cálculo, porque a resposta dele muda a alíquota da série.
+        confirmar_lacunas = False
+        if usar_rbt12_movel:
+            lacunas = _lacunas_do_arquivo(transacoes)
+            if lacunas:
+                st.warning(t["rbt12_lacuna"].format(meses=_lista_de_meses(lacunas, t)))
+                confirmar_lacunas = st.checkbox(
+                    t["rbt12_lacuna_confirmar"],
+                    value=False,
+                    help=t["rbt12_lacuna_ajuda"],
+                    key="confirmar_lacunas",
+                )
         config = ConfigTributaria(
             regime="simples", anexo_simples=anexo, rbt12=Decimal(int(rbt12))
         )
     else:
         usar_rbt12_movel = False
+        confirmar_lacunas = False
         das = st.number_input(t["das"], 1, 500, 76, help=t["das_ajuda"])
         config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal(int(das)))
 
@@ -1341,7 +1447,13 @@ else:
 # Motores rodam uma vez por (dados, config) via cache; a fachada fica
 # disponível para as ações sob demanda (simular, preço, PDF, busca legal).
 res = _resultados_cacheados(
-    tuple(transacoes), config, tabela, atividade, usar_rbt12_movel, origem_dados
+    tuple(transacoes),
+    config,
+    tabela,
+    atividade,
+    usar_rbt12_movel,
+    origem_dados,
+    confirmar_lacunas,
 )
 analise = AnalisadorMargem(
     transacoes,
@@ -1350,6 +1462,7 @@ analise = AnalisadorMargem(
     ParametrosDiagnostico(atividade=atividade),
     retriever=_retriever_cacheado(),
     rbt12_movel=usar_rbt12_movel,
+    confirmar_lacunas=confirmar_lacunas,
     origem=origem_dados,
 )
 if usar_rbt12_movel:
@@ -1364,6 +1477,9 @@ if usar_rbt12_movel:
         )
     else:
         st.info(t["rbt12_movel_sem_janela"])
+    if confirmar_lacunas:
+        # O caminho escolhido fica escrito na tela, não só no objeto.
+        st.caption(t["rbt12_lacuna_confirmada"])
 decomposicao = res["decomposicao"]
 resumo = res["resumo"]
 
@@ -1863,6 +1979,12 @@ with aba_diagnostico:
         if resposta is None:
             resposta = resposta_extrativa(pergunta, dispositivos)
             st.caption(t["modo_extrativo"])
+            # Nenhum erro vira silêncio: se a narrativa não saiu por
+            # configuração faltando ou por falha na chamada, o motivo
+            # aparece aqui em vez de o lojista ficar sem saber.
+            motivo = estado_da_geracao()["motivo"]
+            if motivo:
+                st.caption(t["narrativa_indisponivel"].format(motivo=motivo))
         st.write(resposta)
 
 # ---------------------------------------------------------------------------
