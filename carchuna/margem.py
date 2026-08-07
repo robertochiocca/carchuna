@@ -368,6 +368,59 @@ def _pct(valor: Decimal, receita: Decimal) -> Decimal:
     return (valor / receita * 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def _brl(valor: Decimal) -> str:
+    """R$ 480000.00 → '480.000,00' — para a mensagem que o lojista lê."""
+    inteiro, _, centavos = f"{valor:.2f}".partition(".")
+    milhares = f"{int(inteiro):,}".replace(",", ".")
+    return f"{milhares},{centavos}"
+
+
+def _conferir_teto_do_mei(transacoes: list[Transacao]) -> None:
+    """Recusa o cálculo quando o faturamento estoura o teto do MEI.
+
+    O teto é anual (LC 123/2006, art. 18-A, § 1º) e proporcional ao número
+    de meses no ano de abertura (§ 2º) — então a conferência é ano a ano,
+    com o limite reduzido pelos meses que o arquivo cobre naquele ano.
+    Somar o arquivo inteiro recusaria um MEI regular só por ele ter dois
+    anos de histórico, que é o oposto do que se quer.
+
+    Recusar é a resposta honesta. Acima do teto o enquadramento muda —
+    excesso de mais de 20% desenquadra retroativamente ao início do ano
+    (art. 18-A, § 7º, e art. 3º, § 10) — e o DAS fixo deixa de descrever o
+    imposto devido. Um número calculado nesse estado erra **para cima**, no
+    campo em que o lojista mais confia, e o custo do desenquadramento
+    retroativo é ordens de grandeza maior que a diferença que a tela
+    mostraria.
+    """
+    por_ano: dict[int, list[Transacao]] = {}
+    for t in transacoes:
+        por_ano.setdefault(t.data.year, []).append(t)
+
+    for ano, do_ano in sorted(por_ano.items()):
+        receita = _q(sum((t.valor_bruto for t in do_ano), Decimal("0")))
+        meses = len({t.data.month for t in do_ano})
+        limite = _q(TETO_MEI_ANUAL * Decimal(meses) / Decimal(12))
+        if receita <= limite:
+            continue
+        proporcao = (
+            f"{meses} mês(es) de {ano} no arquivo, então o teto proporcional "
+            f"é R$ {_brl(limite)}"
+            if meses < 12
+            else f"o teto do ano é R$ {_brl(TETO_MEI_ANUAL)}"
+        )
+        raise ValueError(
+            f"Em {ano} este arquivo soma R$ {_brl(receita)} de faturamento, e "
+            f"isso passa do teto do MEI — {proporcao} (LC 123/2006, art. 18-A, "
+            "§ 1º e § 2º). A Carchuna não sabe calcular a sua margem nesse "
+            "estado: acima do teto o enquadramento muda, e quem passa de 20% "
+            "do limite é desenquadrado retroativamente ao início do ano "
+            "(art. 18-A, § 7º, e art. 3º, § 10) — o DAS fixo deixa de ser o "
+            "imposto devido. Fale com o seu contador sobre a migração para o "
+            "Simples e recalcule aqui com o anexo certo; estimar por cima "
+            "seria mostrar um lucro que você não tem."
+        )
+
+
 def decompor_margem(
     transacoes: list[Transacao],
     config: ConfigTributaria,
@@ -400,6 +453,8 @@ def decompor_margem(
     tabela = tabela or TabelaCustos()
 
     receita = _q(sum((t.valor_bruto for t in transacoes), Decimal("0")))
+    if config.regime == "mei":
+        _conferir_teto_do_mei(transacoes)
     devolucoes = _q(
         sum((t.valor_bruto for t in transacoes if t.devolvida), Decimal("0"))
     )

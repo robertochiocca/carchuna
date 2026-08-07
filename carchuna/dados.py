@@ -6,9 +6,15 @@ permite rodar todo o projeto offline.
 
 Dinheiro entra como ``str`` e vira ``Decimal`` direto (nunca passa por
 ``float``); no JSON os números são lidos com ``parse_float=str`` pela
-mesma razão. A única exceção é o Excel, em que a célula já chega como
-``float`` do openpyxl — a conversão passa por ``str()`` e o caso está
-documentado no README.
+mesma razão.
+
+O Excel é a exceção que não dá para fechar: o arquivo já guarda a célula
+em ponto flutuante, e o openpyxl a entrega como ``float`` — o erro é
+anterior à Carchuna. O que a fronteira faz é não deixá-lo entrar: todo
+``float`` de planilha é quantizado a centavos com ``ROUND_HALF_UP`` em
+``_celula_de_planilha`` antes de virar texto. Então a garantia é "o motor
+nunca calcula em float", e ela não se estende ao que o Excel já
+arredondou antes de o arquivo chegar.
 """
 
 from __future__ import annotations
@@ -16,11 +22,13 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import random
+import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 from carchuna.margem import Transacao
@@ -45,11 +53,47 @@ COLUNAS_OPCIONAIS = (
 )
 
 
+# "1.234", "12.345.678" — grupos de milhar sem centavos. O primeiro grupo
+# não pode começar em zero: "0.500" é meio real, e ninguém escreve
+# quinhentos reais assim. Sem essa ressalva a regra do milhar cometeria,
+# na direção oposta, o mesmo erro de mil vezes que ela existe para corrigir.
+_MILHAR_SEM_CENTAVO = re.compile(r"^[+-]?[1-9]\d{0,2}(\.\d{3})+$")
+
+# "1234.567": quatro dígitos ou mais antes de um ponto com exatamente três
+# casas. Pode ser milhar ("1.234.567" mal digitado) ou decimal de três
+# casas, e as duas leituras diferem por mil.
+_PONTO_AMBIGUO = re.compile(r"^[+-]?\d{4,}\.\d{3}$")
+
+
 def _para_decimal(texto: str) -> Decimal:
-    """'R$ 1.234,56' ou '1234.56' → Decimal, sem nunca passar por float."""
+    """'R$ 1.234,56', '1.234' ou '1234.56' → Decimal, sem passar por float.
+
+    A ordem das decisões importa, e cada uma existe por um arquivo real:
+
+    1. tem vírgula → formato brasileiro, o ponto é milhar;
+    2. sem vírgula, mas em grupos de três → o ponto é milhar. É o caso que
+       dividia por mil em silêncio: painel que exporta valor redondo manda
+       "1.234", e a heurística antiga lia um real e vinte e três;
+    3. um ponto só, com uma ou duas casas → decimal, como sempre foi;
+    4. um ponto só, com exatamente três casas e quatro dígitos ou mais
+       antes → **ambíguo de verdade**, e aí a função recusa.
+
+    O passo 4 vai irritar alguém. Irritar é melhor que errar por mil: um
+    valor mil vezes menor não estoura nada, entra na soma e sai na tela
+    como margem, e ninguém tem como desconfiar olhando o resultado.
+    """
     limpo = str(texto).strip().replace("R$", "").replace(" ", "")
     if "," in limpo:  # formato brasileiro: ponto de milhar, vírgula decimal
-        limpo = limpo.replace(".", "").replace(",", ".")
+        return Decimal(limpo.replace(".", "").replace(",", "."))
+    if _MILHAR_SEM_CENTAVO.match(limpo):
+        return Decimal(limpo.replace(".", ""))
+    if _PONTO_AMBIGUO.match(limpo):
+        raise ValueError(
+            f"{texto!r} pode ser {limpo.replace('.', '')} (ponto de milhar) ou "
+            f"{limpo} (três casas decimais), e a diferença entre as duas "
+            "leituras é de mil vezes. A Carchuna não chuta: reexporte a "
+            "planilha com os centavos (1.234.567,00) ou confira essa coluna."
+        )
     return Decimal(limpo)
 
 
@@ -69,6 +113,10 @@ def decimal_de_texto(texto: str, campo: str = "valor") -> Decimal:
             f"`{campo}` = {texto!r} não é um número válido. "
             "Use vírgula ou ponto para os centavos (ex.: 2,49)."
         ) from None
+    except ValueError as ambiguo:
+        # a recusa do ponto ambíguo já explica o problema; falta só dizer
+        # em qual campo ele apareceu
+        raise ValueError(f"`{campo}`: {ambiguo}") from None
 
 
 def _decimal_br(texto: str, campo: str, linha: int) -> Decimal:
@@ -669,6 +717,16 @@ def _colunas_reconhecidas(celulas: list[str]) -> int:
     return total
 
 
+_SEM_CABECALHO = (
+    "Não encontrei o cabeçalho da tabela neste arquivo. A Carchuna "
+    "procura uma linha com os nomes das colunas (data, canal, "
+    "valor_bruto, custo_produto, frete_pago) ou os nomes do relatório "
+    "do marketplace (ex.: 'Data do pedido', 'Preço', 'Tarifa de "
+    "venda'). Confira se você exportou o relatório de VENDAS — um "
+    "extrato bancário ou um resumo financeiro não tem essas colunas."
+)
+
+
 def _achar_cabecalho(linhas: list[str]) -> tuple[int, str]:
     """Descobre em que linha começa a tabela e qual é o separador.
 
@@ -693,15 +751,29 @@ def _achar_cabecalho(linhas: list[str]) -> tuple[int, str]:
             if candidato[:3] > melhor[:3]:
                 melhor = candidato
     if melhor[0] < _MIN_COLUNAS_RECONHECIDAS:
-        raise ValueError(
-            "Não encontrei o cabeçalho da tabela neste arquivo. A Carchuna "
-            "procura uma linha com os nomes das colunas (data, canal, "
-            "valor_bruto, custo_produto, frete_pago) ou os nomes do relatório "
-            "do marketplace (ex.: 'Data do pedido', 'Preço', 'Tarifa de "
-            "venda'). Confira se você exportou o relatório de VENDAS — um "
-            "extrato bancário ou um resumo financeiro não tem essas colunas."
-        )
+        raise ValueError(_SEM_CABECALHO)
     return -melhor[2], melhor[3]
+
+
+def _achar_cabecalho_em_celulas(linhas: list[list[str]]) -> int:
+    """A mesma busca do CSV, para quem já chega em células.
+
+    A planilha não precisa de separador — o Excel já separou —, mas
+    precisa da busca: o relatório que o lojista exporta traz título,
+    loja e período antes da tabela, e ele é o MESMO relatório salvo em
+    outro formato. Assumir a linha 1 recusava em .xlsx o arquivo que a
+    Carchuna aceitava em .csv.
+    """
+    melhor = (0, 0, 0)  # (colunas reconhecidas, nº de células, -índice)
+    for indice, celulas in enumerate(linhas[:_MAX_LINHAS_DE_TITULO]):
+        if not any(c.strip() for c in celulas):
+            continue
+        candidato = (_colunas_reconhecidas(celulas), len(celulas), -indice)
+        if candidato > melhor:
+            melhor = candidato
+    if melhor[0] < _MIN_COLUNAS_RECONHECIDAS:
+        raise ValueError(_SEM_CABECALHO)
+    return -melhor[2]
 
 
 def _ler_csv(source) -> list[dict]:
@@ -723,6 +795,41 @@ def _ler_json(source) -> list[dict]:
     return [{str(k).strip(): v for k, v in item.items()} for item in dados]
 
 
+_CENTAVO = Decimal("0.01")
+
+
+def _celula_de_planilha(valor) -> str:
+    """Converte uma célula do Excel em texto sem carregar erro de float.
+
+    O openpyxl entrega célula numérica como ``float``, e ``str()`` sozinho
+    não desfaz o erro de ponto flutuante: congela ele num texto que passa
+    por baixo da guarda que rejeita ``float`` no motor. ``0,1 + 0,2``
+    chega como ``"0.30000000000000004"`` e vira ``Decimal`` com o rastro
+    junto. A fronteira é o último lugar onde dá para cortar esse rastro,
+    então todo ``float`` é quantizado a centavos com ``ROUND_HALF_UP`` — o
+    arredondamento da prática comercial.
+
+    O ``str(valor)`` de dentro do ``Decimal`` é proposital: ele devolve o
+    número curto que o lojista vê na tela (``1234.565``), não a expansão
+    binária que está logo abaixo (``1234.5649999...``). Quantizar a partir
+    do que ele vê é o que faz meio centavo subir, como ele espera.
+
+    Inteiro não é dinheiro: prazo de 30 dias não vira ``"30,00"``. Texto e
+    data seguem intactos.
+    """
+    if valor is None:
+        return ""
+    if isinstance(valor, float):
+        if not math.isfinite(valor):
+            # `str(nan)` é "nan", e `Decimal("nan")` NÃO estoura: cria um NaN
+            # que contamina a soma inteira em silêncio (NaN + 10 = NaN).
+            # O marcador não vira Decimal nenhum, então a linha é recusada
+            # com nome de coluna e número — e as outras entram normalmente.
+            return "#ERRO"
+        return str(Decimal(str(valor)).quantize(_CENTAVO, rounding=ROUND_HALF_UP))
+    return str(valor)
+
+
 def _ler_xlsx(source) -> list[dict]:
     try:
         from openpyxl import load_workbook
@@ -732,13 +839,22 @@ def _ler_xlsx(source) -> list[dict]:
             "ou exporte a planilha como CSV."
         ) from None
     planilha = load_workbook(source, read_only=True, data_only=True).active
-    linhas_iter = planilha.iter_rows(values_only=True)
-    cabecalho = [str(c or "").strip() for c in next(linhas_iter)]
+    linhas = [
+        [_celula_de_planilha(c) for c in linha]
+        for linha in planilha.iter_rows(values_only=True)
+    ]
+    if not any(any(c.strip() for c in linha) for linha in linhas):
+        raise ValueError(
+            "Esta planilha não tem nenhuma linha preenchida. A Carchuna lê a "
+            "primeira aba do arquivo — confira se as vendas não ficaram em "
+            "outra aba, ou exporte de novo."
+        )
+    inicio = _achar_cabecalho_em_celulas(linhas)
+    cabecalho = [c.strip() for c in linhas[inicio]]
     return [
-        # células numéricas do Excel chegam como float; str() antes do Decimal
-        dict(zip(cabecalho, ["" if v is None else str(v) for v in linha], strict=False))
-        for linha in linhas_iter
-        if any(v not in (None, "") for v in linha)
+        dict(zip(cabecalho, linha, strict=False))
+        for linha in linhas[inicio + 1 :]
+        if any(c.strip() for c in linha)
     ]
 
 

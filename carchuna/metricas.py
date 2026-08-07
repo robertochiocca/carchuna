@@ -60,25 +60,28 @@ def rbt12_movel(transacoes: list[Transacao], mes: str) -> Decimal | None:
     da receita bruta (art. 3º, § 1º) — a mesma base que
     ``decompor_margem`` usa para o tributo do mês.
 
-    Devolve ``None`` quando o arquivo **não cobre os 12 meses inteiros**
-    da janela. Essa recusa é o ponto: um arquivo que começa no meio faria
-    os meses ausentes valerem zero, e zero puxaria a alíquota para baixo
-    sem que ninguém percebesse. A Carchuna não sabe distinguir "não
-    vendeu" de "o dado não veio" — então não chuta, e quem chama usa a
-    RBT12 que o lojista informou.
+    Devolve ``None`` quando o arquivo **não tem linha em cada um dos 12
+    meses** da janela. Essa recusa é o ponto: mês ausente valeria zero, e
+    zero puxa a alíquota para baixo sem que ninguém perceba. A Carchuna
+    não sabe distinguir "não vendeu" de "o dado não veio" — então não
+    chuta, e quem chama usa a RBT12 que o lojista informou.
+
+    Não basta o arquivo COMEÇAR antes da janela: exportar "os últimos 3
+    meses" e juntar com um arquivo velho produz um arquivo que começa
+    cedo e tem dez meses faltando no meio. Por isso a conferência é mês a
+    mês, e não pela primeira data.
     """
     if not transacoes:
         return None
-    inicio = _mes_anterior(mes, 12)
-    fim = _mes_anterior(mes, 1)
-    primeiro_do_arquivo = min(_mes_de(t.data) for t in transacoes)
-    if primeiro_do_arquivo > inicio:
+    janela = {_mes_anterior(mes, n) for n in range(1, 13)}
+    meses_do_arquivo = {_mes_de(t.data) for t in transacoes}
+    if not meses_do_arquivo.issuperset(janela):
         return None
     return sum(
         (
             t.valor_bruto
             for t in transacoes
-            if inicio <= _mes_de(t.data) <= fim and not t.devolvida
+            if _mes_de(t.data) in janela and not t.devolvida
         ),
         Decimal("0"),
     )
