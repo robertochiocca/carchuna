@@ -15,7 +15,9 @@ Regras inegociáveis deste módulo:
   **não** prova que os números são válidos: a margem é construída como
   resíduo, então a igualdade fecha até com entrada absurda. Quem valida o
   número é ``reconciliar()``, que refaz a conta por outro caminho; quem
-  pega absurdo é ``conferir_plausibilidade()``.
+  pega absurdo é ``conferir_plausibilidade()``; e quem confere os
+  PERCENTUAIS — que são outro número, e são os que vão para a tela — é
+  ``conferir_fechamento_percentual()``.
 - **Nenhuma alíquota sem lastro** — a alíquota efetiva do Simples segue a
   fórmula oficial do art. 18, § 1º-A, da LC 123/2006, com as tabelas dos
   Anexos transcritas da redação da LC 155/2016.
@@ -31,6 +33,7 @@ from carchuna.validade import (
     FATOR_DEDUCAO_SOBRE_RECEITA,
     MARGEM_MAXIMA_PLAUSIVEL,
     MARGEM_MINIMA_PLAUSIVEL,
+    TOLERANCIA_ADITIVIDADE_PP,
     TOLERANCIA_RECONCILIACAO,
     Resultado,
 )
@@ -721,7 +724,45 @@ def conferir_plausibilidade(
             "mas nessa ordem de grandeza é erro de dado antes de ser "
             "prejuízo — confira as colunas de custo e de comissão.",
         )
+    fechamento = conferir_fechamento_percentual(decomposicao)
+    if not fechamento.ok:
+        return fechamento
     return Resultado.de_valor(decomposicao.margem_pct)
+
+
+def conferir_fechamento_percentual(decomposicao: DecomposicaoMargem) -> Resultado:
+    """Os percentuais publicados somam 100 com a margem?
+
+    A terceira conferência olha os REAIS: ``reconciliar()`` refaz a margem
+    lançamento a lançamento e compara valores. Os percentuais são outro
+    número — ``valor ÷ receita bruta``, calculado à parte para cada
+    dedução — e nada os conferia, embora sejam eles que aparecem na
+    cachoeira, no drill-down e no resumo.
+
+    O buraco não é teórico. Trocar o denominador do percentual do tributo
+    para a base do tributo (``receita − devoluções``) é uma "correção" que
+    qualquer um faz de boa-fé, já que aquela É a base legal do art. 3º,
+    § 1º. Feita essa troca, todos os valores em reais continuam certos,
+    ``reconciliar()`` diz ok, a identidade estrutural fecha — e a tela
+    publica percentuais que somam 101,41.
+
+    Esta conferência é sobre o denominador, então: todo percentual
+    publicado tem de ser fração da MESMA receita bruta. A tolerância é de
+    arredondamento (``TOLERANCIA_ADITIVIDADE_PP``), não de erro.
+    """
+    soma = sum((d.pct_receita for d in decomposicao.deducoes), Decimal("0"))
+    total = soma + decomposicao.margem_pct
+    divergencia = abs(total - Decimal("100"))
+    if divergencia <= TOLERANCIA_ADITIVIDADE_PP:
+        return Resultado.de_valor(decomposicao.margem_pct)
+    return Resultado.implausivel(
+        decomposicao.margem_pct,
+        f"Os percentuais da tela somam {total}% em vez de 100%: as deduções "
+        f"dão {soma}% e a margem, {decomposicao.margem_pct}%. Os valores em "
+        "reais podem estar certos — o que não fecha é o denominador de "
+        "algum percentual, que precisa ser sempre a receita bruta do "
+        "período. Não use os percentuais até conferir.",
+    )
 
 
 def reconciliar(
