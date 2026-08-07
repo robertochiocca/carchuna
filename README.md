@@ -205,7 +205,9 @@ print(analise.resumo_executivo().frase())
 # anunciada (41.90%) e a real (13.36%); 35% dessa perda veio de Comissões de canal.
 ```
 
-Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrativa em linguagem natural (API da Anthropic); **sem chave, tudo funciona em modo extrativo** — o cálculo nunca depende de LLM.
+A narrativa em linguagem natural vem **desligada de fábrica**: ligue com `CARCHUNA_USAR_LLM=1` e uma credencial de API no ambiente. Desligada por padrão porque cada pergunta vira uma chamada paga, e quem clona o repositório não deve gastar sem ter pedido. **Sem ela tudo funciona em modo extrativo** — o cálculo nunca depende de LLM, e `/api/v1/saude` diz em português por que a narrativa não está saindo, quando não está.
+
+A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-la como dado, não como instrução: sem isso, escrever "ignore as regras acima" no campo de busca disputaria autoridade com as regras que proíbem prometer recuperação tributária. `/api/v1/legal/buscar` é também o único endpoint com limite de chamadas — 30 por minuto por IP —, porque é o único que gasta dinheiro de terceiro por requisição; o alcance e os limites dessa barreira estão escritos em `carchuna/api/limite.py`.
 
 ### Publicação (site e app no ar)
 

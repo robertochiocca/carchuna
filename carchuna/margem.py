@@ -123,16 +123,48 @@ _CENTAVO = Decimal("0.01")
 
 
 def _dinheiro(valor, campo: str) -> Decimal:
-    """Converte para ``Decimal`` rejeitando ``float`` (regra da trilogia)."""
+    """Converte para ``Decimal`` rejeitando ``float`` (regra da trilogia).
+
+    Rejeita mais três coisas que passavam caladas:
+
+    ``bool`` é subclasse de ``int`` em Python, então ``valor_bruto=True``
+    chegava como ``Decimal("1")`` — uma venda de um real, sem aviso. É o
+    erro típico de uma coluna de sim/não mapeada na coluna errada.
+
+    ``Decimal`` não-finito (``NaN``, ``Infinity``) passava intacto pelo
+    ramo do ``Decimal``, e NaN é pior que estourar: ``NaN + 10`` é NaN,
+    toda comparação com ele é falsa, e a contaminação se espalha pela
+    soma inteira sem nada acusar. ``Decimal("nan")`` também não estoura na
+    construção, então texto "nan" vindo de planilha chegava até aqui — a
+    recusa fecha esse caminho para CSV, JSON e Excel de uma vez.
+
+    A recusa do não-finito é ``ValueError``, e não ``TypeError``, porque o
+    tipo está certo e o valor é que não serve: assim a linha é recusada
+    com número e nome de coluna pelo relatório de importação, em vez de
+    derrubar o arquivo inteiro.
+    """
+    if isinstance(valor, bool):
+        raise TypeError(
+            f"`{campo}` recebeu booleano ({valor!r}): em Python `True` vira "
+            "1 e `False` vira 0, então isto entraria como dinheiro sem "
+            "ninguém perceber. Confira se uma coluna de sim/não foi mapeada "
+            "nesta coluna de valor."
+        )
     if isinstance(valor, float):
         raise TypeError(
             f"`{campo}` recebeu float ({valor!r}): use Decimal (ou str/int) "
             "para dinheiro — float acumula erro de arredondamento."
         )
-    if isinstance(valor, Decimal):
-        return valor
-    if isinstance(valor, (int, str)):
-        return Decimal(valor)
+    if isinstance(valor, (Decimal, int, str)):
+        convertido = valor if isinstance(valor, Decimal) else Decimal(valor)
+        if not convertido.is_finite():
+            raise ValueError(
+                f"`{campo}` = {valor!r} não é um número utilizável. NaN e "
+                "infinito contaminam toda a soma em silêncio (NaN + 10 = "
+                "NaN), então a linha é recusada aqui em vez de estragar o "
+                "total. Confira essa célula na planilha."
+            )
+        return convertido
     raise TypeError(f"`{campo}` deve ser Decimal, int ou str, recebeu {type(valor)}.")
 
 
