@@ -341,6 +341,40 @@ class TendenciaCustos(AnaliseInsight):
         return insights
 
 
+def _config_rateada(
+    config, grupo: list[Transacao], receita_total: Decimal, meses_periodo: int
+):
+    """No MEI, rateia o DAS do período pela participação do grupo na receita.
+
+    O DAS é um valor FIXO do mês, não um percentual: ``decompor_margem``
+    o cobra inteiro em qualquer conjunto que receba. Decompor produto a
+    produto para comparar margens cobrava o DAS uma vez por produto — com
+    dez produtos no catálogo, dez DAS. Cada produto saía mais magro do
+    que é, e o detector de margem magra acusava por causa da própria
+    contagem.
+
+    Rateio por receita porque é a única repartição que o dado sustenta:
+    o DAS não tem base de cálculo por item (LC 123/2006, art. 18-A, § 3º,
+    V — é valor fixo), então qualquer alocação é convenção, e a que
+    ninguém precisa explicar é "quem faturou mais carrega mais".
+
+    Fora do MEI a config volta intacta: no Simples o tributo já é
+    proporcional à receita do grupo e não há o que ratear.
+    """
+    if config.regime != "mei" or not receita_total:
+        return config
+    receita_grupo = sum((t.valor_bruto for t in grupo), Decimal("0"))
+    meses_grupo = len({(t.data.year, t.data.month) for t in grupo}) or 1
+    # `decompor_margem` vai calcular `das × meses_do_grupo`. O que ele
+    # precisa chegar é ao DAS do PERÍODO INTEIRO vezes a fatia do grupo na
+    # receita — daí a divisão pelos meses do grupo, que desfaz a
+    # multiplicação que ele fará em seguida. Sem isso, um produto vendido
+    # em 2 dos 6 meses levaria um terço do DAS que lhe cabe.
+    das_do_periodo = config.das_mei_mensal * meses_periodo
+    das_do_grupo = das_do_periodo * receita_grupo / receita_total
+    return replace(config, das_mei_mensal=das_do_grupo / meses_grupo)
+
+
 class ProdutosMargemMagra(AnaliseInsight):
     """Produtos com margem positiva porém magra, e o ganho de um reajuste."""
 
@@ -348,9 +382,15 @@ class ProdutosMargemMagra(AnaliseInsight):
         por_produto: dict[str, list[Transacao]] = {}
         for t in ctx.transacoes:
             por_produto.setdefault(t.produto or t.canal, []).append(t)
+        receita_total = sum((t.valor_bruto for t in ctx.transacoes), Decimal("0"))
+        meses_periodo = len({(t.data.year, t.data.month) for t in ctx.transacoes})
         magros: list[str] = []
         for nome, grupo in por_produto.items():
-            d = decompor_margem(grupo, ctx.config, ctx.tabela)
+            d = decompor_margem(
+                grupo,
+                _config_rateada(ctx.config, grupo, receita_total, meses_periodo),
+                ctx.tabela,
+            )
             if Decimal("0") <= d.margem_pct < ctx.parametros.margem_magra_pct:
                 magros.append(nome)
         if not magros:
