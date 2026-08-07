@@ -23,7 +23,7 @@ Regras inegociáveis deste módulo:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -427,6 +427,83 @@ def _conferir_teto_do_mei(transacoes: list[Transacao]) -> None:
             "Simples e recalcule aqui com o anexo certo; estimar por cima "
             "seria mostrar um lucro que você não tem."
         )
+
+
+BASE_RATEADA = "rateada"
+BASE_VARIAVEL = "variavel"
+
+
+def config_do_subconjunto(
+    config: ConfigTributaria,
+    subconjunto: list[Transacao],
+    todas: list[Transacao],
+    *,
+    base: str,
+) -> ConfigTributaria:
+    """A regra de como o DAS do MEI entra na margem de um SUBCONJUNTO.
+
+    Este é o único lugar onde essa decisão está escrita. Quem decompõe um
+    recorte das vendas — por produto, por canal, venda a venda — chama
+    aqui em vez de resolver por conta própria, porque resolver por conta
+    própria foi como o projeto acabou com duas regras opostas para a
+    mesma pergunta.
+
+    **O problema.** O DAS é valor fixo do mês (LC 123/2006, art. 18-A,
+    § 3º, V): não tem base de cálculo por item, por canal nem por venda.
+    ``decompor_margem`` o cobra inteiro em qualquer conjunto que receba,
+    então decompor dez produtos cobra dez DAS. Qualquer repartição para
+    um recorte é convenção nossa, e a convenção certa depende do que o
+    número vai responder.
+
+    **``BASE_RATEADA`` — o número é lido como margem.** Vale quando o
+    recorte é comparado com o título da tela ou com um recorte irmão
+    (margem por produto, margem por canal). O DAS do período é repartido
+    pela participação do grupo na receita, que é a única repartição com
+    as duas propriedades que essa leitura exige: as partes somam o todo,
+    e cada parte fica no mesmo pé do título. De quebra, o rateio por
+    receita desloca TODO grupo pelo mesmo tanto — ``DAS ÷ receita`` —,
+    então comparar dois grupos entre si dá o mesmo resultado que dá com o
+    DAS fora. Ele não pode inventar diferença entre grupos; só multiplicar
+    o DAS inventa (era o defeito).
+
+    **``BASE_VARIAVEL`` — o número responde "o que muda se esta linha
+    sumir".** Vale para detectar venda no prejuízo e para a visão venda a
+    venda. O DAS não muda se a venda parar, então cobrar dela um pedaço
+    dele responde a pergunta errada: manda o lojista matar uma venda que
+    estava ajudando a pagar o boleto. Repare que isso não é regalia do
+    MEI — no Simples esse caminho já é assim, porque lá todo custo por
+    venda é variável de fato.
+
+    **O que esta função NÃO faz.** Publicar DAS alocado como valor em
+    reais de um grupo ("tributos do canal Shopee: R$ 76"). Aí não é
+    convenção declarada dentro de uma taxa, é afirmação de um fato que o
+    dado não tem — quem publica assim suprime a linha (ver
+    ``AnalisadorMargem.composicao_deducao``).
+
+    Fora do MEI devolve a configuração intacta: no Simples o tributo já é
+    proporcional à receita do grupo e não há o que repartir.
+    """
+    if base not in (BASE_RATEADA, BASE_VARIAVEL):
+        raise ValueError(
+            f"base {base!r} desconhecida; use BASE_RATEADA ou BASE_VARIAVEL."
+        )
+    if config.regime != "mei":
+        return config
+    if base == BASE_VARIAVEL:
+        return replace(config, das_mei_mensal=Decimal("0"))
+
+    receita_total = sum((t.valor_bruto for t in todas), Decimal("0"))
+    if not receita_total:
+        return config
+    receita_grupo = sum((t.valor_bruto for t in subconjunto), Decimal("0"))
+    meses_periodo = len({(t.data.year, t.data.month) for t in todas}) or 1
+    meses_grupo = len({(t.data.year, t.data.month) for t in subconjunto}) or 1
+    # `decompor_margem` vai multiplicar por `meses_grupo`; a divisão aqui
+    # desfaz essa multiplicação. Sem ela, um produto vendido em 2 dos 6
+    # meses levaria um terço do DAS que lhe cabe.
+    das_do_periodo = config.das_mei_mensal * meses_periodo
+    das_do_grupo = das_do_periodo * receita_grupo / receita_total
+    return replace(config, das_mei_mensal=das_do_grupo / meses_grupo)
 
 
 def decompor_margem(
