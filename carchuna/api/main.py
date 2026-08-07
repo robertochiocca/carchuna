@@ -40,7 +40,7 @@ from carchuna.api.schemas import (
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO, preco_para_margem
 from carchuna.diagnostico import ParametrosDiagnostico
-from carchuna.rag.llm import gerar_resposta, resposta_extrativa
+from carchuna.rag.llm import estado_da_geracao, gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
 
 app = FastAPI(
@@ -72,11 +72,17 @@ def _analisador(corpo: AnaliseRequest) -> AnalisadorMargem:
 
 @app.get("/api/v1/saude")
 def saude() -> dict:
-    """Verificação de vida da API (e do índice legal)."""
+    """Verificação de vida da API, do índice legal e da narrativa opcional.
+
+    `geracao` responde à pergunta que antes não tinha resposta: por que a
+    narrativa em linguagem natural não está saindo. Traz o modelo em uso
+    e, quando algo falta, o motivo em português — nunca a credencial.
+    """
     return {
         "status": "ok",
         "versao": __version__,
         "dispositivos_no_corpus": len(_retriever.dispositivos),
+        "geracao": estado_da_geracao(),
     }
 
 

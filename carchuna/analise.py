@@ -41,6 +41,7 @@ from carchuna.margem import (
     decompor_margem,
 )
 from carchuna.metricas import (
+    JanelaRBT12,
     instabilidade_margem,
     lucro_acumulado,
     maior_queda_margem,
@@ -48,6 +49,7 @@ from carchuna.metricas import (
     rbt12_por_mes,
     serie_margem_pct,
 )
+from carchuna.metricas import procedencia_rbt12 as _procedencia_rbt12
 from carchuna.rag.retrieval import Retriever
 
 
@@ -153,6 +155,7 @@ class AnalisadorMargem:
         parametros: ParametrosDiagnostico | None = None,
         retriever: Retriever | None = None,
         rbt12_movel: bool = False,
+        confirmar_lacunas: bool = False,
         origem: str | None = None,
     ):
         if not transacoes:
@@ -170,6 +173,10 @@ class AnalisadorMargem:
         # Só afeta a série mensal; o total do período segue a informada,
         # porque a janela de 12 meses do período inteiro não existe.
         self.rbt12_movel = rbt12_movel
+        # O lojista confirmou que os meses vazios do MEIO da janela foram
+        # faturamento zero, e não dado que faltou. Só ele pode responder
+        # isso; enquanto não responde, vale a RBT12 informada.
+        self.confirmar_lacunas = confirmar_lacunas
 
     # -- construtores alternativos ------------------------------------------
 
@@ -215,7 +222,11 @@ class AnalisadorMargem:
     def mensal(self) -> dict[str, DecomposicaoMargem]:
         """Decomposição mês a mês ("AAAA-MM")."""
         return margem_mensal(
-            self.transacoes, self.config, self.tabela, rbt12_movel=self.rbt12_movel
+            self.transacoes,
+            self.config,
+            self.tabela,
+            rbt12_movel=self.rbt12_movel,
+            confirmar_lacunas=self.confirmar_lacunas,
         )
 
     def composicao_deducao(self, nome: str) -> dict[str, list[tuple[str, Decimal]]]:
@@ -248,9 +259,23 @@ class AnalisadorMargem:
         """RBT12 móvel de cada mês; ``None`` onde o arquivo não cobre a janela.
 
         Serve para a tela dizer de onde veio a alíquota de cada mês em
-        vez de o lojista ter que adivinhar.
+        vez de o lojista ter que adivinhar. Para saber POR QUE um mês deu
+        ``None`` — e quais meses estão vazios no meio da janela —, use
+        ``procedencia_rbt12``.
         """
-        return rbt12_por_mes(self.transacoes)
+        return rbt12_por_mes(self.transacoes, confirmar_lacunas=self.confirmar_lacunas)
+
+    @cached_property
+    def procedencia_rbt12(self) -> dict[str, JanelaRBT12]:
+        """De onde saiu a RBT12 de cada mês, com as lacunas nomeadas.
+
+        É o que permite a tela perguntar ao lojista "março/2026 está sem
+        lançamentos: foi mês sem faturamento ou o arquivo está
+        incompleto?" — e registrar a resposta dele no resultado.
+        """
+        return _procedencia_rbt12(
+            self.transacoes, confirmar_lacunas=self.confirmar_lacunas
+        )
 
     def margem_por_venda(self) -> list[MargemVenda]:
         """A margem real de cada venda, decomposta pelo mesmo motor testado.

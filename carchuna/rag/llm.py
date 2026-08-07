@@ -16,7 +16,89 @@ try:
 except ImportError:  # dependência opcional
     anthropic = None
 
-MODEL = os.environ.get("CARCHUNA_MODEL", "claude-opus-4-8")
+# O modelo é configurável por ambiente; este é o padrão de quem clona o
+# repositório e não configura nada. Escolha deliberada de um modelo da
+# faixa intermediária: a tarefa aqui é redigir, em português, um texto
+# que já vem com os dispositivos legais e os números prontos no contexto
+# — não é raciocínio pesado, e o padrão não deve queimar o crédito de
+# quem só quer ver o projeto rodando.
+MODELO_PADRAO = "claude-sonnet-5"
+
+
+def modelo_configurado() -> str:
+    """Qual modelo a narrativa vai usar (lido do ambiente a cada chamada).
+
+    Lido na hora, e não uma vez na importação, para que trocar
+    ``CARCHUNA_MODEL`` valha sem reimportar o módulo — o dashboard e a
+    API vivem em processos longos.
+    """
+    return os.environ.get("CARCHUNA_MODEL") or MODELO_PADRAO
+
+
+def _credencial_no_ambiente() -> bool:
+    """Se há credencial da API exportada no ambiente.
+
+    Vale como diagnóstico, **não** como porteiro: o SDK também aceita
+    perfil de credencial gravado em disco, e barrar a chamada por
+    ausência das variáveis recusaria quem autenticou por esse caminho.
+    Por isso a geração continua sendo tentada; o que esta função alimenta
+    é a mensagem de `/api/v1/saude`.
+    """
+    return bool(
+        os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    )
+
+
+def _ligada() -> bool:
+    """Se a Carchuna vai sequer tentar gerar a narrativa.
+
+    Duas condições, e credencial não é uma delas — ver
+    ``_credencial_no_ambiente``.
+    """
+    return anthropic is not None and os.environ.get("CARCHUNA_USAR_LLM", "1") == "1"
+
+
+def estado_da_geracao() -> dict:
+    """O que a Carchuna sabe dizer sobre a narrativa opcional, sem chamá-la.
+
+    Existe porque "a narrativa não apareceu" tinha exatamente uma
+    explicação visível — nenhuma. Sem pacote, sem credencial, desligada
+    por variável ou com modelo trocado, o efeito na tela era o mesmo
+    texto extrativo, e quem estava subindo a Carchuna não tinha como
+    saber em qual dos casos estava. O ``motivo`` diz qual é e o que
+    fazer a respeito.
+
+    Nunca devolve a credencial nem parte dela — só se existe.
+    """
+    if anthropic is None:
+        motivo = (
+            "O pacote `anthropic` não está instalado. A Carchuna funciona "
+            "inteira sem ele (modo extrativo, com os dispositivos legais "
+            "citados); para ligar a narrativa em linguagem natural, instale "
+            "o extra: `pip install -e .[llm]`."
+        )
+    elif os.environ.get("CARCHUNA_USAR_LLM", "1") != "1":
+        motivo = (
+            "A narrativa está desligada por `CARCHUNA_USAR_LLM`. Defina "
+            "`CARCHUNA_USAR_LLM=1` para ligá-la."
+        )
+    elif not _credencial_no_ambiente():
+        motivo = (
+            "Não encontrei credencial da API nas variáveis de ambiente. "
+            "Exporte `ANTHROPIC_API_KEY` antes de subir a Carchuna. Se você "
+            "autenticou por perfil gravado em disco, ignore este aviso: a "
+            "chamada será tentada assim mesmo. De todo modo o diagnóstico "
+            "sai igual, em modo extrativo — o cálculo nunca dependeu disto."
+        )
+    else:
+        motivo = None
+    return {
+        "disponivel": _ligada(),
+        "credencial_no_ambiente": _credencial_no_ambiente(),
+        "modelo": modelo_configurado(),
+        "motivo": motivo,
+    }
+
 
 SYSTEM_PROMPT = """\
 Você é o assistente da Carchuna, plataforma de diagnóstico de margem para \
@@ -50,14 +132,12 @@ def _montar_contexto(dispositivos) -> str:
 
 def gerar_resposta(pergunta: str, dispositivos) -> str | None:
     """Gera a resposta com o LLM. Retorna ``None`` se ele estiver indisponível."""
-    if anthropic is None or not dispositivos:
-        return None
-    if os.environ.get("CARCHUNA_USAR_LLM", "1") != "1":
+    if not dispositivos or not _ligada():
         return None
     try:
         client = anthropic.Anthropic()
         response = client.messages.create(
-            model=MODEL,
+            model=modelo_configurado(),
             max_tokens=2048,
             system=[
                 {

@@ -52,7 +52,49 @@ def _mes_anterior(mes: str, quantos: int = 1) -> str:
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
 
 
-def rbt12_movel(transacoes: list[Transacao], mes: str) -> Decimal | None:
+@dataclass(frozen=True)
+class JanelaRBT12:
+    """De onde saiu a RBT12 de um mês — e o que o lojista decidiu a respeito.
+
+    A recusa de calcular a RBT12 do arquivo é conservadora de propósito
+    (ver ``rbt12_movel``), mas conservadora e silenciosa é uma combinação
+    ruim: o lojista via a alíquota informada valer em meses que ele acha
+    que o arquivo cobria, sem nada explicando a diferença. Este registro é
+    o que permite dizer, mês a mês, qual caminho a conta tomou.
+    """
+
+    mes: str
+    valor: Decimal | None
+    origem: str  # "arquivo" ou "informada"
+    lacunas: tuple[str, ...] = ()
+    confirmada: bool = False
+
+    @property
+    def tem_lacuna(self) -> bool:
+        return bool(self.lacunas)
+
+
+def lacunas_na_janela(transacoes: list[Transacao], mes: str) -> tuple[str, ...]:
+    """Meses da janela sem nenhum lançamento **entre** dois que têm.
+
+    A distinção é o ponto. Um arquivo que começa tarde não tem lacuna:
+    ele simplesmente não alcança o começo da janela, e ninguém pode
+    confirmar como "venda zero" um período que o arquivo nunca cobriu. Já
+    o buraco no meio é uma pergunta respondível — o lojista sabe se
+    faturou naquele mês —, e é a única coisa que ele pode confirmar.
+    """
+    janela = [_mes_anterior(mes, n) for n in range(12, 0, -1)]  # em ordem
+    presentes = {_mes_de(t.data) for t in transacoes}
+    dentro = [m for m in janela if m in presentes]
+    if len(dentro) < 2:
+        return ()
+    primeiro, ultimo = dentro[0], dentro[-1]
+    return tuple(m for m in janela if primeiro < m < ultimo and m not in presentes)
+
+
+def rbt12_movel(
+    transacoes: list[Transacao], mes: str, confirmar_lacunas: bool = False
+) -> Decimal | None:
     """Receita bruta acumulada nos 12 meses ANTERIORES a ``mes`` ("AAAA-MM").
 
     É a RBT12 do art. 18, § 1º, da LC 123/2006: o mês de apuração não
@@ -70,12 +112,22 @@ def rbt12_movel(transacoes: list[Transacao], mes: str) -> Decimal | None:
     meses" e juntar com um arquivo velho produz um arquivo que começa
     cedo e tem dez meses faltando no meio. Por isso a conferência é mês a
     mês, e não pela primeira data.
+
+    ``confirmar_lacunas=True`` é o lojista respondendo à pergunta que a
+    Carchuna não sabe responder: os meses vazios do MEIO da janela são
+    faturamento zero, e não dado que faltou. Só isso ele pode confirmar —
+    um arquivo que começa depois do início da janela continua devolvendo
+    ``None`` mesmo com a confirmação, porque ali não há nada para
+    confirmar (ver ``lacunas_na_janela``).
     """
     if not transacoes:
         return None
     janela = {_mes_anterior(mes, n) for n in range(1, 13)}
     meses_do_arquivo = {_mes_de(t.data) for t in transacoes}
-    if not meses_do_arquivo.issuperset(janela):
+    faltando = janela - meses_do_arquivo
+    if faltando and not (
+        confirmar_lacunas and faltando <= set(lacunas_na_janela(transacoes, mes))
+    ):
         return None
     return sum(
         (
@@ -87,14 +139,47 @@ def rbt12_movel(transacoes: list[Transacao], mes: str) -> Decimal | None:
     )
 
 
-def rbt12_por_mes(transacoes: list[Transacao]) -> dict[str, Decimal | None]:
+def procedencia_rbt12(
+    transacoes: list[Transacao], confirmar_lacunas: bool = False
+) -> dict[str, JanelaRBT12]:
+    """A RBT12 de cada mês do arquivo, com a procedência ao lado do número.
+
+    É esta função que a tela usa para avisar o lojista: ela sabe quais
+    meses estão vazios no meio da janela, e portanto qual pergunta fazer
+    ("foi mês sem faturamento ou o arquivo está incompleto?").
+    """
+    resultado: dict[str, JanelaRBT12] = {}
+    for mes in sorted({_mes_de(t.data) for t in transacoes}):
+        valor = rbt12_movel(transacoes, mes, confirmar_lacunas=confirmar_lacunas)
+        lacunas = lacunas_na_janela(transacoes, mes)
+        # RBT12 zerada não serve para a fórmula, que divide por ela — nesse
+        # caso a conta usa a informada, e a procedência tem de dizer isso.
+        do_arquivo = valor is not None and valor > 0
+        resultado[mes] = JanelaRBT12(
+            mes=mes,
+            valor=valor,
+            origem="arquivo" if do_arquivo else "informada",
+            lacunas=lacunas,
+            confirmada=bool(lacunas) and confirmar_lacunas and do_arquivo,
+        )
+    return resultado
+
+
+def rbt12_por_mes(
+    transacoes: list[Transacao], confirmar_lacunas: bool = False
+) -> dict[str, Decimal | None]:
     """RBT12 móvel de cada mês do arquivo, em ordem cronológica.
 
     ``None`` no mês significa "não dá para calcular do arquivo" — quem
-    mostra isso na tela deve dizer que ali vale a RBT12 informada.
+    mostra isso na tela deve dizer que ali vale a RBT12 informada. Para
+    saber POR QUE deu ``None``, use ``procedencia_rbt12``.
     """
-    meses = sorted({_mes_de(t.data) for t in transacoes})
-    return {mes: rbt12_movel(transacoes, mes) for mes in meses}
+    return {
+        mes: janela.valor
+        for mes, janela in procedencia_rbt12(
+            transacoes, confirmar_lacunas=confirmar_lacunas
+        ).items()
+    }
 
 
 def margem_mensal(
@@ -102,6 +187,7 @@ def margem_mensal(
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
     rbt12_movel: bool = False,
+    confirmar_lacunas: bool = False,
 ) -> dict[str, DecomposicaoMargem]:
     """Decomposição completa da margem para cada mês ("AAAA-MM"), em ordem.
 
@@ -125,7 +211,7 @@ def margem_mensal(
             for mes, grupo in sorted(por_mes.items())
         }
 
-    janelas = rbt12_por_mes(transacoes)
+    janelas = rbt12_por_mes(transacoes, confirmar_lacunas=confirmar_lacunas)
     series = {}
     for mes, grupo in sorted(por_mes.items()):
         janela = janelas.get(mes)
