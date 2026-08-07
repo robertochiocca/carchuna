@@ -193,11 +193,17 @@ def _devolvida_de(texto, linha: int, interpretacao: dict[str, bool] | None) -> b
         return True
     if estado == "nao_devolvida":
         return False
-    motivo = (
-        "é um status intermediário (a devolução ainda não se resolveu)"
-        if estado == "indefinido"
-        else "não está no léxico de devolução"
-    )
+    if estado == "indefinido":
+        motivo = "é um status intermediário (a devolução ainda não se resolveu)"
+    elif estado == "cancelada":
+        motivo = (
+            "diz que algo foi cancelado, mas não diz o quê — e as duas "
+            "leituras vão para lados opostos: cancelar a SOLICITAÇÃO DE "
+            "DEVOLUÇÃO deixa a venda de pé, cancelar o PEDIDO quer dizer "
+            "que ela nunca aconteceu"
+        )
+    else:
+        motivo = "não está no léxico de devolução"
     raise ValueError(
         f"linha {linha}: `devolvida` = {texto!r} {motivo}. A Carchuna não "
         "adivinha: diga como tratar esta categoria — no dashboard, o "

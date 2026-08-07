@@ -227,7 +227,7 @@ class AnalisadorMargem:
             self.transacoes,
             self.config,
             self.tabela,
-            rbt12_movel=self.rbt12_movel,
+            usar_rbt12_movel=self.rbt12_movel,
             confirmar_lacunas=self.confirmar_lacunas,
         )
 

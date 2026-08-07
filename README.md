@@ -8,8 +8,8 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-339%2F339-2ee6d6.svg)](tests/)
-[![Cobertura](https://img.shields.io/badge/cobertura-98%25-2ee6d6.svg)](.github/workflows/ci.yml)
+[![Testes](https://img.shields.io/badge/testes-481%2F481-2ee6d6.svg)](tests/)
+[![Cobertura](https://img.shields.io/badge/cobertura-99%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green.svg)](LICENSE)
@@ -186,7 +186,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 339 testes
+pip install pytest && pytest          # 481 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -239,7 +239,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (339 testes, cobertura 98,58%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), reconciliação da margem por um segundo caminho e a API respondida com os mesmos centavos do motor.
+`pytest` (481 testes, cobertura 98,59%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), reconciliação da margem por um segundo caminho e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 

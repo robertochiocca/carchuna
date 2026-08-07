@@ -12,7 +12,7 @@ Tudo em ``Decimal`` e Python puro; a decomposição de cada mês é feita
 pelo próprio ``decompor_margem``, então cada número da série herda as
 fontes das deduções.
 
-**RBT12 móvel** (``margem_mensal(..., rbt12_movel=True)``): o Simples não
+**RBT12 móvel** (``margem_mensal(..., usar_rbt12_movel=True)``): o Simples não
 tem uma alíquota do ano, tem uma por mês de apuração, calculada sobre a
 receita bruta acumulada nos doze meses anteriores (LC 123/2006, art. 18,
 § 1º). Quem cresceu no ano paga em dezembro uma alíquota maior que a de
@@ -186,12 +186,12 @@ def margem_mensal(
     transacoes: list[Transacao],
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
-    rbt12_movel: bool = False,
+    usar_rbt12_movel: bool = False,
     confirmar_lacunas: bool = False,
 ) -> dict[str, DecomposicaoMargem]:
     """Decomposição completa da margem para cada mês ("AAAA-MM"), em ordem.
 
-    Com ``rbt12_movel=True`` cada mês do Simples é tributado pela RBT12
+    Com ``usar_rbt12_movel=True`` cada mês do Simples é tributado pela RBT12
     dos seus doze meses anteriores (art. 18, § 1º), em vez de repetir a
     RBT12 informada em todos eles. Nos meses em que o arquivo não cobre a
     janela inteira vale a RBT12 informada — ver ``rbt12_movel()``.
@@ -205,7 +205,7 @@ def margem_mensal(
     for t in transacoes:
         por_mes.setdefault(_mes_de(t.data), []).append(t)
 
-    if not (rbt12_movel and config.regime == "simples"):
+    if not (usar_rbt12_movel and config.regime == "simples"):
         return {
             mes: decompor_margem(grupo, config, tabela)
             for mes, grupo in sorted(por_mes.items())
