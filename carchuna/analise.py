@@ -251,6 +251,19 @@ class AnalisadorMargem:
             for canal, grupo in por_canal_grupos.items()
         ]
         por_canal = sorted([(c, v) for c, v in por_canal if v > 0], key=lambda x: -x[1])
+        # Cada canal é decomposto sozinho e arredondado sozinho; o número da
+        # tela é arredondado uma vez só, sobre a soma. A diferença é resíduo
+        # de arredondamento — no máximo um centavo por canal — e ela precisa
+        # sumir: a quebra existe para explicar o número da tela, e uma quebra
+        # que soma diferente do que ela explica é pior que quebra nenhuma.
+        # O resíduo vai para o maior canal, onde é proporcionalmente menor.
+        if por_canal:
+            residuo = self.decomposicao.deducao(nome).valor - sum(
+                v for _, v in por_canal
+            )
+            if residuo:
+                canal, valor = por_canal[0]
+                por_canal[0] = (canal, valor + residuo)
         por_mes = [(mes, d.deducao(nome).valor) for mes, d in self.mensal.items()]
         return {"por_canal": por_canal, "por_mes": por_mes}
 

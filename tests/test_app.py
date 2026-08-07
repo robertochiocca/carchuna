@@ -631,12 +631,21 @@ def test_nenhum_sinal_do_radar_chega_sem_metodo_e_sem_nota_de_confianca(tmp_path
         assert sinal.aviso
 
 
-def test_sem_sinal_o_radar_diz_que_esta_limpo(app_demo):
-    """Seção vazia é pior que seção ausente: o radar fala quando cala."""
-    from carchuna.analise import AnalisadorMargem
+def test_sem_sinal_o_radar_diz_que_esta_limpo(tmp_path):
+    """Seção vazia é pior que seção ausente: o radar fala quando cala.
 
-    assert AnalisadorMargem.demo(meses=6).radar() == []
-    sucessos = " ".join(s.value for s in app_demo.success)
+    A base limpa é construída aqui de propósito. Antes o teste usava os
+    dados sintéticos do `demo()`, que por acaso não tinham sinal nenhum
+    — e deixaram de não ter quando a antecipação passou a valer nos
+    marketplaces e as margens afinaram. Depender do acaso de um fixture
+    fazia este teste falhar por uma correção legítima do motor, sem que
+    nada do que ele afirma tivesse mudado.
+    """
+    vendas = _csv_de_meses(tmp_path / "limpas.csv", 6, "30000,00")
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    sucessos = " ".join(s.value for s in teste.success)
     assert "Nenhum sinal no radar" in sucessos
 
 

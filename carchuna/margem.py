@@ -253,6 +253,14 @@ class TabelaCustos:
     # Canais em que o lojista paga adquirência diretamente (nos marketplaces
     # a tarifa de pagamento já vem embutida na comissão/split do canal).
     canais_com_adquirencia: frozenset[str] = frozenset({"loja_propria", "fisico"})
+    # Canais em que existe custo de antecipação de recebíveis. Por padrão,
+    # TODOS: a antecipação não é privilégio de quem tem maquininha própria —
+    # marketplace segura o repasse por 15 a 30 dias e vende a liberação
+    # adiantada exatamente como a adquirente vende. Amarrar a antecipação
+    # aos canais de adquirência zerava esse custo justamente onde ele é
+    # mais comum. Quem espera o prazo em vez de antecipar informa
+    # `prazo_recebimento_dias=0`, e aí não há custo em canal nenhum.
+    canais_com_antecipacao: frozenset[str] = frozenset(CANAIS_VALIDOS)
 
     def __post_init__(self):
         self.comissao_canal = {
@@ -503,8 +511,9 @@ def decompor_margem(
     )
 
     # --- antecipação de recebíveis -----------------------------------------
+    base_ant = [t for t in vendas_efetivas if t.canal in tabela.canais_com_antecipacao]
     antecipacao = Decimal("0")
-    for t in base_adq:
+    for t in base_ant:
         if t.prazo_recebimento_dias > 0:
             antecipacao += (
                 t.valor_bruto
@@ -664,13 +673,15 @@ def reconciliar(
         perdido += t.custo_produto
         if t.canal in tabela.canais_com_adquirencia:
             perdido += t.valor_bruto * tabela.taxa_adquirencia
-            if t.prazo_recebimento_dias > 0:
-                perdido += (
-                    t.valor_bruto
-                    * tabela.taxa_antecipacao_mensal
-                    * Decimal(t.prazo_recebimento_dias)
-                    / Decimal(30)
-                )
+        # Antecipação tem base própria: marketplace não cobra adquirência do
+        # lojista e mesmo assim vende a liberação adiantada do repasse.
+        if t.canal in tabela.canais_com_antecipacao and t.prazo_recebimento_dias > 0:
+            perdido += (
+                t.valor_bruto
+                * tabela.taxa_antecipacao_mensal
+                * Decimal(t.prazo_recebimento_dias)
+                / Decimal(30)
+            )
     perdido += sum((t.frete_pago for t in transacoes), Decimal("0"))
 
     lucro_reconstruido = _q(receita - perdido)
