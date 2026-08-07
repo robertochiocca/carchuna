@@ -524,6 +524,21 @@ def decompor_margem(
     antecipacao = _q(antecipacao)
 
     # --- frete, devoluções, CMV --------------------------------------------
+    # ATENÇÃO à assimetria, que é deliberada e não descuido: o frete soma
+    # sobre `transacoes` (TODAS, devolvidas inclusive) e o CMV sobre
+    # `vendas_efetivas` (só as que ficaram de pé). Comissão, adquirência e
+    # antecipação seguem o CMV.
+    #
+    # A razão é o que acontece de fato quando uma venda volta. O frete de
+    # ida já foi pago à transportadora e não volta — e na devolução o
+    # lojista costuma pagar também o de retorno, então tratá-lo como
+    # recuperado erraria a favor da margem. O produto, esse volta para o
+    # estoque: o CMV não se realizou. A comissão o canal estorna, e sem
+    # repasse não há o que antecipar.
+    #
+    # A premissa é do frete de IDA. Quem paga também o retorno e quer isso
+    # na conta lança a linha de retorno como transação própria — a
+    # Carchuna não inventa um custo que o arquivo não traz.
     frete = _q(sum((t.frete_pago for t in transacoes), Decimal("0")))
     cmv = _q(sum((t.custo_produto for t in vendas_efetivas), Decimal("0")))
 
