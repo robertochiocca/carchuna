@@ -174,6 +174,19 @@ def test_no_mei_nao_ha_faixa_para_publicar():
     assert "diluicao_fixo" in nomes
 
 
+def test_mes_sem_faturamento_nao_gera_driver():
+    """Os dois recortes dividem pela receita — sem ela não há o que dizer.
+
+    Diluição é custo fixo sobre faturamento e faixa é tributo sobre
+    faturamento. Num mês zerado nenhuma das duas tem denominador, e sair
+    calado é a resposta certa: quem avisa que o mês não tem margem para
+    comparar é `conferir_receita`, e não um p.p. inventado aqui.
+    """
+    zerado = decompor_margem([_venda(2026, 1, "0")], MEI)
+    assert zerado.receita_bruta == Decimal("0.00")
+    assert _drivers_estruturais(zerado, zerado) == ()
+
+
 def test_regimes_diferentes_nos_dois_meses_nao_geram_driver():
     """Comparar MEI com Simples precisa de outra conversa, não de um p.p.
 

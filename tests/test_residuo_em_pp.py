@@ -209,6 +209,16 @@ def test_linha_parada_nao_ganha_centesimo_do_residuo():
 # ---------------------------------------------------------------------------
 
 
+def test_mes_sem_receita_nao_vira_divisao_por_zero():
+    """Sem faturamento não há percentual da receita — e não há erro.
+
+    Espelha `_pct` do motor: devolve zero em vez de estourar. O mês sem
+    receita não tem margem para comparar, e quem avisa isso é
+    `conferir_receita`, não uma exceção no meio da cachoeira.
+    """
+    assert _pct_exato(Decimal("10"), Decimal("0")) == Decimal("0")
+
+
 def test_o_centesimo_que_falta_vai_para_quem_mais_perdeu_arredondando():
     """Maior-resto: 0,334 perdeu mais no arredondamento que 0,333."""
     saida = _repartir_residuo_pp(
