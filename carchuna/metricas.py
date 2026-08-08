@@ -353,6 +353,114 @@ def _repartir_residuo_pp(
 
 
 @dataclass(frozen=True)
+class DriverEstrutural:
+    """Pedaço da variação da margem que o lojista não fez acontecer.
+
+    A cachoeira responde *o que* mudou: o tributo pesou mais, o CMV pesou
+    menos. Ela não responde *por quê*, e no tributo o porquê tem duas
+    causas que o lojista precisa distinguir de decisão sua, porque não
+    adianta agir sobre elas:
+
+    - o custo fixo diluído por um faturamento maior — a margem melhora
+      sem que nada tenha melhorado na operação;
+    - a faixa da RBT12 — vender mais no acumulado de doze meses sobe a
+      alíquota efetiva do mês, e a margem cai sozinha.
+
+    ``delta_pp`` tem o sinal do efeito na MARGEM: positivo ajudou.
+
+    O recorte é arredondado por conta própria, então ele pode ficar um
+    centésimo de ponto distante da linha do tributo que ele recorta. É
+    arredondamento das duas publicações, não desacordo entre as duas
+    contas — e é por isso que estes drivers não entram na soma da
+    cachoeira.
+    """
+
+    nome: str
+    rotulo: str
+    delta_pp: Decimal
+    explicacao: str
+
+
+def _drivers_estruturais(
+    dec_a: DecomposicaoMargem, dec_b: DecomposicaoMargem
+) -> tuple[DriverEstrutural, ...]:
+    """Os dois porquês do tributo, cada um no regime em que existe.
+
+    No MEI o DAS é valor fixo por mês (LC 123/2006, art. 18-A, § 3º, V):
+    não há alíquota, e tudo que move o peso do tributo é diluição. No
+    Simples o tributo é proporcional, e diluição não existe — o que move é
+    a alíquota efetiva da faixa (art. 18, § 1º-A).
+
+    Por isso cada driver sai só no seu regime, em vez de sair sempre com
+    zero: publicar "diluição: 0,00" para quem está no Simples sugeriria
+    que a conta olhou e não achou, quando na verdade a conta não se
+    aplica. Se os dois períodos estiverem em regimes diferentes não sai
+    nenhum: ali a comparação inteira precisa de outra conversa.
+    """
+    r_a, r_b = dec_a.receita_bruta, dec_b.receita_bruta
+    if r_a <= 0 or r_b <= 0:
+        return ()
+    a_a, a_b = dec_a.aliquota_efetiva, dec_b.aliquota_efetiva
+
+    if a_a is None and a_b is None:
+        das = dec_a.deducao("tributos").valor
+        # Mesmo DAS, receitas diferentes: o peso cai quando o mês fatura
+        # mais. Segurar o valor do mês base é o que isola a diluição do
+        # que seria mudança do próprio custo fixo.
+        delta = _pct_exato(das, r_a) - _pct_exato(das, r_b)
+        if r_a == r_b:
+            texto = (
+                f"O DAS do MEI é fixo em R$ {das} e os dois meses faturaram o "
+                "mesmo, então o custo fixo pesou igual: nada da variação da "
+                "margem veio de diluição."
+            )
+        else:
+            efeito = (
+                "faturar mais o diluiu" if r_b > r_a else "faturar menos o concentrou"
+            )
+            texto = (
+                f"O DAS do MEI é o mesmo R$ {das} nos dois meses, e {efeito}. "
+                "Este pedaço da variação não veio da operação: veio do "
+                "tamanho do mês."
+            )
+        return (
+            DriverEstrutural(
+                nome="diluicao_fixo",
+                rotulo="Diluição do DAS fixo",
+                delta_pp=_q2(delta),
+                explicacao=texto,
+            ),
+        )
+
+    if a_a is not None and a_b is not None:
+        base_b = r_b - dec_b.deducao("devolucoes").valor
+        delta = -(a_b - a_a) * _pct_exato(base_b, r_b)
+        de, para = (a_a * 100).quantize(_CENTESIMO), (a_b * 100).quantize(_CENTESIMO)
+        if a_a == a_b:
+            texto = (
+                f"A alíquota efetiva do Simples é a mesma nos dois meses "
+                f"({de}%): a receita dos doze meses anteriores não mudou de "
+                "faixa, e nada da variação da margem veio daí."
+            )
+        else:
+            texto = (
+                f"A alíquota efetiva do Simples passou de {de}% para {para}% "
+                "porque a receita dos doze meses anteriores mudou (LC "
+                "123/2006, art. 18, § 1º e § 1º-A). Este pedaço da variação "
+                "é da faixa, não do que você vendeu no mês."
+            )
+        return (
+            DriverEstrutural(
+                nome="faixa_rbt12",
+                rotulo="Faixa da RBT12",
+                delta_pp=_q2(delta),
+                explicacao=texto,
+            ),
+        )
+    return ()
+
+
+@dataclass(frozen=True)
 class Contribuicao:
     """Quanto um fator empurrou o lucro entre dois meses."""
 
@@ -388,6 +496,11 @@ class ExplicacaoVariacao:
     ``var_lucro_pct`` e ``var_receita_pct`` são ``Resultado``: viram
     ``indefinido`` quando a base do mês anterior não é estritamente
     positiva, em vez de devolver um percentual com o sinal trocado.
+
+    ``estruturais`` são os drivers que explicam parte do movimento sem
+    que ninguém tenha feito nada — ver ``DriverEstrutural``. Eles não
+    entram em ``contribuicoes``: são recorte de uma linha que já está
+    lá (o tributo), e somá-los junto contaria o mesmo efeito duas vezes.
     """
 
     mes_a: str
@@ -398,6 +511,7 @@ class ExplicacaoVariacao:
     delta_margem_pp: Decimal  # pontos de margem — sempre definido
     contribuicoes: tuple[Contribuicao, ...]  # ordenadas pelo efeito
     margem_base_pct: Decimal  # margem do mês A — calibra o limiar de divergência
+    estruturais: tuple[DriverEstrutural, ...]  # recortes do tributo, não somam
 
     def frase(self) -> str:
         """O resumo no formato do CFO: causa principal e secundária."""
@@ -529,6 +643,7 @@ def explicar_variacao(
         delta_margem_pp=delta_margem_pp,
         contribuicoes=contribuicoes,
         margem_base_pct=dec_a.margem_pct,
+        estruturais=_drivers_estruturais(dec_a, dec_b),
     )
 
 
