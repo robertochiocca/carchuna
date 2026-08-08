@@ -124,9 +124,42 @@ class ResumoExecutivoOut(BaseModel):
     frase: str
 
 
+class ResultadoOut(BaseModel):
+    """Um número do motor com o carimbo de validade junto.
+
+    ``valor`` é ``None`` quando ``status == "indefinido"``; ``motivo`` é o
+    texto que o cliente mostra no lugar do número. Ver
+    ``carchuna/validade.py``.
+    """
+
+    valor: Dinheiro | None
+    status: str
+    motivo: str
+
+
+class ConferenciasOut(BaseModel):
+    """O que o motor confere antes de o número sair daqui.
+
+    O dashboard já rodava a plausibilidade; a API devolvia a decomposição
+    sem conferência nenhuma, e quem integrasse por HTTP recebia margem de
+    −1854% com a mesma cara de um número bom. Como a conferência é a
+    promessa central do projeto, ela não pode ser privilégio de quem entra
+    pela tela.
+
+    ``reconciliacao`` é a que de fato valida o número: refaz o lucro
+    lançamento a lançamento, por um caminho que não passa por
+    ``decompor_margem``. O ``valor`` dela é a diferença entre os dois
+    caminhos, em reais — ``0.00`` é o esperado.
+    """
+
+    plausibilidade: ResultadoOut
+    reconciliacao: ResultadoOut
+
+
 class MargemResponse(BaseModel):
     decomposicao: DecomposicaoOut
     resumo: ResumoExecutivoOut
+    conferencias: ConferenciasOut
 
 
 class DispositivoOut(BaseModel):

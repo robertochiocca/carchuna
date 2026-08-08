@@ -29,6 +29,7 @@ from carchuna.api.schemas import (
     AnaliseRequest,
     BuscaLegalResponse,
     CenarioOut,
+    ConferenciasOut,
     CrescimentoResponse,
     DecomposicaoOut,
     DiagnosticoResponse,
@@ -38,10 +39,12 @@ from carchuna.api.schemas import (
     OportunidadeOut,
     PrecoAlvoRequest,
     PrecoAlvoResponse,
+    ResultadoOut,
     ResumoExecutivoOut,
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO, preco_para_margem
 from carchuna.diagnostico import ParametrosDiagnostico
+from carchuna.margem import conferir_plausibilidade, reconciliar
 from carchuna.rag.llm import estado_da_geracao, gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
 
@@ -91,7 +94,14 @@ def saude() -> dict:
 
 @app.post("/api/v1/margem/decompor", response_model=MargemResponse)
 def decompor(corpo: AnaliseRequest) -> MargemResponse:
-    """Decompõe a margem do período e devolve o resumo executivo."""
+    """Decompõe a margem do período, com resumo executivo e conferências.
+
+    As conferências vão no corpo da resposta, e não em código HTTP: uma
+    decomposição implausível não é erro de requisição — a conta rodou, o
+    número existe, e o que o cliente precisa saber é que não dá para
+    confiar nele. Devolver 422 aqui esconderia o número de quem tem todo
+    o direito de auditá-lo.
+    """
     analise = _analisador(corpo)
     resumo = analise.resumo_executivo()
     return MargemResponse(
@@ -104,6 +114,21 @@ def decompor(corpo: AnaliseRequest) -> MargemResponse:
                 ],
                 "frase": resumo.frase(),
             }
+        ),
+        conferencias=ConferenciasOut(
+            plausibilidade=ResultadoOut(
+                **asdict(conferir_plausibilidade(analise.decomposicao))
+            ),
+            reconciliacao=ResultadoOut(
+                **asdict(
+                    reconciliar(
+                        list(analise.transacoes),
+                        analise.config,
+                        analise.decomposicao,
+                        analise.tabela,
+                    )
+                )
+            ),
         ),
     )
 
