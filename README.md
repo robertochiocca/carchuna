@@ -218,7 +218,7 @@ A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-
 
 <div align="center">
 
-<img src="docs/img/tres-conferencias.svg" alt="As três primeiras conferências: a identidade estrutural fecha por definição e não pode falhar; a reconciliação refaz a margem por um segundo caminho e pode falhar; a faixa de plausibilidade carimba o valor que não cabe em realidade contábil. O diagrama é anterior à quarta e à quinta, descritas no texto abaixo." width="880">
+<img src="docs/img/cinco-conferencias.svg" alt="Cinco conferências em duas fileiras. As três que olham os reais: a identidade estrutural fecha por definição e não pode falhar; a reconciliação refaz a margem lançamento a lançamento e pode falhar; a faixa de plausibilidade carimba o valor que não cabe em realidade contábil. As duas que olham os percentuais: o fechamento percentual exige que todo percentual publicado seja fração da mesma receita bruta; a aditividade em pontos de margem exige que a soma das linhas da cachoeira reproduza a manchete." width="880">
 
 </div>
 

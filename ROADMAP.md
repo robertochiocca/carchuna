@@ -15,7 +15,6 @@ oficial não sai do papel. Prefiro a fila curta e honesta a uma lista de intenç
 | P5 | Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano | contrato e credenciais do agregador |
 | P6 | Persistência e autenticação da API | roadmap | só faz sentido quando houver piloto multiusuário |
 | P6 | Quebrar o `app.py` em módulos de tela | dívida assumida | nada — é escolha, não bloqueio |
-| P6 | Redesenhar `docs/img/tres-conferencias.svg` | dívida assumida | nada — o diagrama mostra 3 das 5 conferências e o texto ao lado já diz isso |
 
 Não há nada em P0 nem em P1. O que sobrou na fila está todo travado em alguma coisa que não
 se resolve escrevendo código — e, enquanto nenhum desses bloqueios cair, mexer aqui seria
