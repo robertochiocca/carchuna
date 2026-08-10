@@ -83,6 +83,16 @@ TOLERANCIA_RECONCILIACAO = Decimal("0.07")
 # cada uma.
 TOLERANCIA_ADITIVIDADE_PP = Decimal("0.05")
 
+# Precisão em que os pontos de margem são publicados. Nenhum limiar pode
+# exigir do número uma exatidão menor que a casa que a tela mostra.
+PRECISAO_PP = Decimal("0.01")
+
+# Teto do limiar de divergência: um ponto de margem inteiro.
+LIMIAR_DIVERGENCIA_MAXIMO_PP = Decimal("1.0")
+
+# Fração da margem do período base abaixo da qual a divergência é ruído.
+FRACAO_DA_MARGEM_BASE = Decimal("0.10")
+
 
 @dataclass(frozen=True)
 class Resultado:
@@ -163,6 +173,31 @@ def variacao_percentual(anterior: Decimal, atual: Decimal, grandeza: str) -> Res
         )
     return Resultado.de_valor(
         ((atual - anterior) / anterior * 100).quantize(Decimal("0.1"))
+    )
+
+
+def limiar_divergencia_pp(margem_base: Decimal) -> Decimal:
+    """Quanta divergência em pontos de margem ainda é ruído **nesta** loja.
+
+    Limiar fixo trata como iguais duas lojas que não são. Meio ponto de
+    margem é ruído para quem fecha o mês em 30% e é um sexto do resultado
+    de quem fecha em 3% — e no varejo brasileiro a segunda é a comum. Por
+    isso o limiar é ``min(1,0 p.p.; 10% da margem do período base)``: o
+    teto impede que a loja gorda aceite qualquer coisa em nome da própria
+    folga, e a fração faz o limiar encolher junto com a margem de quem tem
+    pouco a perder.
+
+    A margem base entra em módulo: num mês de prejuízo o que importa é a
+    ordem de grandeza do resultado, não o lado do zero em que ele caiu.
+
+    O piso é ``PRECISAO_PP``, a casa em que os pontos são publicados —
+    exigir menos que o centésimo seria cobrar do número uma exatidão que a
+    tela não mostra. Margem base zero cai nesse piso, e ali é ele quem
+    manda: 10% de nada não é limiar nenhum.
+    """
+    return max(
+        PRECISAO_PP,
+        min(LIMIAR_DIVERGENCIA_MAXIMO_PP, abs(margem_base) * FRACAO_DA_MARGEM_BASE),
     )
 
 

@@ -18,15 +18,18 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 
 from carchuna import __version__
 from carchuna.analise import AnalisadorMargem
+from carchuna.api.limite import LimiteDeChamadas
 from carchuna.api.schemas import (
+    MAX_PERGUNTA,
     AchadoOut,
     AnaliseRequest,
     BuscaLegalResponse,
     CenarioOut,
+    ConferenciasOut,
     CrescimentoResponse,
     DecomposicaoOut,
     DiagnosticoResponse,
@@ -36,10 +39,12 @@ from carchuna.api.schemas import (
     OportunidadeOut,
     PrecoAlvoRequest,
     PrecoAlvoResponse,
+    ResultadoOut,
     ResumoExecutivoOut,
 )
 from carchuna.crescimento import AVISO_CRESCIMENTO, preco_para_margem
 from carchuna.diagnostico import ParametrosDiagnostico
+from carchuna.margem import conferir_plausibilidade, reconciliar
 from carchuna.rag.llm import estado_da_geracao, gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
 
@@ -54,6 +59,7 @@ app = FastAPI(
     ),
 )
 
+_limite = LimiteDeChamadas()
 _retriever = Retriever()  # índice BM25 construído uma vez, na subida
 
 
@@ -88,7 +94,14 @@ def saude() -> dict:
 
 @app.post("/api/v1/margem/decompor", response_model=MargemResponse)
 def decompor(corpo: AnaliseRequest) -> MargemResponse:
-    """Decompõe a margem do período e devolve o resumo executivo."""
+    """Decompõe a margem do período, com resumo executivo e conferências.
+
+    As conferências vão no corpo da resposta, e não em código HTTP: uma
+    decomposição implausível não é erro de requisição — a conta rodou, o
+    número existe, e o que o cliente precisa saber é que não dá para
+    confiar nele. Devolver 422 aqui esconderia o número de quem tem todo
+    o direito de auditá-lo.
+    """
     analise = _analisador(corpo)
     resumo = analise.resumo_executivo()
     return MargemResponse(
@@ -101,6 +114,21 @@ def decompor(corpo: AnaliseRequest) -> MargemResponse:
                 ],
                 "frase": resumo.frase(),
             }
+        ),
+        conferencias=ConferenciasOut(
+            plausibilidade=ResultadoOut(
+                **asdict(conferir_plausibilidade(analise.decomposicao))
+            ),
+            reconciliacao=ResultadoOut(
+                **asdict(
+                    reconciliar(
+                        list(analise.transacoes),
+                        analise.config,
+                        analise.decomposicao,
+                        analise.tabela,
+                    )
+                )
+            ),
         ),
     )
 
@@ -188,14 +216,36 @@ def preco_alvo(corpo: PrecoAlvoRequest) -> PrecoAlvoResponse:
 
 @app.get("/api/v1/legal/buscar", response_model=BuscaLegalResponse)
 def buscar_legal(
-    q: str = Query(min_length=3, description="Pergunta na língua do lojista"),
+    request: Request,
+    q: str = Query(
+        min_length=3,
+        max_length=MAX_PERGUNTA,
+        description="Pergunta na língua do lojista",
+    ),
     top_k: int = Query(default=4, ge=1, le=10),
 ) -> BuscaLegalResponse:
     """Busca dispositivos no corpus PME (BM25 + sinônimos do lojista).
 
-    Com ``ANTHROPIC_API_KEY`` no ambiente, a resposta vem em linguagem
-    natural; sem chave, no modo extrativo — sempre citando fonte.
+    Com credencial da API no ambiente e ``CARCHUNA_USAR_LLM=1``, a
+    resposta vem em linguagem natural; fora isso, no modo extrativo —
+    sempre citando fonte.
+
+    É o único endpoint com limite de chamadas, porque é o único que pode
+    gastar dinheiro de terceiro por requisição. O alcance e os limites
+    dessa barreira estão em ``carchuna/api/limite.py``.
     """
+    chave = request.client.host if request.client else "desconhecido"
+    if not _limite.permitir(chave):
+        espera = _limite.segundos_para_liberar(chave)
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Muitas buscas seguidas. Tente de novo em {espera}s. O "
+                "limite existe porque cada busca pode virar uma chamada "
+                "paga ao modelo de linguagem."
+            ),
+            headers={"Retry-After": str(espera)},
+        )
     dispositivos = _retriever.buscar(q, top_k=top_k)
     resposta = gerar_resposta(q, dispositivos) or resposta_extrativa(q, dispositivos)
     return BuscaLegalResponse(

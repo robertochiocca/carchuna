@@ -42,7 +42,7 @@ from carchuna.dados import (
     sugerir_mapeamento,
     transacoes_de_mapa,
 )
-from carchuna.margem import conferir_plausibilidade
+from carchuna.margem import conferir_plausibilidade, reconciliar
 from carchuna.metricas import procedencia_rbt12
 from carchuna.rag.llm import estado_da_geracao, gerar_resposta, resposta_extrativa
 from carchuna.rag.retrieval import AVISO_LEGAL, Retriever
@@ -315,6 +315,7 @@ T = {
         ),
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
         "implausivel_titulo": "Estes números não fecham com a realidade.",
+        "reconciliacao_titulo": "Os dois caminhos de cálculo não bateram.",
         "wf_receita": "Faturamento",
         "cachoeira_dica": (
             "Toque numa barra de custo para abrir de onde ela vem — por "
@@ -668,6 +669,7 @@ T = {
         ),
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
         "implausivel_titulo": "These numbers don't add up.",
+        "reconciliacao_titulo": "The two calculation paths disagree.",
         "wf_receita": "Revenue",
         "cachoeira_dica": (
             "Click a cost bar to see where it comes from — by channel "
@@ -973,6 +975,14 @@ def _resultados_cacheados(
         "linhagem": analise.linhagem(),
         "confianca": avaliar_confianca(list(transacoes), base="calculado"),
         "plausibilidade": conferir_plausibilidade(analise.decomposicao),
+        # A conferência que de fato valida o número: refaz o lucro
+        # lançamento a lançamento, sem passar por `decompor_margem`. Ela
+        # existia desde o começo e só era chamada nos testes — a tela
+        # publicava a margem sem nunca perguntar se os dois caminhos
+        # fechavam.
+        "reconciliacao": reconciliar(
+            analise.transacoes, analise.config, analise.decomposicao, analise.tabela
+        ),
     }
 
 
@@ -1500,6 +1510,8 @@ with aba_resumo:
     # continuam na tela, porque escondê-los não conserta o dado de origem.
     if not res["plausibilidade"].ok:
         st.error(f"**{t['implausivel_titulo']}** {res['plausibilidade'].motivo}")
+    if not res["reconciliacao"].ok:
+        st.error(f"**{t['reconciliacao_titulo']}** {res['reconciliacao'].motivo}")
 
     if lang == "pt":
         st.info(resumo.frase())

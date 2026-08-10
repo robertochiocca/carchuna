@@ -24,13 +24,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 
-from carchuna.insights import (
-    ContextoInsights,
-    ParametrosInsights,
-    ProdutosMargemMagra,
-    _config_rateada,
+from carchuna.insights import ContextoInsights, ParametrosInsights, ProdutosMargemMagra
+from carchuna.margem import (
+    BASE_RATEADA,
+    ConfigTributaria,
+    TabelaCustos,
+    Transacao,
+    config_do_subconjunto,
+    decompor_margem,
 )
-from carchuna.margem import ConfigTributaria, TabelaCustos, Transacao, decompor_margem
 
 MEI = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76.00"))
 SIMPLES = ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("360000"))
@@ -52,11 +54,11 @@ def _tributos_por_produto(vendas, config) -> Decimal:
     por_produto: dict[str, list[Transacao]] = {}
     for t in vendas:
         por_produto.setdefault(t.produto, []).append(t)
-    receita = sum((t.valor_bruto for t in vendas), Decimal("0"))
-    meses = len({(t.data.year, t.data.month) for t in vendas})
     return sum(
         decompor_margem(
-            grupo, _config_rateada(config, grupo, receita, meses), TabelaCustos()
+            grupo,
+            config_do_subconjunto(config, grupo, vendas, base=BASE_RATEADA),
+            TabelaCustos(),
         )
         .deducao("tributos")
         .valor
@@ -93,12 +95,15 @@ def test_a_soma_do_das_por_produto_e_o_das_do_periodo():
 def test_quem_fatura_mais_carrega_mais_das():
     """R$ 3.000 e R$ 1.000: 75% e 25% do DAS de R$ 76,00."""
     vendas = [_venda("A", "3000"), _venda("B", "1000")]
-    receita = Decimal("4000")
     a = decompor_margem(
-        [vendas[0]], _config_rateada(MEI, [vendas[0]], receita, 1), TabelaCustos()
+        [vendas[0]],
+        config_do_subconjunto(MEI, [vendas[0]], vendas, base=BASE_RATEADA),
+        TabelaCustos(),
     )
     b = decompor_margem(
-        [vendas[1]], _config_rateada(MEI, [vendas[1]], receita, 1), TabelaCustos()
+        [vendas[1]],
+        config_do_subconjunto(MEI, [vendas[1]], vendas, base=BASE_RATEADA),
+        TabelaCustos(),
     )
     assert a.deducao("tributos").valor == Decimal("57.00")  # 76 × 0,75
     assert b.deducao("tributos").valor == Decimal("19.00")  # 76 × 0,25
@@ -123,7 +128,9 @@ def test_produto_vendido_em_poucos_meses_leva_o_das_que_lhe_cabe():
 
     so_b = [t for t in vendas if t.produto == "B"]
     b = decompor_margem(
-        so_b, _config_rateada(MEI, so_b, Decimal("6000"), 3), TabelaCustos()
+        so_b,
+        config_do_subconjunto(MEI, so_b, vendas, base=BASE_RATEADA),
+        TabelaCustos(),
     )
     assert b.deducao("tributos").valor == Decimal("114.00")  # metade dos 228
 
@@ -131,13 +138,13 @@ def test_produto_vendido_em_poucos_meses_leva_o_das_que_lhe_cabe():
 def test_no_simples_nao_ha_o_que_ratear():
     """O tributo do Simples já é proporcional à receita do grupo."""
     grupo = [_venda("A")]
-    assert _config_rateada(SIMPLES, grupo, Decimal("1000"), 1) is SIMPLES
+    assert config_do_subconjunto(SIMPLES, grupo, grupo, base=BASE_RATEADA) is SIMPLES
 
 
 def test_receita_zero_nao_estoura():
     """Arquivo só de devoluções não pode derrubar o detector."""
     grupo = [_venda("A")]
-    assert _config_rateada(MEI, grupo, Decimal("0"), 1) is MEI
+    assert config_do_subconjunto(MEI, grupo, [], base=BASE_RATEADA) is MEI
 
 
 # ---------------------------------------------------------------------------

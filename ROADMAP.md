@@ -14,10 +14,20 @@ oficial não sai do papel. Prefiro a fila curta e honesta a uma lista de intenç
 | P5 | Conector Mercado Livre API | bloqueado por humano | app registrado + OAuth do lojista |
 | P5 | Open Finance via agregador (Pluggy/Belvo) | bloqueado por humano | contrato e credenciais do agregador |
 | P6 | Persistência e autenticação da API | roadmap | só faz sentido quando houver piloto multiusuário |
+| P6 | Quebrar o `app.py` em módulos de tela | dívida assumida | nada — é escolha, não bloqueio |
 
 Não há nada em P0 nem em P1. O que sobrou na fila está todo travado em alguma coisa que não
 se resolve escrevendo código — e, enquanto nenhum desses bloqueios cair, mexer aqui seria
 reescrever o que já funciona.
+
+**Sobre o `app.py`.** São 2.002 linhas num arquivo só: os dois dicionários de tradução, sete
+abas, os gráficos e as funções cacheadas. É o maior arquivo do projeto por uma folga larga —
+o segundo tem menos da metade. Está registrado aqui como dívida reconhecida, e **não** está
+marcado para refatorar agora, por três razões: os 34 testes de UI passam por ele de ponta a
+ponta, o `@st.cache_data` grudado na função errada já causou um defeito neste projeto (e o
+teste que o pegou é estrutural, não de comportamento), e nenhuma tela nova está prevista.
+Quebrar em módulos é trabalho de risco não desprezível cujo ganho hoje é legibilidade, não
+capacidade — e o momento certo é quando uma tela nova pedir o corte, não antes.
 
 ## O que destrava cada coisa, na ordem de quem chega primeiro
 

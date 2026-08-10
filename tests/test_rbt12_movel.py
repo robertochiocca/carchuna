@@ -147,7 +147,7 @@ def test_o_arquivo_recortado_nao_derruba_a_aliquota_em_silencio():
     assert rbt12_movel(vendas, "2026-01") is None
 
     vendas_do_mes = _vendas(1, "30000.00", inicio=(2026, 1))
-    serie = margem_mensal(vendas + vendas_do_mes, CONFIG, rbt12_movel=True)
+    serie = margem_mensal(vendas + vendas_do_mes, CONFIG, usar_rbt12_movel=True)
     assert serie["2026-01"].aliquota_efetiva == Decimal("0.10")  # a informada
 
 
@@ -249,13 +249,13 @@ def test_passo_2_em_que_faixa_cada_janela_cai(
 )
 def test_passo_3_a_aliquota_que_sai_de_cada_faixa(mes, esperada):
     """Só agora o número: janela e faixa já foram conferidas acima."""
-    meses = margem_mensal(_vendas_do_cenario(), CONFIG, rbt12_movel=True)
+    meses = margem_mensal(_vendas_do_cenario(), CONFIG, usar_rbt12_movel=True)
     assert meses[mes].aliquota_efetiva == Decimal(esperada)
 
 
 def test_a_aliquota_sobe_mes_a_mes_quando_o_lojista_cresce():
     """O ponto do item: com a RBT12 fixa da v1 os três meses eram iguais."""
-    meses = margem_mensal(_vendas_do_cenario(), CONFIG, rbt12_movel=True)
+    meses = margem_mensal(_vendas_do_cenario(), CONFIG, usar_rbt12_movel=True)
     aliquotas = [meses[m].aliquota_efetiva for m in CENARIO]
     assert aliquotas == sorted(aliquotas)
     assert len(set(aliquotas)) == 3
@@ -269,16 +269,16 @@ def test_mes_sem_janela_usa_a_rbt12_informada_e_nao_inventa():
             = (798.000 − 378.000) / 4.200.000 = 10% exatos.
     """
     vendas = _vendas(6, "10000.00", inicio=(2025, 1))
-    meses = margem_mensal(vendas, CONFIG, rbt12_movel=True)
+    meses = margem_mensal(vendas, CONFIG, usar_rbt12_movel=True)
     for mes in meses.values():
         assert mes.aliquota_efetiva == Decimal("0.10")
 
 
 def test_o_padrao_nao_muda_nada_para_quem_ja_usava():
-    """`rbt12_movel=False` é o padrão: série idêntica à de antes."""
+    """`usar_rbt12_movel=False` é o padrão: série idêntica à de antes."""
     vendas = _vendas(14, "10000.00", inicio=(2025, 1))
     antes = margem_mensal(vendas, CONFIG)
-    com_flag = margem_mensal(vendas, CONFIG, rbt12_movel=False)
+    com_flag = margem_mensal(vendas, CONFIG, usar_rbt12_movel=False)
     assert antes == com_flag
     for mes in antes.values():
         assert mes.aliquota_efetiva == Decimal("0.10")
@@ -287,7 +287,7 @@ def test_o_padrao_nao_muda_nada_para_quem_ja_usava():
 def test_a_invariante_contabil_vale_em_todo_mes_da_serie_movel():
     """Trocar a alíquota mês a mês não pode furar a conta em nenhum mês."""
     vendas = _vendas(15, "10000.00", inicio=(2025, 1))
-    for mes, d in margem_mensal(vendas, CONFIG, rbt12_movel=True).items():
+    for mes, d in margem_mensal(vendas, CONFIG, usar_rbt12_movel=True).items():
         deducoes = sum(x.valor for x in d.deducoes)
         assert deducoes + d.margem_liquida == d.receita_bruta, mes
 
@@ -296,11 +296,11 @@ def test_mei_e_arquivo_vazio_nao_quebram():
     """RBT12 móvel só faz sentido no Simples; os outros seguem iguais."""
     mei = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("75.60"))
     vendas = _vendas(13, "1000.00", inicio=(2025, 1))
-    meses = margem_mensal(vendas, mei, rbt12_movel=True)
+    meses = margem_mensal(vendas, mei, usar_rbt12_movel=True)
     assert all(d.aliquota_efetiva is None for d in meses.values())
 
     with pytest.raises(ValueError, match="vazio"):
-        margem_mensal([], CONFIG, rbt12_movel=True)
+        margem_mensal([], CONFIG, usar_rbt12_movel=True)
 
 
 if __name__ == "__main__":

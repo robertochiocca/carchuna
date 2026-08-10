@@ -31,6 +31,12 @@ class TransacaoIn(BaseModel):
     devolvida: bool = False
     prazo_recebimento_dias: int = Field(default=0, ge=0)
     comissao_cobrada: Dinheiro | None = None
+    # Estes dois existiam no motor e não na API: quem chamava por HTTP não
+    # conseguia mandar o nome do produto (e ficava sem o ranking de
+    # campeões e vilões) nem o status original da devolução (e ficava sem
+    # a linhagem do dado bruto, que é metade do argumento do projeto).
+    produto: str | None = Field(default=None, max_length=200)
+    devolucao_status: str | None = Field(default=None, max_length=200)
 
     def para_dominio(self) -> Transacao:
         return Transacao(**self.model_dump())
@@ -56,10 +62,28 @@ class TabelaCustosIn(BaseModel):
         return TabelaCustos(**campos)
 
 
+# Teto de lançamentos por chamada. Sem ele, `min_length=1` era o único
+# limite e a API aceitava uma lista de qualquer tamanho: cada item vira um
+# objeto Pydantic, uma `Transacao` e várias decomposições, então o custo é
+# de memória e de CPU, e um corpo grande o bastante derruba o processo
+# antes de qualquer cálculo. 200.000 é cerca de dezesseis anos de vendas
+# do lojista típico deste estudo (~1.000 lançamentos/mês) — larga o
+# bastante para não estorvar uso real, apertada o bastante para o custo de
+# uma chamada continuar previsível.
+MAX_TRANSACOES_POR_CHAMADA = 200_000
+
+# Teto da pergunta da busca legal. A pergunta vai inteira para o prompt do
+# modelo, então o comprimento dela é custo por chamada — e um texto muito
+# longo é sinal de despejo, não de dúvida de lojista.
+MAX_PERGUNTA = 500
+
+
 class AnaliseRequest(BaseModel):
     """Corpo comum: vendas + configuração tributária + custos opcionais."""
 
-    transacoes: list[TransacaoIn] = Field(min_length=1)
+    transacoes: list[TransacaoIn] = Field(
+        min_length=1, max_length=MAX_TRANSACOES_POR_CHAMADA
+    )
     config: ConfigTributariaIn
     tabela: TabelaCustosIn | None = None
     atividade: Literal["comercio", "industria", "servicos"] = "comercio"
@@ -100,9 +124,42 @@ class ResumoExecutivoOut(BaseModel):
     frase: str
 
 
+class ResultadoOut(BaseModel):
+    """Um número do motor com o carimbo de validade junto.
+
+    ``valor`` é ``None`` quando ``status == "indefinido"``; ``motivo`` é o
+    texto que o cliente mostra no lugar do número. Ver
+    ``carchuna/validade.py``.
+    """
+
+    valor: Dinheiro | None
+    status: str
+    motivo: str
+
+
+class ConferenciasOut(BaseModel):
+    """O que o motor confere antes de o número sair daqui.
+
+    O dashboard já rodava a plausibilidade; a API devolvia a decomposição
+    sem conferência nenhuma, e quem integrasse por HTTP recebia margem de
+    −1854% com a mesma cara de um número bom. Como a conferência é a
+    promessa central do projeto, ela não pode ser privilégio de quem entra
+    pela tela.
+
+    ``reconciliacao`` é a que de fato valida o número: refaz o lucro
+    lançamento a lançamento, por um caminho que não passa por
+    ``decompor_margem``. O ``valor`` dela é a diferença entre os dois
+    caminhos, em reais — ``0.00`` é o esperado.
+    """
+
+    plausibilidade: ResultadoOut
+    reconciliacao: ResultadoOut
+
+
 class MargemResponse(BaseModel):
     decomposicao: DecomposicaoOut
     resumo: ResumoExecutivoOut
+    conferencias: ConferenciasOut
 
 
 class DispositivoOut(BaseModel):

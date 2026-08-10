@@ -145,7 +145,43 @@ def inferir_tipo_coluna(valores, max_categorias: int = MAX_CATEGORIAS) -> TipoCo
 
 # -- camada 3: significado de negócio da devolução ---------------------------
 
-ESTADOS_DEVOLUCAO = ("devolvida", "nao_devolvida", "indefinido", "desconhecido")
+ESTADOS_DEVOLUCAO = (
+    "devolvida",
+    "nao_devolvida",
+    "cancelada",
+    "indefinido",
+    "desconhecido",
+)
+
+# "Cancelado" sozinho não diz o que foi cancelado, e as duas leituras vão
+# para lados opostos: "solicitação de devolução cancelada" quer dizer que
+# a venda ficou de pé; "pedido cancelado" quer dizer que ela nunca
+# aconteceu. Estava na lista dos negativos, então todo cancelamento virava
+# venda normal — inclusive o pedido cancelado, que entrava na receita com
+# CMV e comissão de uma venda que não existiu.
+#
+# Quando o texto DIZ o que foi cancelado, a leitura sai daí: os dois
+# léxicos abaixo resolvem esses casos, e cada um vai para o seu lado.
+# Quando não diz, o valor cai em `cancelada` — estado próprio, que pede a
+# decisão do usuário em vez de escolher por ele.
+_TERMOS_DEVOLUCAO_CANCELADA = (
+    "devolucao cancelada",
+    "solicitacao cancelada",
+    "solicitacao de devolucao cancelada",
+    "reembolso cancelado",
+    "estorno cancelado",
+    "return canceled",
+    "return cancelled",
+)
+_TERMOS_VENDA_CANCELADA = (
+    "pedido cancelad",
+    "venda cancelada",
+    "compra cancelada",
+    "order canceled",
+    "order cancelled",
+    "cancelado pelo comprador",
+    "cancelado pelo vendedor",
+)
 
 # Léxico central (termos normalizados, casados por substring). A ORDEM
 # importa: negativos primeiro, porque "não devolvida" contém "devolvid"
@@ -154,7 +190,6 @@ _TERMOS_NAO_DEVOLVIDA = (
     "recusad",
     "rejeitad",
     "negad",
-    "cancelad",
     "nao se aplica",
     "nao devolvid",
     "sem devolucao",
@@ -187,6 +222,12 @@ def interpretar_devolucao(valor) -> str:
     - booleano confiável → ``devolvida``/``nao_devolvida``;
     - status conclusivo do léxico ("Solicitação aprovada" → devolução
       aconteceu; "Solicitação recusada" → não) → idem;
+    - cancelamento que DIZ o que foi cancelado ("Pedido cancelado" → a
+      venda não aconteceu; "Solicitação de devolução cancelada" → a
+      venda ficou de pé) → resolvido pelo próprio texto;
+    - cancelamento que não diz ("Cancelado") → ``cancelada``, estado
+      próprio: as duas leituras vão para lados opostos e nenhuma delas é
+      dedutível do dado;
     - estado intermediário ("Em análise") → ``indefinido`` — preservado,
       NUNCA reduzido a sim/não automaticamente;
     - fora do léxico → ``desconhecido`` (decisão do usuário).
@@ -197,6 +238,15 @@ def interpretar_devolucao(valor) -> str:
     if booleano is False:
         return "nao_devolvida"
     normal = normalizar_valor(valor)
+    # Antes dos léxicos gerais: "devolução cancelada" contém "cancelad" e
+    # também "devolucao", e casaria com o lado errado em qualquer ordem
+    # que não seja esta.
+    if any(termo in normal for termo in _TERMOS_DEVOLUCAO_CANCELADA):
+        return "nao_devolvida"
+    if any(termo in normal for termo in _TERMOS_VENDA_CANCELADA):
+        return "devolvida"
+    if "cancelad" in normal or "cancel" in normal:
+        return "cancelada"
     if any(termo in normal for termo in _TERMOS_NAO_DEVOLVIDA):
         return "nao_devolvida"
     if any(termo in normal for termo in _TERMOS_DEVOLVIDA):

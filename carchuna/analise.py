@@ -33,11 +33,13 @@ from carchuna.diagnostico import (
     ParametrosDiagnostico,
 )
 from carchuna.margem import (
+    BASE_VARIAVEL,
     ROTULOS_DEDUCOES,
     ConfigTributaria,
     DecomposicaoMargem,
     TabelaCustos,
     Transacao,
+    config_do_subconjunto,
     decompor_margem,
 )
 from carchuna.metricas import (
@@ -225,7 +227,7 @@ class AnalisadorMargem:
             self.transacoes,
             self.config,
             self.tabela,
-            rbt12_movel=self.rbt12_movel,
+            usar_rbt12_movel=self.rbt12_movel,
             confirmar_lacunas=self.confirmar_lacunas,
         )
 
@@ -240,6 +242,10 @@ class AnalisadorMargem:
         convenção de ``margem_por_venda``): a quebra de ``tributos`` por
         canal fica vazia e o valor cheio aparece na quebra por mês.
         """
+        # Terceiro caso da regra de `config_do_subconjunto`, e o único que
+        # ela NÃO resolve: aqui o DAS sairia publicado como valor em reais
+        # de um canal ("tributos da Shopee: R$ 76"), que é afirmar um fato
+        # que o dado não tem. A linha é suprimida, não repartida.
         config = self.config
         if config.regime == "mei" and nome == "tributos":
             config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("0"))
@@ -298,9 +304,9 @@ class AnalisadorMargem:
         venda considera tributos = 0 e o valor cheio segue na visão
         mensal (``decomposicao``/``mensal``).
         """
-        config = self.config
-        if config.regime == "mei":
-            config = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("0"))
+        config = config_do_subconjunto(
+            self.config, self.transacoes, self.transacoes, base=BASE_VARIAVEL
+        )
         return [
             MargemVenda(t, decompor_margem([t], config, self.tabela))
             for t in self.transacoes

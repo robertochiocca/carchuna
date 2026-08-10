@@ -12,7 +12,7 @@ Tudo em ``Decimal`` e Python puro; a decomposição de cada mês é feita
 pelo próprio ``decompor_margem``, então cada número da série herda as
 fontes das deduções.
 
-**RBT12 móvel** (``margem_mensal(..., rbt12_movel=True)``): o Simples não
+**RBT12 móvel** (``margem_mensal(..., usar_rbt12_movel=True)``): o Simples não
 tem uma alíquota do ano, tem uma por mês de apuração, calculada sobre a
 receita bruta acumulada nos doze meses anteriores (LC 123/2006, art. 18,
 § 1º). Quem cresceu no ano paga em dezembro uma alíquota maior que a de
@@ -38,7 +38,7 @@ from carchuna.margem import (
     Transacao,
     decompor_margem,
 )
-from carchuna.validade import Resultado, variacao_percentual
+from carchuna.validade import Resultado, limiar_divergencia_pp, variacao_percentual
 
 
 def _mes_de(data) -> str:
@@ -186,12 +186,12 @@ def margem_mensal(
     transacoes: list[Transacao],
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
-    rbt12_movel: bool = False,
+    usar_rbt12_movel: bool = False,
     confirmar_lacunas: bool = False,
 ) -> dict[str, DecomposicaoMargem]:
     """Decomposição completa da margem para cada mês ("AAAA-MM"), em ordem.
 
-    Com ``rbt12_movel=True`` cada mês do Simples é tributado pela RBT12
+    Com ``usar_rbt12_movel=True`` cada mês do Simples é tributado pela RBT12
     dos seus doze meses anteriores (art. 18, § 1º), em vez de repetir a
     RBT12 informada em todos eles. Nos meses em que o arquivo não cobre a
     janela inteira vale a RBT12 informada — ver ``rbt12_movel()``.
@@ -205,7 +205,7 @@ def margem_mensal(
     for t in transacoes:
         por_mes.setdefault(_mes_de(t.data), []).append(t)
 
-    if not (rbt12_movel and config.regime == "simples"):
+    if not (usar_rbt12_movel and config.regime == "simples"):
         return {
             mes: decompor_margem(grupo, config, tabela)
             for mes, grupo in sorted(por_mes.items())
@@ -282,12 +282,182 @@ def lucro_acumulado(
 # ---------------------------------------------------------------------------
 
 
+_CENTESIMO = Decimal("0.01")
+
+
 def _q1(v: Decimal) -> Decimal:
     return v.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 
 def _q2(v: Decimal) -> Decimal:
     return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _pct_exato(valor: Decimal, receita: Decimal) -> Decimal:
+    """``valor`` como % da receita, sem arredondar — espelha ``_pct``.
+
+    A conta em precisão cheia é o que torna a repartição do resíduo
+    honesta: sem ela eu só teria os percentuais já arredondados, e
+    distribuir centésimos entre números arredondados é chute com aparência
+    de método.
+    """
+    if receita == 0:
+        return Decimal("0")
+    return valor / receita * 100
+
+
+def _repartir_residuo_pp(
+    exatos: list[Decimal],
+    ajustaveis: list[bool],
+    total: Decimal,
+) -> list[Decimal]:
+    """Arredonda ao centésimo de ponto somando **exatamente** ``total``.
+
+    O problema: ``margem% = 100 − Σ pct_receita`` é exato em precisão
+    cheia, mas cada linha é publicada arredondada. Somar o que está na
+    tela dava até meio centésimo de erro por linha, e o lojista que
+    conferia a cachoeira na mão encontrava uma diferença que não existe
+    em lugar nenhum da conta.
+
+    A saída é maior-resto: cada linha vai para o centésimo mais próximo, e
+    os poucos centésimos que faltam para fechar o total vão para as linhas
+    que mais perderam no arredondamento — as de maior resto, na direção
+    em que falta. Cada linha publicada fica no máximo um centésimo do seu
+    valor exato, e a soma fecha na unha.
+
+    **O que esta função se recusa a fazer.** Se o que falta passar de um
+    centésimo por linha ajustável, ela devolve os valores arredondados sem
+    tocar em nada. Um resíduo desse tamanho não é arredondamento: é driver
+    faltando ou fórmula errada, e maquiar a soma esconderia exatamente o
+    defeito que a aditividade existe para pegar. Quem reporta é
+    ``conferir_aditividade_pp``.
+
+    ``ajustaveis`` marca quem pode receber centésimo. Fica de fora quem
+    não foi arredondado: a receita, que entra em p.p. como zero
+    estrutural, e qualquer linha que não se mexeu entre os dois períodos.
+    Dar resíduo a elas seria publicar movimento onde não houve nenhum.
+    """
+    arredondados = [_q2(e) for e in exatos]
+    falta = total - sum(arredondados, Decimal("0"))
+    residuo = int((falta / _CENTESIMO).to_integral_value(rounding=ROUND_HALF_UP))
+    if residuo == 0:
+        return arredondados
+    pool = [i for i, pode in enumerate(ajustaveis) if pode]
+    if not pool or abs(residuo) > len(pool):
+        return arredondados
+    sentido = 1 if residuo > 0 else -1
+    ordem = sorted(pool, key=lambda i: (-sentido * (exatos[i] - arredondados[i]), i))
+    for i in ordem[: abs(residuo)]:
+        arredondados[i] += sentido * _CENTESIMO
+    return arredondados
+
+
+@dataclass(frozen=True)
+class DriverEstrutural:
+    """Pedaço da variação da margem que o lojista não fez acontecer.
+
+    A cachoeira responde *o que* mudou: o tributo pesou mais, o CMV pesou
+    menos. Ela não responde *por quê*, e no tributo o porquê tem duas
+    causas que o lojista precisa distinguir de decisão sua, porque não
+    adianta agir sobre elas:
+
+    - o custo fixo diluído por um faturamento maior — a margem melhora
+      sem que nada tenha melhorado na operação;
+    - a faixa da RBT12 — vender mais no acumulado de doze meses sobe a
+      alíquota efetiva do mês, e a margem cai sozinha.
+
+    ``delta_pp`` tem o sinal do efeito na MARGEM: positivo ajudou.
+
+    O recorte é arredondado por conta própria, então ele pode ficar um
+    centésimo de ponto distante da linha do tributo que ele recorta. É
+    arredondamento das duas publicações, não desacordo entre as duas
+    contas — e é por isso que estes drivers não entram na soma da
+    cachoeira.
+    """
+
+    nome: str
+    rotulo: str
+    delta_pp: Decimal
+    explicacao: str
+
+
+def _drivers_estruturais(
+    dec_a: DecomposicaoMargem, dec_b: DecomposicaoMargem
+) -> tuple[DriverEstrutural, ...]:
+    """Os dois porquês do tributo, cada um no regime em que existe.
+
+    No MEI o DAS é valor fixo por mês (LC 123/2006, art. 18-A, § 3º, V):
+    não há alíquota, e tudo que move o peso do tributo é diluição. No
+    Simples o tributo é proporcional, e diluição não existe — o que move é
+    a alíquota efetiva da faixa (art. 18, § 1º-A).
+
+    Por isso cada driver sai só no seu regime, em vez de sair sempre com
+    zero: publicar "diluição: 0,00" para quem está no Simples sugeriria
+    que a conta olhou e não achou, quando na verdade a conta não se
+    aplica. Se os dois períodos estiverem em regimes diferentes não sai
+    nenhum: ali a comparação inteira precisa de outra conversa.
+    """
+    r_a, r_b = dec_a.receita_bruta, dec_b.receita_bruta
+    if r_a <= 0 or r_b <= 0:
+        return ()
+    a_a, a_b = dec_a.aliquota_efetiva, dec_b.aliquota_efetiva
+
+    if a_a is None and a_b is None:
+        das = dec_a.deducao("tributos").valor
+        # Mesmo DAS, receitas diferentes: o peso cai quando o mês fatura
+        # mais. Segurar o valor do mês base é o que isola a diluição do
+        # que seria mudança do próprio custo fixo.
+        delta = _pct_exato(das, r_a) - _pct_exato(das, r_b)
+        if r_a == r_b:
+            texto = (
+                f"O DAS do MEI é fixo em R$ {das} e os dois meses faturaram o "
+                "mesmo, então o custo fixo pesou igual: nada da variação da "
+                "margem veio de diluição."
+            )
+        else:
+            efeito = (
+                "faturar mais o diluiu" if r_b > r_a else "faturar menos o concentrou"
+            )
+            texto = (
+                f"O DAS do MEI é o mesmo R$ {das} nos dois meses, e {efeito}. "
+                "Este pedaço da variação não veio da operação: veio do "
+                "tamanho do mês."
+            )
+        return (
+            DriverEstrutural(
+                nome="diluicao_fixo",
+                rotulo="Diluição do DAS fixo",
+                delta_pp=_q2(delta),
+                explicacao=texto,
+            ),
+        )
+
+    if a_a is not None and a_b is not None:
+        base_b = r_b - dec_b.deducao("devolucoes").valor
+        delta = -(a_b - a_a) * _pct_exato(base_b, r_b)
+        de, para = (a_a * 100).quantize(_CENTESIMO), (a_b * 100).quantize(_CENTESIMO)
+        if a_a == a_b:
+            texto = (
+                f"A alíquota efetiva do Simples é a mesma nos dois meses "
+                f"({de}%): a receita dos doze meses anteriores não mudou de "
+                "faixa, e nada da variação da margem veio daí."
+            )
+        else:
+            texto = (
+                f"A alíquota efetiva do Simples passou de {de}% para {para}% "
+                "porque a receita dos doze meses anteriores mudou (LC "
+                "123/2006, art. 18, § 1º e § 1º-A). Este pedaço da variação "
+                "é da faixa, não do que você vendeu no mês."
+            )
+        return (
+            DriverEstrutural(
+                nome="faixa_rbt12",
+                rotulo="Faixa da RBT12",
+                delta_pp=_q2(delta),
+                explicacao=texto,
+            ),
+        )
+    return ()
 
 
 @dataclass(frozen=True)
@@ -317,9 +487,20 @@ class ExplicacaoVariacao:
 
     ``delta_lucro`` em reais também está sempre definido.
 
+    A soma dos ``delta_pp`` publicados fecha com ``delta_margem_pp`` na
+    unha, e não por sorte: o resíduo de arredondamento é repartido por
+    maior-resto em ``_repartir_residuo_pp``. Quando o resíduo é grande
+    demais para ser arredondamento, a repartição se recusa a acontecer e
+    ``conferir_aditividade_pp`` reporta a divergência.
+
     ``var_lucro_pct`` e ``var_receita_pct`` são ``Resultado``: viram
     ``indefinido`` quando a base do mês anterior não é estritamente
     positiva, em vez de devolver um percentual com o sinal trocado.
+
+    ``estruturais`` são os drivers que explicam parte do movimento sem
+    que ninguém tenha feito nada — ver ``DriverEstrutural``. Eles não
+    entram em ``contribuicoes``: são recorte de uma linha que já está
+    lá (o tributo), e somá-los junto contaria o mesmo efeito duas vezes.
     """
 
     mes_a: str
@@ -329,6 +510,8 @@ class ExplicacaoVariacao:
     delta_lucro: Decimal  # R$ — sempre definido
     delta_margem_pp: Decimal  # pontos de margem — sempre definido
     contribuicoes: tuple[Contribuicao, ...]  # ordenadas pelo efeito
+    margem_base_pct: Decimal  # margem do mês A — calibra o limiar de divergência
+    estruturais: tuple[DriverEstrutural, ...]  # recortes do tributo, não somam
 
     def frase(self) -> str:
         """O resumo no formato do CFO: causa principal e secundária."""
@@ -371,6 +554,13 @@ def explicar_variacao(
       faturando o mesmo por real não move a margem. O que move são as
       fatias.
 
+    Os p.p. são calculados em precisão cheia a partir dos valores em
+    reais e só depois arredondados, com o resíduo repartido por
+    maior-resto. Antes eles saíam da subtração de dois percentuais já
+    arredondados, e a soma da cachoeira ficava alguns centésimos longe da
+    manchete — diferença pequena, mas que aparecia para quem conferisse na
+    mão e não tinha resposta nenhuma na conta.
+
     A "pressão" é a fatia de cada fator ENTRE os que empurraram o lucro no
     sentido observado; quem empurrou contra aparece com o delta e pressão 0.
     """
@@ -389,29 +579,36 @@ def explicar_variacao(
     (mes_a, dec_a), (mes_b, dec_b) = meses[idx - 1], meses[idx]
 
     delta_lucro = dec_b.margem_liquida - dec_a.margem_liquida
+    r_a, r_b = dec_a.receita_bruta, dec_b.receita_bruta
     # A receita move o lucro em reais, mas não move a margem por si só:
     # entra com delta_pp zero de propósito, e o comentário existe para
-    # ninguém "consertar" isso depois achando que faltou um termo.
-    contribs = [
-        (
-            "receita",
-            "Receita",
-            dec_b.receita_bruta - dec_a.receita_bruta,
-            Decimal("0"),
+    # ninguém "consertar" isso depois achando que faltou um termo. Sendo
+    # zero estrutural, e não zero arredondado, ela também não recebe
+    # resíduo — daí o `False` na terceira posição.
+    contribs = [("receita", "Receita", r_b - r_a, Decimal("0"), False)]
+    for d in dec_b.deducoes:
+        anterior = dec_a.deducao(d.nome)
+        delta_pp = _pct_exato(anterior.valor, r_a) - _pct_exato(d.valor, r_b)
+        contribs.append(
+            (
+                d.nome,
+                ROTULOS_DEDUCOES.get(d.nome, d.nome),
+                -(d.valor - anterior.valor),
+                delta_pp,
+                delta_pp != 0,
+            )
         )
-    ]
-    contribs += [
-        (
-            d.nome,
-            ROTULOS_DEDUCOES.get(d.nome, d.nome),
-            -(d.valor - dec_a.deducao(d.nome).valor),
-            -(d.pct_receita - dec_a.deducao(d.nome).pct_receita),
-        )
-        for d in dec_b.deducoes
-    ]
+
+    delta_margem_pp = dec_b.margem_pct - dec_a.margem_pct
+    publicados = _repartir_residuo_pp(
+        [pp for _, _, _, pp, _ in contribs],
+        [pode for *_, pode in contribs],
+        delta_margem_pp,
+    )
+
     sentido = -1 if delta_lucro < 0 else 1
     pressao_total = sum(
-        (abs(delta) for _, _, delta, _ in contribs if delta * sentido > 0),
+        (abs(delta) for _, _, delta, _, _ in contribs if delta * sentido > 0),
         Decimal("0"),
     )
     contribuicoes = tuple(
@@ -421,14 +618,16 @@ def explicar_variacao(
                     nome=nome,
                     rotulo=rotulo,
                     delta_reais=_q2(delta),
-                    delta_pp=delta_pp,
+                    delta_pp=pp,
                     pct_da_pressao=(
                         _q1(abs(delta) / pressao_total * 100)
                         if pressao_total > 0 and delta * sentido > 0
                         else Decimal("0")
                     ),
                 )
-                for nome, rotulo, delta, delta_pp in contribs
+                for (nome, rotulo, delta, _, _), pp in zip(
+                    contribs, publicados, strict=True
+                )
             ),
             key=lambda c: (-c.pct_da_pressao, -abs(c.delta_reais)),
         )
@@ -436,13 +635,46 @@ def explicar_variacao(
     return ExplicacaoVariacao(
         mes_a=mes_a,
         mes_b=mes_b,
-        var_receita_pct=variacao_percentual(
-            dec_a.receita_bruta, dec_b.receita_bruta, "faturamento"
-        ),
+        var_receita_pct=variacao_percentual(r_a, r_b, "faturamento"),
         var_lucro_pct=variacao_percentual(
             dec_a.margem_liquida, dec_b.margem_liquida, "lucro"
         ),
         delta_lucro=_q2(delta_lucro),
-        delta_margem_pp=dec_b.margem_pct - dec_a.margem_pct,
+        delta_margem_pp=delta_margem_pp,
         contribuicoes=contribuicoes,
+        margem_base_pct=dec_a.margem_pct,
+        estruturais=_drivers_estruturais(dec_a, dec_b),
+    )
+
+
+def conferir_aditividade_pp(explicacao: ExplicacaoVariacao) -> Resultado:
+    """A cachoeira publicada soma o que a manchete diz?
+
+    A manchete é ``delta_margem_pp``, e a cachoeira é a lista de
+    ``contribuicoes``. Elas têm de dar o mesmo número, porque
+    ``margem% = 100 − Σ pct_receita`` e a soma dos deltas das fatias é o
+    delta da margem. Com o resíduo repartido a igualdade sai exata; se
+    sobrar divergência, ela não é arredondamento.
+
+    O limiar não é fixo: vem de ``limiar_divergencia_pp`` e encolhe junto
+    com a margem da loja, porque meio ponto que é ruído para quem fecha em
+    30% é um sexto do resultado de quem fecha em 3%.
+
+    Devolve a divergência em pontos, carimbada. Não conserta a cachoeira e
+    não esconde a linha: quem lê precisa saber que a decomposição daquele
+    mês não fecha, e isso é diferente de não ter decomposição.
+    """
+    soma = sum((c.delta_pp for c in explicacao.contribuicoes), Decimal("0"))
+    divergencia = abs(soma - explicacao.delta_margem_pp)
+    limiar = limiar_divergencia_pp(explicacao.margem_base_pct)
+    if divergencia <= limiar:
+        return Resultado.de_valor(divergencia)
+    return Resultado.implausivel(
+        divergencia,
+        f"A decomposição de {explicacao.mes_a} para {explicacao.mes_b} não "
+        f"fecha: as linhas somam {soma} ponto(s) de margem e a variação do "
+        f"período é de {explicacao.delta_margem_pp}, uma diferença de "
+        f"{divergencia} — acima do limiar de {limiar} p.p. para uma margem "
+        f"base de {explicacao.margem_base_pct}%. Falta um fator na conta; "
+        "não use a cachoeira deste mês para decidir onde mexer.",
     )

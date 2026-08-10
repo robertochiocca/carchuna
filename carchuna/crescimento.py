@@ -26,11 +26,14 @@ from decimal import ROUND_HALF_UP, ROUND_UP, Decimal
 
 from carchuna.margem import (
     ANEXOS_SIMPLES,
+    BASE_RATEADA,
+    BASE_VARIAVEL,
     TETO_SIMPLES,
     ConfigTributaria,
     TabelaCustos,
     Transacao,
     aliquota_efetiva_simples,
+    config_do_subconjunto,
     decompor_margem,
 )
 from carchuna.rag.retrieval import Dispositivo, Retriever
@@ -152,8 +155,20 @@ class AnaliseMixCanais(AnaliseCrescimento):
             por_canal.setdefault(t.canal, []).append(t)
         if len(por_canal) < 2:
             return []
+        # Comparação entre canais: rateada. Com o DAS inteiro em cada
+        # canal, dois canais de economia unitária IDÊNTICA e volumes
+        # diferentes abriam gap — o menor carregava o mesmo DAS sobre
+        # menos receita — e a análise mandava migrar venda entre canais
+        # que rendem igual. Pior: a recomendação invertia se o volume
+        # invertesse.
         margens = {
-            canal: decompor_margem(grupo, ctx.config, ctx.tabela)
+            canal: decompor_margem(
+                grupo,
+                config_do_subconjunto(
+                    ctx.config, grupo, ctx.transacoes, base=BASE_RATEADA
+                ),
+                ctx.tabela,
+            )
             for canal, grupo in por_canal.items()
         }
         melhor = max(margens, key=lambda c: margens[c].margem_pct)
@@ -198,7 +213,14 @@ class AnaliseVendasNoPrejuizo(AnaliseCrescimento):
         for t in ctx.transacoes:
             if t.devolvida:
                 continue
-            margem = decompor_margem([t], ctx.config, ctx.tabela).margem_liquida
+            # "Esta venda sai abaixo do custo?" é pergunta sobre o que
+            # muda se ela parar — e o DAS não muda. Cobrá-lo por venda
+            # marcava dez vendas saudáveis como prejuízo e mandava o
+            # lojista matar o que pagava o próprio boleto.
+            config_da_venda = config_do_subconjunto(
+                ctx.config, [t], ctx.transacoes, base=BASE_VARIAVEL
+            )
+            margem = decompor_margem([t], config_da_venda, ctx.tabela).margem_liquida
             if margem < 0:
                 prejuizo += -margem
                 exemplos.append(t)

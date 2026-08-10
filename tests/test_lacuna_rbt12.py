@@ -171,18 +171,18 @@ def test_a_serie_mensal_muda_de_aliquota_quando_o_lojista_confirma():
     """
     vendas = _sem(_vendas(13, "10000.00"), (2025, 6))
 
-    sem = margem_mensal(vendas, CONFIG, rbt12_movel=True)
+    sem = margem_mensal(vendas, CONFIG, usar_rbt12_movel=True)
     assert sem["2026-01"].aliquota_efetiva == Decimal("0.10")
 
-    com = margem_mensal(vendas, CONFIG, rbt12_movel=True, confirmar_lacunas=True)
+    com = margem_mensal(vendas, CONFIG, usar_rbt12_movel=True, confirmar_lacunas=True)
     assert com["2026-01"].aliquota_efetiva == Decimal("0.04")
 
 
 def test_confirmar_nao_muda_nada_em_arquivo_sem_lacuna():
     """A opção é inerte onde não há lacuna — não é um atalho global."""
     vendas = _vendas(14, "10000.00")
-    assert margem_mensal(vendas, CONFIG, rbt12_movel=True) == margem_mensal(
-        vendas, CONFIG, rbt12_movel=True, confirmar_lacunas=True
+    assert margem_mensal(vendas, CONFIG, usar_rbt12_movel=True) == margem_mensal(
+        vendas, CONFIG, usar_rbt12_movel=True, confirmar_lacunas=True
     )
 
 

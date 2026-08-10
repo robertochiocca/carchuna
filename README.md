@@ -8,8 +8,8 @@
 
 [![CI](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml/badge.svg)](https://github.com/robertochiocca/carchuna/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Testes](https://img.shields.io/badge/testes-339%2F339-2ee6d6.svg)](tests/)
-[![Cobertura](https://img.shields.io/badge/cobertura-98%25-2ee6d6.svg)](.github/workflows/ci.yml)
+[![Testes](https://img.shields.io/badge/testes-519%2F519-2ee6d6.svg)](tests/)
+[![Cobertura](https://img.shields.io/badge/cobertura-99%25-2ee6d6.svg)](.github/workflows/ci.yml)
 [![Código: black](https://img.shields.io/badge/c%C3%B3digo-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green.svg)](LICENSE)
@@ -186,7 +186,7 @@ cd carchuna
 
 # O núcleo é Python puro (zero dependências): exemplo e testes rodam offline
 python examples/exemplo_diagnostico.py
-pip install pytest && pytest          # 339 testes
+pip install pytest && pytest          # 519 testes
 
 # Dashboard e API
 pip install -r requirements.txt
@@ -205,7 +205,9 @@ print(analise.resumo_executivo().frase())
 # anunciada (41.90%) e a real (13.36%); 35% dessa perda veio de Comissões de canal.
 ```
 
-Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrativa em linguagem natural (API da Anthropic); **sem chave, tudo funciona em modo extrativo** — o cálculo nunca depende de LLM.
+A narrativa em linguagem natural vem **desligada de fábrica**: ligue com `CARCHUNA_USAR_LLM=1` e uma credencial de API no ambiente. Desligada por padrão porque cada pergunta vira uma chamada paga, e quem clona o repositório não deve gastar sem ter pedido. **Sem ela tudo funciona em modo extrativo** — o cálculo nunca depende de LLM, e `/api/v1/saude` diz em português por que a narrativa não está saindo, quando não está.
+
+A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-la como dado, não como instrução: sem isso, escrever "ignore as regras acima" no campo de busca disputaria autoridade com as regras que proíbem prometer recuperação tributária. `/api/v1/legal/buscar` é também o único endpoint com limite de chamadas — 30 por minuto por IP —, porque é o único que gasta dinheiro de terceiro por requisição; o alcance e os limites dessa barreira estão escritos em `carchuna/api/limite.py`.
 
 ### Publicação (site e app no ar)
 
@@ -216,16 +218,19 @@ Com `ANTHROPIC_API_KEY` configurada, as respostas do diagnóstico ganham narrati
 
 <div align="center">
 
-<img src="docs/img/tres-conferencias.svg" alt="Três conferências diferentes: a identidade estrutural fecha por definição e não pode falhar; a reconciliação refaz a margem por um segundo caminho e pode falhar; a faixa de plausibilidade carimba o valor que não cabe em realidade contábil." width="880">
+<img src="docs/img/cinco-conferencias.svg" alt="Cinco conferências em duas fileiras. As três que olham os reais: a identidade estrutural fecha por definição e não pode falhar; a reconciliação refaz a margem lançamento a lançamento e pode falhar; a faixa de plausibilidade carimba o valor que não cabe em realidade contábil. As duas que olham os percentuais: o fechamento percentual exige que todo percentual publicado seja fração da mesma receita bruta; a aditividade em pontos de margem exige que a soma das linhas da cachoeira reproduza a manchete." width="880">
 
 </div>
 
 - **Tributos**: fórmula oficial da alíquota efetiva (LC 123/2006, art. 18, § 1º-A) com os Anexos I–V na redação da LC 155/2016, validada por testes calculados à mão — inclusive o degrau da 6ª faixa, em que o ICMS/ISS saem da guia pelo sublimite (arts. 19 e 20). A conferência automática no Planalto foi tentada em 19/07/2026 (portal retornou HTTP 503 a robôs); a data e a ressalva estão documentadas em `carchuna/margem.py`.
 - **Comissões/adquirência/antecipação**: tabelas **editáveis pelo usuário**, com defaults documentados com fonte e marcados `estimado` — o seu contrato prevalece.
-- **Três conferências diferentes, e cada uma responde por uma coisa só** — a distinção existe porque durante muito tempo eu chamei a primeira de "validação", e ela não é:
+- **Cinco conferências diferentes, e cada uma responde por uma coisa só** — a distinção existe porque durante muito tempo eu chamei a primeira de "validação", e ela não é:
   - **Identidade estrutural** (deduções + margem == receita). Prova que o código não perdeu nem duplicou um termo na soma. **Não** prova que os números são válidos e **não** detecta entrada absurda: a margem é construída como resíduo, então a igualdade fecha por definição. Rodando o motor com uma comissão de 900% da receita, a margem sai em −1854% e a identidade fecha normalmente. É teste de regressão de implementação, e é só isso.
   - **Reconciliação independente** (`margem.reconciliar`). Recompõe a margem lançamento a lançamento, a partir dos campos crus, sem passar pela decomposição — dois caminhos, duas somas — e compara com tolerância de **R$ 0,07**, que é meio centavo por linha arredondada e nada além disso. Esta asserção **pode** falhar, e é ela que valida o número: se o motor cobrar CMV sobre uma venda devolvida, a identidade continua fechando e esta não.
   - **Faixa de plausibilidade** (`margem.conferir_plausibilidade`). Dedução isolada maior que o faturamento do período, ou margem fora da faixa de −100% a 100%, saem carimbadas como `implausivel`, com o motivo em português na tela — sem limitar, zerar ou esconder o valor. Os limiares vivem todos em `carchuna/validade.py`, com o porquê de cada um escrito ao lado.
+  - **Fechamento percentual** (`margem.conferir_fechamento_percentual`). As três de cima olham reais; os percentuais são outro número, e são eles que aparecem na cachoeira e no resumo. Todo percentual publicado tem de ser fração da **mesma** receita bruta, e a soma das deduções mais a margem tem de dar 100. O buraco que isso fecha é concreto: trocar o denominador do percentual do tributo para a base do tributo (`receita − devoluções`) é uma "correção" plausível — aquela *é* a base legal do art. 3º, § 1º —, e feita a troca os valores em reais continuam certos, a reconciliação diz ok, a identidade fecha, e a tela publica percentuais que somam 101,41%.
+  - **Aditividade em pontos de margem** (`metricas.conferir_aditividade_pp`). A comparação entre dois meses tem uma manchete ("a margem subiu 0,66 ponto") e uma cachoeira que a explica linha a linha. As duas têm de dar o mesmo número, e agora dão **exatamente**: os pontos de cada linha saem dos reais em precisão cheia, e o resíduo de arredondamento é repartido por maior-resto — quem mais perdeu no arredondamento recebe o centésimo que falta. Quando o resíduo é grande demais para ser arredondamento, a repartição não acontece e esta conferência reporta a divergência, porque fechar a soma na marra esconderia o driver que está faltando. O limiar não é fixo: `min(1,0 p.p.; 10% da margem do período base)`, porque meio ponto é ruído para quem fecha o mês em 30% e é um sexto do resultado de quem fecha em 3%.
+- **As conferências rodam nas duas fronteiras, não só na tela.** Elas viviam em `carchuna/margem.py` sem que a produção as chamasse, com uma exceção: o dashboard rodava a plausibilidade. A API devolvia a decomposição crua — CMV de R$ 5.000 numa venda de R$ 100 saía com HTTP 200 e a mesma cara de um número bom. Hoje `/api/v1/margem/decompor` devolve `conferencias.plausibilidade` e `conferencias.reconciliacao` no corpo (e não em código HTTP: a conta rodou, o número existe, e devolver 4xx esconderia justamente o dado que precisa ser auditado), e o dashboard mostra as duas.
 - **Quando não há número, o motor diz isso.** Variação percentual sobre base zero ou negativa é `indefinido`, não um percentual com o sinal trocado: melhorar de −100 para −50 apareceria como queda de 50%. Onde o percentual não vale, respondem a variação em reais e em pontos de margem, que atravessam o zero sem mentir.
 - **Base legal dos achados**: apenas o que o `Retriever` recuperou do corpus versionado — com link oficial e status de revisão em cada citação. Fluxo: pergunta → busca no corpus → recuperação dos trechos → LLM interpreta (opcional) → cita fonte → aviso.
 - **Excel**: o arquivo `.xlsx` guarda a célula em ponto flutuante — o erro é anterior à Carchuna, e nenhuma conversão desfaz o que já foi arredondado. O que dá para fazer é não deixá-lo entrar: todo `float` que vem de planilha é quantizado a centavos com `ROUND_HALF_UP` na fronteira, antes de virar `Decimal`. Então a garantia é **"o motor nunca calcula em `float`"** — e ela não se estende ao que o Excel arredondou antes de o arquivo chegar. Para dinheiro com mais de duas casas, prefira CSV. Os campos de percentual da barra lateral do dashboard **não** são a segunda exceção: eles são lidos como texto e convertidos pelo mesmo parser das planilhas (`decimal_de_texto`), justamente porque `st.number_input` devolveria `float` — e esse número multiplica cada venda da base. Os `float()` que aparecem no `app.py` e no `relatorio.py` são de desenho de gráfico e de PDF: recebem um `Decimal` já calculado e não voltam para o cálculo.
@@ -236,7 +241,7 @@ Não é ERP (não emite nota, não controla estoque); **não dá parecer jurídi
 
 ## Qualidade
 
-`pytest` (339 testes, cobertura 98,58%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), reconciliação da margem por um segundo caminho e a API respondida com os mesmos centavos do motor.
+`pytest` (519 testes, cobertura 98,67%, mínimo 95% no CI) · `ruff` · `black` · GitHub Actions em Python 3.10, 3.11 e 3.12. Padrão de teste: casos validados contra cálculo manual (o "VaR ≈ 1.645σ" daqui é a alíquota do Simples conferida à mão), reconciliação da margem por um segundo caminho e a API respondida com os mesmos centavos do motor.
 
 **Stack:** Python 3.10+ (núcleo sem dependências) · FastAPI · Pydantic · Streamlit · matplotlib · pytest
 
@@ -256,7 +261,7 @@ Live app: [carchuna.streamlit.app](https://carchuna.streamlit.app) · project si
 
 ```bash
 python examples/exemplo_diagnostico.py       # zero dependencies, fully offline
-pytest                                        # 339 tests, 98.58% coverage
+pytest                                        # 519 tests, 98.67% coverage
 streamlit run app.py                          # dashboard
 uvicorn carchuna.api.main:app --reload        # FastAPI + Pydantic, /docs
 ```
