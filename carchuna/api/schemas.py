@@ -103,6 +103,10 @@ class DecomposicaoOut(BaseModel):
     margem_liquida: Dinheiro
     margem_pct: Dinheiro
     aliquota_efetiva: Dinheiro | None
+    # Verdades sobre o período que não recusam o cálculo — a projeção de
+    # teto do MEI é a primeira. Sai aqui e não em código HTTP: a conta
+    # rodou e o número vale.
+    avisos: list[str] = []
 
 
 class FontePerdaOut(BaseModel):

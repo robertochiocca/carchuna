@@ -328,6 +328,11 @@ class DecomposicaoMargem:
     margem_liquida: Decimal
     margem_pct: Decimal
     aliquota_efetiva: Decimal | None  # fração (ex.: 0.0565) — só no Simples
+    # Coisas verdadeiras sobre este período que não recusam o cálculo e
+    # não cabem em nenhuma dedução — hoje, a projeção de teto do MEI. Não
+    # confundir com as conferências: `Resultado` carimba um número; aqui é
+    # texto para o lojista ler, e o número ao lado vale.
+    avisos: tuple[str, ...] = ()
 
     def deducao(self, nome: str) -> Deducao:
         """Busca uma dedução pelo nome (ex.: ``"tributos"``)."""
@@ -418,50 +423,90 @@ def _brl(valor: Decimal) -> str:
     return f"{milhares},{centavos}"
 
 
-def _conferir_teto_do_mei(transacoes: list[Transacao]) -> None:
-    """Recusa o cálculo quando o faturamento estoura o teto do MEI.
+def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
+    """Recusa o cálculo do MEI acima do teto; projeção vira aviso, não recusa.
 
-    O teto é anual (LC 123/2006, art. 18-A, § 1º) e proporcional ao número
-    de meses no ano de abertura (§ 2º) — então a conferência é ano a ano,
-    com o limite reduzido pelos meses que o arquivo cobre naquele ano.
-    Somar o arquivo inteiro recusaria um MEI regular só por ele ter dois
-    anos de histórico, que é o oposto do que se quer.
+    **A recusa é uma só, e é factual**: a receita bruta de um ano do
+    arquivo passou de ``TETO_MEI_ANUAL`` (LC 123/2006, art. 18-A, § 1º).
+    Ali o enquadramento mudou de fato — excesso de mais de 20% desenquadra
+    retroativamente ao início do ano (art. 18-A, § 7º, e art. 3º, § 10) —
+    e o DAS fixo deixou de descrever o imposto devido. Calcular nesse
+    estado erra **para cima**, no campo em que o lojista mais confia, e o
+    custo do desenquadramento retroativo é ordens de grandeza maior que a
+    diferença que a tela mostraria.
 
-    Recusar é a resposta honesta. Acima do teto o enquadramento muda —
-    excesso de mais de 20% desenquadra retroativamente ao início do ano
-    (art. 18-A, § 7º, e art. 3º, § 10) — e o DAS fixo deixa de descrever o
-    imposto devido. Um número calculado nesse estado erra **para cima**, no
-    campo em que o lojista mais confia, e o custo do desenquadramento
-    retroativo é ordens de grandeza maior que a diferença que a tela
-    mostraria.
+    **A projeção é outra coisa e não recusa nada.** Quando o ano do
+    arquivo ainda não fechou, o ritmo dos meses cobertos pode apontar para
+    um estouro que ainda não aconteceu. Isso é informação útil e é hora de
+    o lojista falar com o contador — mas não é fato consumado, e recusar
+    o cálculo por causa dele é punir quem ainda está dentro da lei.
+
+    Antes esta conferência tratava as duas coisas como uma. Pior: ela
+    dividia o teto pelo número de meses **com venda**, não pela janela do
+    arquivo. Um MEI sazonal que fatura em novembro e dezembro e fecha o
+    ano em R$ 35.000 — folgadamente dentro do teto — era recusado, porque
+    dois meses de venda valiam um teto de R$ 13.500. A conta media
+    intensidade de venda e chamava aquilo de teto.
+
+    A janela agora é o **span**: do primeiro ao último mês daquele ano
+    presente no arquivo, inclusive. Mês vazio no meio conta, porque ele
+    faz parte do período que o arquivo cobre.
+
+    Nota sobre o fundamento, que estava errado no texto anterior: o § 2º
+    é a proporcionalidade do ano de **abertura** do MEI, não da janela de
+    um arquivo de vendas. Um arquivo de três meses não reduz o teto de
+    ninguém. Por isso a projeção sai daqui sem citação legal: ela é
+    **heurística de produto** — regra de três sobre o ritmo observado —, e
+    apresentá-la com um parágrafo de lei ao lado a faria passar por
+    obrigação onde ela é só um alerta antecipado.
+
+    O que a Carchuna não sabe, e o aviso não substitui: quem abriu o MEI
+    no meio do ano tem teto proporcional de verdade (§ 2º), menor que
+    ``TETO_MEI_ANUAL`` — e a data de abertura não está no arquivo de
+    vendas.
+
+    Devolve os avisos de projeção, um por ano. Quem chama publica.
     """
     por_ano: dict[int, list[Transacao]] = {}
     for t in transacoes:
         por_ano.setdefault(t.data.year, []).append(t)
 
+    avisos: list[str] = []
     for ano, do_ano in sorted(por_ano.items()):
         receita = _q(sum((t.valor_bruto for t in do_ano), Decimal("0")))
-        meses = len({t.data.month for t in do_ano})
-        limite = _q(TETO_MEI_ANUAL * Decimal(meses) / Decimal(12))
-        if receita <= limite:
+        if receita > TETO_MEI_ANUAL:
+            raise ValueError(
+                f"Em {ano} este arquivo soma R$ {_brl(receita)} de "
+                f"faturamento, e isso passa do teto do MEI, que é de "
+                f"R$ {_brl(TETO_MEI_ANUAL)} por ano (LC 123/2006, art. 18-A, "
+                "§ 1º). A Carchuna não sabe calcular a sua margem nesse "
+                "estado: acima do teto o enquadramento muda, e quem passa de "
+                "20% do limite é desenquadrado retroativamente ao início do "
+                "ano (art. 18-A, § 7º, e art. 3º, § 10) — o DAS fixo deixa "
+                "de ser o imposto devido. Fale com o seu contador sobre a "
+                "migração para o Simples e recalcule aqui com o anexo certo; "
+                "estimar por cima seria mostrar um lucro que você não tem."
+            )
+
+        meses = {t.data.month for t in do_ano}
+        span = max(meses) - min(meses) + 1
+        if span >= 12:
             continue
-        proporcao = (
-            f"{meses} mês(es) de {ano} no arquivo, então o teto proporcional "
-            f"é R$ {_brl(limite)}"
-            if meses < 12
-            else f"o teto do ano é R$ {_brl(TETO_MEI_ANUAL)}"
+        projetado = _q(receita * Decimal(12) / Decimal(span))
+        if projetado <= TETO_MEI_ANUAL:
+            continue
+        avisos.append(
+            f"Em {ano} o arquivo cobre {span} mês(es) e soma "
+            f"R$ {_brl(receita)}, que ainda está dentro do teto do MEI de "
+            f"R$ {_brl(TETO_MEI_ANUAL)} por ano (LC 123/2006, art. 18-A, "
+            f"§ 1º). Mantido esse ritmo, o ano fecharia em torno de "
+            f"R$ {_brl(projetado)} e passaria do teto. A conta está feita e "
+            "vale; isto é só um aviso para você falar com o contador antes "
+            "de o ano fechar. É uma regra de três sobre o que o arquivo "
+            "mostra, não uma previsão: quem vende concentrado em poucos "
+            "meses do ano dispara este aviso sem estar perto do teto."
         )
-        raise ValueError(
-            f"Em {ano} este arquivo soma R$ {_brl(receita)} de faturamento, e "
-            f"isso passa do teto do MEI — {proporcao} (LC 123/2006, art. 18-A, "
-            "§ 1º e § 2º). A Carchuna não sabe calcular a sua margem nesse "
-            "estado: acima do teto o enquadramento muda, e quem passa de 20% "
-            "do limite é desenquadrado retroativamente ao início do ano "
-            "(art. 18-A, § 7º, e art. 3º, § 10) — o DAS fixo deixa de ser o "
-            "imposto devido. Fale com o seu contador sobre a migração para o "
-            "Simples e recalcule aqui com o anexo certo; estimar por cima "
-            "seria mostrar um lucro que você não tem."
-        )
+    return tuple(avisos)
 
 
 BASE_RATEADA = "rateada"
@@ -573,8 +618,9 @@ def decompor_margem(
     tabela = tabela or TabelaCustos()
 
     receita = _q(sum((t.valor_bruto for t in transacoes), Decimal("0")))
+    avisos: tuple[str, ...] = ()
     if config.regime == "mei":
-        _conferir_teto_do_mei(transacoes)
+        avisos = _conferir_teto_do_mei(transacoes)
     devolucoes = _q(
         sum((t.valor_bruto for t in transacoes if t.devolvida), Decimal("0"))
     )
@@ -702,6 +748,7 @@ def decompor_margem(
         margem_liquida=margem,
         margem_pct=_pct(margem, receita),
         aliquota_efetiva=aliquota,
+        avisos=avisos,
     )
 
 
