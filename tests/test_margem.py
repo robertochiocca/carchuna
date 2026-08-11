@@ -258,30 +258,53 @@ def test_mei_dentro_do_teto_continua_calculando():
     assert d.deducao("tributos").valor == Decimal("912.00")  # 76 × 12
 
 
-def test_o_teto_do_mei_e_proporcional_aos_meses_do_arquivo():
-    """Arquivo de 2 meses: o teto que vale é o de 2 meses (art. 18-A, § 2º).
+def test_o_ritmo_que_projeta_estouro_avisa_e_nao_recusa():
+    """Reescrito: antes isto era recusa, e a recusa estava errada.
 
-    R$ 20 mil em dois meses é ritmo de R$ 120 mil por ano — passa do teto
-    muito antes de o ano fechar, e esperar dezembro para avisar seria
-    avisar tarde demais.
+    O teste anterior exigia `ValueError` para dois meses de R$ 10 mil,
+    citando o art. 18-A, § 2º como fundamento de um teto proporcional à
+    janela do arquivo. O § 2º é a proporcionalidade do ano de ABERTURA do
+    MEI — um arquivo de dois meses não reduz o teto de ninguém, e quem
+    ainda está dentro da lei não pode ter o cálculo recusado.
+
+    R$ 20 mil em dois meses continua sendo informação útil: no ritmo, o
+    ano fecharia em R$ 120 mil. Isso agora sai como aviso, com a conta
+    feita e válida ao lado.
     """
-    with pytest.raises(ValueError, match="art. 18-A"):
-        decompor_margem(_mei("10000", 2), CONFIG_MEI)
-    # o mesmo faturamento anualizado dentro do teto passa
-    assert decompor_margem(_mei("6750", 2), CONFIG_MEI).receita_bruta == Decimal(
-        "13500.00"
-    )
+    d = decompor_margem(_mei("10000", 2), CONFIG_MEI)
+    assert d.receita_bruta == Decimal("20000.00")
+    assert d.deducao("tributos").valor == Decimal("152.00")  # 76 × 2 meses
+
+    assert len(d.avisos) == 1
+    aviso = d.avisos[0]
+    assert "120.000" in aviso
+    assert "81.000" in aviso
+    assert "regra de três" in aviso  # heurística de produto, e diz que é
+
+    # o ritmo que projeta dentro do teto não avisa nada
+    assert decompor_margem(_mei("6750", 2), CONFIG_MEI).avisos == ()
 
 
 def test_o_teto_do_mei_e_conferido_ano_a_ano_e_nao_no_total_do_arquivo():
-    """Dois anos de R$ 60 mil cada não é R$ 120 mil acima do teto.
+    """Reescrito: a regra de ano a ano ficou, o divisor do span mudou.
 
-    O teto é anual. Somar o arquivo inteiro recusaria um MEI regular só
-    por ele ter histórico longo — que é o oposto do que se quer.
+    O teto é anual, e somar o arquivo inteiro recusaria um MEI regular só
+    por ele ter histórico longo. Isso continua valendo. O que mudou é o
+    caso de baixo: dois anos parciais, cada um dentro do teto, em que a
+    conferência antiga dividia o teto pelos meses COM VENDA e recusava.
     """
     dois_anos = _mei("5000", 12, ano=2025) + _mei("5000", 12, ano=2026)
     d = decompor_margem(dois_anos, CONFIG_MEI)
     assert d.receita_bruta == Decimal("120000.00")
+    assert d.avisos == ()
+
+    # cada ano com 3 meses de R$ 20 mil: R$ 60 mil por ano, dentro do teto
+    parciais = _mei("20000", 3, ano=2025) + _mei("20000", 3, ano=2026)
+    parcial = decompor_margem(parciais, CONFIG_MEI)
+    assert parcial.receita_bruta == Decimal("120000.00")
+    # e o aviso de ritmo sai um por ano, nomeando o ano
+    assert len(parcial.avisos) == 2
+    assert "2025" in parcial.avisos[0] and "2026" in parcial.avisos[1]
 
 
 def test_o_simples_nao_e_afetado_pelo_teto_do_mei():

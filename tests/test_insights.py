@@ -11,6 +11,7 @@ estatísticos do outro. Nenhum caso se perdeu na junção; o que mudou foi
 que "mês fora do padrão" passou a ser detectado em um lugar só.
 """
 
+import calendar
 import sys
 from datetime import date
 from decimal import Decimal
@@ -45,6 +46,32 @@ def _venda(valor, mes, dia=15, **kwargs):
     )
 
 
+def _mes_cheio(mes, valor="1000", comissao=None, n=10, **kwargs):
+    """`n` vendas do dia 1 ao último dia do mês, somando `valor`.
+
+    A tendência passou a exigir das duas pontas volume (dez vendas) e mês
+    inteiro — um mês de uma venda só não tem percentual estável, e um mês
+    cortado ao meio carrega o mix de meia dúzia de dias. As fixtures que
+    usavam uma venda por mês eram econômicas demais para a conferência
+    nova; o que elas afirmam (8 p.p. é crítico, 2 p.p. é atenção, 1 p.p.
+    é silêncio) continua igual, com a ponta densa o bastante para o
+    percentual dela querer dizer alguma coisa.
+    """
+    ultimo = calendar.monthrange(2026, mes)[1]
+    fatia = Decimal(valor) / n
+    por_venda = None if comissao is None else Decimal(comissao) / n
+    return [
+        _venda(
+            fatia,
+            mes,
+            dia=1 + (i * (ultimo - 1)) // (n - 1),
+            comissao_cobrada=por_venda,
+            **kwargs,
+        )
+        for i in range(n)
+    ]
+
+
 def _ctx(vendas):
     return ContextoInsights(
         transacoes=vendas,
@@ -63,10 +90,7 @@ def test_tendencia_comissao_subindo_8pp_e_critico_com_impacto_80():
     # Mês 1: venda 1000, comissão cobrada 120 → 12,00% da receita.
     # Mês 2: venda 1000, comissão cobrada 200 → 20,00% da receita.
     # Delta = 8,00 p.p. ≥ 3 (limiar crítico); impacto = 8% × 1000 = 80,00.
-    vendas = [
-        _venda("1000", 5, comissao_cobrada=Decimal("120")),
-        _venda("1000", 6, comissao_cobrada=Decimal("200")),
-    ]
+    vendas = _mes_cheio(5, comissao="120") + _mes_cheio(6, comissao="200")
     insights = MotorInsights().radar(vendas, CONFIG)
     assert len(insights) == 1
     (i,) = insights
@@ -79,19 +103,13 @@ def test_tendencia_comissao_subindo_8pp_e_critico_com_impacto_80():
 
 def test_tendencia_alta_pequena_vira_atencao_e_abaixo_do_limiar_silencia():
     # Delta de 2,00 p.p. (120 → 140 sobre 1000): atenção (1,5 ≤ 2 < 3).
-    vendas = [
-        _venda("1000", 5, comissao_cobrada=Decimal("120")),
-        _venda("1000", 6, comissao_cobrada=Decimal("140")),
-    ]
+    vendas = _mes_cheio(5, comissao="120") + _mes_cheio(6, comissao="140")
     (i,) = TendenciaCustos().avaliar(_ctx(vendas))
     assert i.severidade == "atencao"
     assert i.impacto_mensal == Decimal("20.00")
 
     # Delta de 1,00 p.p. (120 → 130): abaixo de 1,5 → sem sinal.
-    vendas = [
-        _venda("1000", 5, comissao_cobrada=Decimal("120")),
-        _venda("1000", 6, comissao_cobrada=Decimal("130")),
-    ]
+    vendas = _mes_cheio(5, comissao="120") + _mes_cheio(6, comissao="130")
     assert TendenciaCustos().avaliar(_ctx(vendas)) == []
 
 
@@ -381,22 +399,9 @@ def test_radar_ordena_por_severidade_e_todo_sinal_traz_metodo_e_confianca():
     # Crítico (comissão +8 p.p.) e oportunidade (produto magro) juntos:
     # o crítico vem primeiro. Capinha nos 2 meses: receita 2000, tributos
     # 113, comissões 320, CMV 1500 → margem 67 → 3,35% (magra).
-    vendas = [
-        _venda(
-            "1000",
-            5,
-            comissao_cobrada=Decimal("120"),
-            custo=Decimal("750"),
-            produto="Capinha",
-        ),
-        _venda(
-            "1000",
-            6,
-            comissao_cobrada=Decimal("200"),
-            custo=Decimal("750"),
-            produto="Capinha",
-        ),
-    ]
+    vendas = _mes_cheio(
+        5, comissao="120", custo=Decimal("75"), produto="Capinha"
+    ) + _mes_cheio(6, comissao="200", custo=Decimal("75"), produto="Capinha")
     insights = MotorInsights().radar(vendas, CONFIG)
     assert len(insights) >= 2
     severidades = [i.severidade for i in insights]

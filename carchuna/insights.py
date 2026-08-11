@@ -38,7 +38,9 @@ sazonais). Está documentado, não prometido.
 
 from __future__ import annotations
 
+import calendar
 from abc import ABC, abstractmethod
+from collections import Counter
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 from functools import cached_property
@@ -115,6 +117,12 @@ class ParametrosInsights:
     # -- tendência entre o primeiro e o último mês (em p.p. da receita)
     tendencia_atencao_pp: Decimal = Decimal("1.5")
     tendencia_critico_pp: Decimal = Decimal("3")
+    # Vendas mínimas em CADA ponta para a inclinação valer alguma coisa.
+    # A tendência compara o percentual de um mês com o de outro, e um mês
+    # de três vendas não tem percentual estável: uma venda atípica move a
+    # fatia em pontos inteiros. Abaixo disto o sinal mede o acaso da ponta,
+    # não a inclinação do custo.
+    min_vendas_tendencia: int = 10
     # -- margem de produto abaixo disto (e >= 0) é "magra"
     margem_magra_pct: Decimal = Decimal("8")
     reajuste_simulado: Decimal = Decimal("0.05")
@@ -285,6 +293,27 @@ class AnaliseInsight(ABC):
         """Lista de insights (vazia quando não há sinal)."""
 
 
+def _pontas_parciais(transacoes: list[Transacao]) -> bool:
+    """O arquivo corta ao meio o primeiro ou o último mês que ele cobre?
+
+    A tendência compara duas pontas, e ponta cortada é ponta com menos
+    dias de venda que as outras — o percentual dela não é comparável com
+    o de um mês inteiro. Um mês que só tem a primeira quinzena carrega o
+    mix daquela quinzena, e mix move fatia de custo.
+
+    A ambiguidade é a mesma da lacuna da RBT12 e não tem saída pelo dado:
+    arquivo que começa no dia 12 pode ser export cortado ou pode ser
+    lojista cuja primeira venda foi no dia 12. Por isso isto **não**
+    silencia o sinal — apenas tira dele o direito de se chamar crítico.
+    """
+    datas = sorted(t.data for t in transacoes)
+    if not datas:
+        return False
+    primeira, ultima = datas[0], datas[-1]
+    ultimo_dia = calendar.monthrange(ultima.year, ultima.month)[1]
+    return primeira.day > 1 or ultima.day < ultimo_dia
+
+
 class TendenciaCustos(AnaliseInsight):
     """Deduções que cresceram como fatia da receita entre os meses.
 
@@ -292,6 +321,23 @@ class TendenciaCustos(AnaliseInsight):
     mede a inclinação, que é a pergunta "isto está piorando devagar?".
     Um custo que sobe 1 p.p. por mês durante um ano nunca é anômalo em
     mês nenhum, e é o vazamento mais caro que existe.
+
+    **A inclinação depende inteiramente das duas pontas**, e por isso as
+    pontas passam por duas conferências antes de o sinal sair.
+
+    Poucas vendas na ponta silenciam o sinal (``min_vendas_tendencia``).
+    Com três vendas num mês, uma delas atípica desloca a fatia de um
+    custo em pontos inteiros — e a tendência publicaria como "custo
+    subindo" o que é uma venda fora da curva numa ponta.
+
+    Ponta parcial rebaixa ``critico`` para ``atencao``. Aqui o sinal
+    continua saindo, e a diferença de tratamento é deliberada: quase todo
+    export real termina no meio do mês, porque o lojista exporta no dia
+    em que abre a Carchuna. Silenciar por mês parcial desligaria este
+    detector em praticamente toda base de verdade — trocaria ruído a
+    menos por detector a menos, que é o pior negócio possível para o
+    vazamento mais caro que existe. Rebaixar diz a coisa certa: o sinal é
+    real, a intensidade dele é que não está confirmada.
     """
 
     def avaliar(self, ctx: ContextoInsights) -> list[Insight]:
@@ -299,6 +345,15 @@ class TendenciaCustos(AnaliseInsight):
         if len(mensal) < 2:
             return []
         (mes_a, dec_a), (mes_b, dec_b) = mensal[0], mensal[-1]
+
+        vendas_no_mes = Counter(
+            f"{t.data.year:04d}-{t.data.month:02d}" for t in ctx.transacoes
+        )
+        minimo = ctx.parametros.min_vendas_tendencia
+        if min(vendas_no_mes[mes_a], vendas_no_mes[mes_b]) < minimo:
+            return []
+        parcial = _pontas_parciais(ctx.transacoes)
+
         insights = []
         for deducao in dec_b.deducoes:
             antes = dec_a.deducao(deducao.nome).pct_receita
@@ -306,7 +361,9 @@ class TendenciaCustos(AnaliseInsight):
             if delta < ctx.parametros.tendencia_atencao_pp:
                 continue
             severidade = (
-                "critico" if delta >= ctx.parametros.tendencia_critico_pp else "atencao"
+                "critico"
+                if delta >= ctx.parametros.tendencia_critico_pp and not parcial
+                else "atencao"
             )
             impacto = _q2(delta / 100 * dec_b.receita_bruta)
             rotulo = ROTULOS_DEDUCOES.get(deducao.nome, deducao.nome)
@@ -336,7 +393,14 @@ class TendenciaCustos(AnaliseInsight):
                         f"comparação do primeiro com o último mês; alta de "
                         f"{delta} p.p. (limiares: "
                         f"{ctx.parametros.tendencia_atencao_pp} p.p. atenção, "
-                        f"{ctx.parametros.tendencia_critico_pp} p.p. crítico)"
+                        f"{ctx.parametros.tendencia_critico_pp} p.p. crítico"
+                        + (
+                            "; rebaixado a atenção porque o arquivo corta "
+                            "ao meio o primeiro ou o último mês"
+                            if parcial
+                            else ""
+                        )
+                        + ")"
                     ),
                 )
             )

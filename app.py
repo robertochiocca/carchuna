@@ -18,6 +18,7 @@ Uso::
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from decimal import Decimal
 
 import altair as alt
@@ -316,6 +317,11 @@ T = {
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
         "implausivel_titulo": "Estes números não fecham com a realidade.",
         "reconciliacao_titulo": "Os dois caminhos de cálculo não bateram.",
+        "motor_falhou": "Esta parte não pôde ser calculada.",
+        "motor_falhou_base": (
+            "A decomposição da margem não rodou, e sem ela não há nada "
+            "para as abas mostrarem."
+        ),
         "wf_receita": "Faturamento",
         "cachoeira_dica": (
             "Toque numa barra de custo para abrir de onde ela vem — por "
@@ -670,6 +676,11 @@ T = {
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
         "implausivel_titulo": "These numbers don't add up.",
         "reconciliacao_titulo": "The two calculation paths disagree.",
+        "motor_falhou": "This section could not be computed.",
+        "motor_falhou_base": (
+            "The margin breakdown did not run, and without it there is "
+            "nothing for the tabs to show."
+        ),
         "wf_receita": "Revenue",
         "cachoeira_dica": (
             "Click a cost bar to see where it comes from — by channel "
@@ -934,6 +945,35 @@ def _retriever_cacheado() -> Retriever:
     return Retriever()
 
 
+# Cada motor da bandeja, com o nome da chave e como chamá-lo. A tabela
+# existe para o `try/except` ficar num lugar só: motor novo entra aqui e
+# já nasce contido, em vez de depender de alguém lembrar de embrulhá-lo.
+_MOTORES: tuple[tuple[str, Callable], ...] = (
+    ("decomposicao", lambda a: a.decomposicao),
+    ("rbt12_mensal", lambda a: a.rbt12_mensal),
+    ("resumo", lambda a: a.resumo_executivo()),
+    ("mensal", lambda a: a.mensal),
+    ("lucro", lambda a: a.lucro_acumulado()),
+    ("por_venda", lambda a: a.margem_por_venda()),
+    ("por_produto", lambda a: a.margem_por_produto()),
+    ("cenarios", lambda a: a.cenarios()),
+    ("achados", lambda a: a.diagnosticar()),
+    ("oportunidades", lambda a: a.crescimento()),
+    ("radar", lambda a: a.radar()),
+    ("linhagem", lambda a: a.linhagem()),
+    ("confianca", lambda a: avaliar_confianca(a.transacoes, base="calculado")),
+    ("plausibilidade", lambda a: conferir_plausibilidade(a.decomposicao)),
+    # A conferência que de fato valida o número: refaz o lucro lançamento
+    # a lançamento, sem passar por `decompor_margem`. Ela existia desde o
+    # começo e só era chamada nos testes — a tela publicava a margem sem
+    # nunca perguntar se os dois caminhos fechavam.
+    (
+        "reconciliacao",
+        lambda a: reconciliar(a.transacoes, a.config, a.decomposicao, a.tabela),
+    ),
+)
+
+
 @st.cache_data(show_spinner=False)
 def _resultados_cacheados(
     transacoes: tuple,
@@ -944,11 +984,24 @@ def _resultados_cacheados(
     origem: str | None = None,
     confirmar_lacunas: bool = False,
 ) -> dict:
-    """Roda os quatro motores uma vez por (dados, config) — não por clique.
+    """Roda os motores uma vez por (dados, config) — não por clique.
 
     Com bases reais (dezenas de milhares de vendas), decompor venda a
     venda a cada interação de widget ficaria lento; o cache devolve o
     conjunto pronto enquanto nada mudar.
+
+    **Cada motor é contido no seu próprio erro.** Antes eles rodavam numa
+    expressão só: o primeiro `ValueError` levava junto os outros catorze,
+    e o lojista via um traceback no lugar do dashboard inteiro por causa
+    de um cenário que não cabia nos dados dele. Agora a chave que falha
+    recebe ``None`` e o motivo vai para ``falhas``, que a tela publica na
+    aba correspondente.
+
+    ``ValueError`` e ``TypeError`` são as duas que o motor levanta de
+    propósito quando o dado não serve — teto do MEI estourado, canal sem
+    venda, dinheiro em ``float``. Nada além delas é capturado aqui: erro
+    que eu não previ tem de aparecer, não virar um bloco vazio com
+    mensagem gentil.
     """
     analise = AnalisadorMargem(
         list(transacoes),
@@ -960,30 +1013,16 @@ def _resultados_cacheados(
         confirmar_lacunas=confirmar_lacunas,
         origem=origem,
     )
-    return {
-        "decomposicao": analise.decomposicao,
-        "rbt12_mensal": analise.rbt12_mensal,
-        "resumo": analise.resumo_executivo(),
-        "mensal": analise.mensal,
-        "lucro": analise.lucro_acumulado(),
-        "por_venda": analise.margem_por_venda(),
-        "por_produto": analise.margem_por_produto(),
-        "cenarios": analise.cenarios(),
-        "achados": analise.diagnosticar(),
-        "oportunidades": analise.crescimento(),
-        "radar": analise.radar(),
-        "linhagem": analise.linhagem(),
-        "confianca": avaliar_confianca(list(transacoes), base="calculado"),
-        "plausibilidade": conferir_plausibilidade(analise.decomposicao),
-        # A conferência que de fato valida o número: refaz o lucro
-        # lançamento a lançamento, sem passar por `decompor_margem`. Ela
-        # existia desde o começo e só era chamada nos testes — a tela
-        # publicava a margem sem nunca perguntar se os dois caminhos
-        # fechavam.
-        "reconciliacao": reconciliar(
-            analise.transacoes, analise.config, analise.decomposicao, analise.tabela
-        ),
-    }
+    bandeja: dict = {}
+    falhas: dict[str, str] = {}
+    for chave, motor in _MOTORES:
+        try:
+            bandeja[chave] = motor(analise)
+        except (ValueError, TypeError) as erro:
+            bandeja[chave] = None
+            falhas[chave] = str(erro)
+    bandeja["falhas"] = falhas
+    return bandeja
 
 
 def _lacunas_do_arquivo(transacoes) -> list[str]:
@@ -1465,6 +1504,40 @@ res = _resultados_cacheados(
     origem_dados,
     confirmar_lacunas,
 )
+
+
+def _motor(chave: str):
+    """O resultado do motor, ou o motivo na tela e ``None`` no lugar.
+
+    Publica onde é chamada, de propósito: o mesmo motor alimenta abas
+    diferentes, e cada aba tem de explicar a própria lacuna em vez de
+    mandar o lojista procurar o aviso em outra.
+    """
+    if chave in res["falhas"]:
+        st.error(f"**{t['motor_falhou']}** {res['falhas'][chave]}")
+    return res[chave]
+
+
+def _falhou(chave: str) -> bool:
+    """Distingue "o motor não rodou" de "rodou e não achou nada".
+
+    Sem isto, a lista vazia de um motor que estourou herdaria a mensagem
+    de sucesso do caso em que ele roda e não encontra nada — trocando um
+    erro por um "está tudo bem" que ninguém pediu.
+    """
+    return chave in res["falhas"]
+
+
+# A decomposição não é um motor entre outros: é a base de todos. Sem ela
+# as abas não teriam o que mostrar, e fingir o contrário seria pior que
+# parar — então o motivo vai para a tela e o desenho para aqui.
+if res["decomposicao"] is None or res["resumo"] is None:
+    st.error(
+        f"**{t['motor_falhou_base']}** "
+        + (res["falhas"].get("decomposicao") or res["falhas"].get("resumo", ""))
+    )
+    st.stop()
+
 analise = AnalisadorMargem(
     transacoes,
     config,
@@ -1478,13 +1551,10 @@ analise = AnalisadorMargem(
 if usar_rbt12_movel:
     # Honestidade na tela: dizer em quantos meses a alíquota saiu do
     # próprio arquivo e em quantos veio do valor que o lojista digitou.
-    _com_janela = sum(1 for v in res["rbt12_mensal"].values() if v)
+    janelas = _motor("rbt12_mensal") or {}
+    _com_janela = sum(1 for v in janelas.values() if v)
     if _com_janela:
-        st.caption(
-            t["rbt12_movel_aplicada"].format(
-                n=_com_janela, total=len(res["rbt12_mensal"])
-            )
-        )
+        st.caption(t["rbt12_movel_aplicada"].format(n=_com_janela, total=len(janelas)))
     else:
         st.info(t["rbt12_movel_sem_janela"])
     if confirmar_lacunas:
@@ -1508,10 +1578,12 @@ with aba_resumo:
     # Faixa de plausibilidade: quando o número não cabe em realidade
     # contábil nenhuma, o motivo vem ANTES dos números — e os números
     # continuam na tela, porque escondê-los não conserta o dado de origem.
-    if not res["plausibilidade"].ok:
-        st.error(f"**{t['implausivel_titulo']}** {res['plausibilidade'].motivo}")
-    if not res["reconciliacao"].ok:
-        st.error(f"**{t['reconciliacao_titulo']}** {res['reconciliacao'].motivo}")
+    plausibilidade = _motor("plausibilidade")
+    if plausibilidade is not None and not plausibilidade.ok:
+        st.error(f"**{t['implausivel_titulo']}** {plausibilidade.motivo}")
+    reconciliacao = _motor("reconciliacao")
+    if reconciliacao is not None and not reconciliacao.ok:
+        st.error(f"**{t['reconciliacao_titulo']}** {reconciliacao.motivo}")
 
     if lang == "pt":
         st.info(resumo.frase())
@@ -1589,8 +1661,8 @@ with aba_resumo:
 
     st.subheader(t["radar_titulo"])
     st.caption(t["radar_caption"])
-    radar = res["radar"]
-    if not radar:
+    radar = _motor("radar") or []
+    if not radar and not _falhou("radar"):
         st.success(t["radar_vazio"])
     estilo_sev = {
         "critico": st.error,
@@ -1619,61 +1691,64 @@ with aba_resumo:
     st.subheader(t["acoes_titulo"])
     st.caption(t["acoes_caption"])
     acoes = [
-        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in res["achados"]
+        (a.impacto_mensal, a.titulo, a.caminho_pratico) for a in _motor("achados") or []
     ] + [
         (o.ganho_estimado_mensal, o.titulo, o.caminho_pratico)
-        for o in res["oportunidades"]
+        for o in _motor("oportunidades") or []
     ]
     acoes.sort(key=lambda x: x[0], reverse=True)
-    if not acoes:
+    if not acoes and not (_falhou("achados") or _falhou("oportunidades")):
         st.success(t["sem_acoes"])
     for valor, titulo, caminho in acoes[:3]:
         with st.container(border=True):
             st.markdown(f"**{titulo}** — ~{_brl(valor)}/{t['por_mes']}")
             st.caption(caminho)
 
-    nota = res["confianca"]
-    with st.expander(
-        f"{t['conf_titulo']} — "
-        + t["conf_nota"].format(pct=nota.pct, nivel=nota.nivel.upper())
-    ):
-        st.markdown(f"_{nota.frase}_")
-        st.caption(t["conf_caption"])
-        for componente in nota.componentes:
-            st.markdown(
-                f"- **{componente.pontos}/{componente.maximo}** — {componente.motivo}"
-            )
+    nota = _motor("confianca")
+    if nota is not None:
+        with st.expander(
+            f"{t['conf_titulo']} — "
+            + t["conf_nota"].format(pct=nota.pct, nivel=nota.nivel.upper())
+        ):
+            st.markdown(f"_{nota.frase}_")
+            st.caption(t["conf_caption"])
+            for componente in nota.componentes:
+                st.markdown(
+                    f"- **{componente.pontos}/{componente.maximo}** — "
+                    f"{componente.motivo}"
+                )
 
     with st.expander(t["lin_titulo"]):
         st.caption(t["lin_caption"])
-        fichas = res["linhagem"]
-        nome_ficha = st.selectbox(
-            t["lin_numero"],
-            list(fichas),
-            format_func=lambda n: (
-                f"{rotulos.get(n, fichas[n].rotulo)} — {_brl(fichas[n].valor)}"
-            ),
-            key="linhagem_numero",
-        )
-        ficha = fichas[nome_ficha]
-        st.markdown(f"**{t['lin_origem']}:** `{ficha.origem_dados}`")
-        st.markdown(f"**{t['lin_colunas']}:** `{'`, `'.join(ficha.colunas)}`")
-        st.markdown(f"**{t['lin_formula']}:** {ficha.formula}")
-        st.markdown(f"**{t['lin_transf']}:**")
-        for transformacao in ficha.transformacoes:
-            st.markdown(f"- {transformacao}")
-        if ficha.premissas:
-            st.markdown(f"**{t['lin_premissas']}:**")
-            for premissa in ficha.premissas:
-                st.markdown(f"- {premissa}")
-        if ficha.limitacoes:
-            st.markdown(f"**{t['lin_limitacoes']}:**")
-            for limitacao in ficha.limitacoes:
-                st.markdown(f"- {limitacao}")
-        st.caption(
-            f"{t['lin_fonte']} {ficha.fonte} · [{ficha.confianca_dados}] · "
-            f"{t['lin_quando']} {ficha.calculado_em.strftime('%d/%m/%Y %H:%M')}"
-        )
+        fichas = _motor("linhagem")
+        if fichas:
+            nome_ficha = st.selectbox(
+                t["lin_numero"],
+                list(fichas),
+                format_func=lambda n: (
+                    f"{rotulos.get(n, fichas[n].rotulo)} — {_brl(fichas[n].valor)}"
+                ),
+                key="linhagem_numero",
+            )
+            ficha = fichas[nome_ficha]
+            st.markdown(f"**{t['lin_origem']}:** `{ficha.origem_dados}`")
+            st.markdown(f"**{t['lin_colunas']}:** `{'`, `'.join(ficha.colunas)}`")
+            st.markdown(f"**{t['lin_formula']}:** {ficha.formula}")
+            st.markdown(f"**{t['lin_transf']}:**")
+            for transformacao in ficha.transformacoes:
+                st.markdown(f"- {transformacao}")
+            if ficha.premissas:
+                st.markdown(f"**{t['lin_premissas']}:**")
+                for premissa in ficha.premissas:
+                    st.markdown(f"- {premissa}")
+            if ficha.limitacoes:
+                st.markdown(f"**{t['lin_limitacoes']}:**")
+                for limitacao in ficha.limitacoes:
+                    st.markdown(f"- {limitacao}")
+            st.caption(
+                f"{t['lin_fonte']} {ficha.fonte} · [{ficha.confianca_dados}] · "
+                f"{t['lin_quando']} {ficha.calculado_em.strftime('%d/%m/%Y %H:%M')}"
+            )
 
     with st.expander(t["como_ler"]):
         st.markdown(t["como_ler_texto"])
@@ -1701,7 +1776,7 @@ with aba_vendas:
     col3.metric(m[2], frame["canal"].nunique())
     col4.metric(m[3], int(frame["devolvida"].sum()))
 
-    produtos = res["por_produto"]
+    produtos = _motor("por_produto") or []
     campeoes = [p for p in produtos if p.margem > 0][:3]
     viloes = [p for p in produtos if p.margem < 0]
 
@@ -1766,17 +1841,19 @@ with aba_vendas:
 
     with st.expander(t["todas_vendas"]):
         if st.toggle(t["margem_por_venda"], value=len(frame) <= 500):
-            por_venda = res["por_venda"]
-            frame["margem"] = [float(v.margem_liquida) for v in por_venda]
-            frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
+            por_venda = _motor("por_venda")
+            if por_venda is not None:
+                frame["margem"] = [float(v.margem_liquida) for v in por_venda]
+                frame["margem_%"] = [float(v.margem_pct) for v in por_venda]
         st.dataframe(frame, width="stretch", height=320)
 
 # ---------------------------------------------------------------------------
 with aba_historico:
     st.caption(t["hist_caption"])
-    mensal = res["mensal"]
+    mensal = _motor("mensal") or {}
     if len(mensal) < 2:
-        st.info(t["hist_um_mes"])
+        if not _falhou("mensal"):
+            st.info(t["hist_um_mes"])
     else:
         meses_lst = list(mensal.items())
         (mes_a, dec_a), (mes_b, dec_b) = meses_lst[-2], meses_lst[-1]
@@ -1850,7 +1927,7 @@ with aba_historico:
             _grafico_serie(
                 [
                     {"rotulo": mes, "valor": float(v), "texto": _brl_inteiro(v)}
-                    for mes, v in res["lucro"]
+                    for mes, v in _motor("lucro") or []
                 ],
                 modo="area",
             ),
@@ -1883,7 +1960,7 @@ with aba_historico:
 # ---------------------------------------------------------------------------
 with aba_ese:
     st.caption(t["ese_caption"])
-    for resultado in res["cenarios"]:
+    for resultado in _motor("cenarios") or []:
         with st.container(border=True):
             st.markdown(f"**{resultado.nome}**")
             c1, c2, c3 = st.columns(3)
@@ -1894,7 +1971,7 @@ with aba_ese:
 # ---------------------------------------------------------------------------
 with aba_crescer:
     st.caption(t["crescimento_caption"])
-    for oportunidade in res["oportunidades"]:
+    for oportunidade in _motor("oportunidades") or []:
         with st.container(border=True):
             ganho = _brl(oportunidade.ganho_estimado_mensal)
             st.markdown(
@@ -1964,8 +2041,8 @@ with aba_diagnostico:
     st.warning(retriever.aviso_corpus)
 
     st.subheader(t["vazamentos"])
-    achados = res["achados"]
-    if not achados:
+    achados = _motor("achados") or []
+    if not achados and not _falhou("achados"):
         st.success(t["sem_achados"])
     for achado in achados:
         with st.expander(
