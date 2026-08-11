@@ -173,8 +173,12 @@ def test_a_tela_roda_as_duas_conferencias_e_nao_so_a_plausibilidade():
         and isinstance(no.func, ast.Attribute)
         and no.func.attr == "error"
     }
-    assert any("res['reconciliacao'].motivo" in texto for texto in mostrados)
-    assert any("res['plausibilidade'].motivo" in texto for texto in mostrados)
+    # As duas leituras passaram a sair de variável local em vez de
+    # `res[...]` direto, porque cada motor agora atravessa `_motor`, que
+    # publica o motivo quando ele não roda. O que esta conferência guarda
+    # continua sendo o mesmo: as duas são chamadas e as duas aparecem.
+    assert any("reconciliacao.motivo" in texto for texto in mostrados)
+    assert any("plausibilidade.motivo" in texto for texto in mostrados)
 
 
 def test_a_base_sadia_nao_imprime_aviso_de_reconciliacao(tmp_path):

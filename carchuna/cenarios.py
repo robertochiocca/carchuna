@@ -342,7 +342,22 @@ def rodar_cenarios_padrao(
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
 ) -> list[ResultadoCenario]:
-    """Roda a bateria padrão de cenários (a "página de stress" do relatório)."""
+    """Roda a bateria padrão de cenários (a "página de stress" do relatório).
+
+    **Cenário que não roda é omitido da lista, não derruba a bateria.**
+    Um cenário é uma pergunta hipotética, e nem toda hipótese cabe nos
+    dados: subir o preço de um MEI que já está perto do teto produz um
+    ano acima do limite, migrar canal exige que o canal de origem tenha
+    venda. Antes, o primeiro cenário impossível levava junto os outros
+    cinco — e a aba inteira de simulação sumia por causa de uma pergunta
+    que não se aplicava àquela loja.
+
+    A omissão é silenciosa **aqui de propósito**: quem chama sabe quais
+    cenários pediu e vê quais voltaram. Não invento um resultado com
+    aviso no meio da lista, porque a lista é de números comparáveis entre
+    si e um item "não deu" ali dentro só serve para ser somado por
+    engano.
+    """
     cenarios: list[Cenario] = [
         CenarioPreco(),
         CenarioComissao(),
@@ -354,7 +369,14 @@ def rodar_cenarios_padrao(
         cenarios.append(CenarioMudancaAnexo(outro))
     if any(t.canal == "mercado_livre" for t in transacoes):
         cenarios.append(CenarioMigracaoCanal())
-    return [c.executar(transacoes, config, tabela) for c in cenarios]
+
+    resultados: list[ResultadoCenario] = []
+    for cenario in cenarios:
+        try:
+            resultados.append(cenario.executar(transacoes, config, tabela))
+        except (ValueError, TypeError):
+            continue
+    return resultados
 
 
 # ---------------------------------------------------------------------------
