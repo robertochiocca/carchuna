@@ -153,26 +153,49 @@ def test_cenario_migracao_de_canal_calculado_a_mao():
 
 
 def test_cenario_preco_recalcula_imposto_e_comissao_sobre_o_preco_novo():
-    # Venda ML de 100 com CMV 50 no Anexo I @ 360k (efetiva 5,65%):
-    # base:  100 − 5,65 − 12,00 (comissão 12%) − 50 = 32,35.
-    # +5%:   105 − 5,93 (105 × 5,65%) − 12,60 (105 × 12%) − 50 = 36,47.
-    # O ganho não é 5% do preço (5,00): imposto e comissão comem parte —
-    # impacto = 36,47 − 32,35 = +4,12.
+    """Reescrito: a RBT12 do cenário passou a acompanhar a receita.
+
+    O número antigo (36,47) tributava o faturamento de 105 pela alíquota
+    de quem fatura 100 — a RBT12 ficava congelada em R$ 360.000 e a loja
+    não saía da faixa. Aqui ela sai, e é isso que a simulação existe para
+    mostrar.
+
+    Base: venda ML de 100, CMV 50, Anexo I com RBT12 de R$ 360.000 →
+    5,6500% efetivos. 100 − 5,65 − 12,00 (comissão 12%) − 50 = 32,35.
+
+    Cenário +5%: RBT12 vai a R$ 378.000, que é 3ª faixa do Anexo I
+    (nominal 9,5%, dedução 13.860) → efetiva 5,8333%.
+    105 − 6,12 − 12,60 − 50 = 36,28, e o impacto é 3,93.
+
+    O ganho não é 5% do preço (5,00) nem os 4,12 de antes: imposto,
+    comissão **e a faixa nova** comem parte.
+    """
     vendas = [_venda("100", 5, custo=Decimal("50"))]
     r = CenarioPreco(Decimal("0.05")).executar(vendas, CONFIG)
     assert r.base.margem_liquida == Decimal("32.35")
-    assert r.cenario.margem_liquida == Decimal("36.47")
-    assert r.impacto_reais == Decimal("4.12")
+    assert r.cenario.aliquota_efetiva == Decimal("0.058333")  # era 0,056500
+    assert r.cenario.margem_liquida == Decimal("36.28")
+    assert r.impacto_reais == Decimal("3.93")
     assert "5%" in r.nome and "mesmo volume" in r.nome
 
 
 def test_cenario_preco_escala_comissao_observada_do_extrato():
-    # Comissão observada (18,00 sobre 100) é percentual → escala para
-    # 18,90 sobre 105. Margem base: 100 − 5,65 − 18 = 76,35;
-    # cenário: 105 − 5,93 − 18,90 = 80,17 → impacto +3,82.
+    """Reescrito pelo mesmo motivo — e com um achado no meio.
+
+    Comissão observada (18,00 sobre 100) é percentual e escala para 18,90
+    sobre 105. Base: 100 − 5,65 − 18 = 76,35. Cenário: 105 − 6,12 (faixa
+    nova) − 18,90 = 79,98 → impacto +3,63.
+
+    E aqui aparece o que a conta congelada escondia por completo: em
+    reais o lojista ganha, mas a margem **percentual cai** 0,18 ponto,
+    porque o aumento de preço atravessa a faixa do Simples. Um cenário
+    que não mexe na RBT12 nunca poderia mostrar isso — mostraria só o
+    ganho.
+    """
     vendas = [_venda("100", 5, comissao_cobrada=Decimal("18"))]
     r = CenarioPreco(Decimal("0.05")).executar(vendas, CONFIG)
-    assert r.impacto_reais == Decimal("3.82")
+    assert r.impacto_reais == Decimal("3.63")
+    assert r.impacto_pp == Decimal("-0.18")
 
 
 def test_bateria_padrao_inclui_anexo_so_no_simples_e_migracao_se_ha_ml():

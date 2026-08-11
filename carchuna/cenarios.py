@@ -252,6 +252,52 @@ class CenarioMigracaoCanal(Cenario):
         return novas, config, tabela
 
 
+def _rbt12_proporcional(
+    config: ConfigTributaria,
+    base: list[Transacao],
+    cenario: list[Transacao],
+) -> ConfigTributaria:
+    """RBT12 do cenário, na mesma proporção em que a receita mudou.
+
+    A alíquota efetiva do Simples sai da receita bruta acumulada dos doze
+    meses anteriores (LC 123/2006, art. 18, § 1º e § 1º-A). Um cenário que
+    move a receita move essa base junto — e os cenários que a moviam
+    devolviam a ``rbt12`` original, congelada.
+
+    O erro tem direção, e é a pior das duas. Aumentar 5% no preço com a
+    RBT12 parada mantém a loja na faixa antiga: o tributo do cenário sai
+    menor do que seria, e a margem simulada sai maior. A tela responderia
+    "aumentar o preço rende X" com X inflado — bem no número que o lojista
+    usa para decidir aumentar o preço. Perto de uma virada de faixa o
+    engano é grosso: subir da 1ª para a 2ª faixa do Anexo I custa 0,83
+    ponto de margem que a simulação simplesmente não mostrava.
+
+    A proporção usa a receita **sem as devoluções**, que é a base que
+    ``rbt12_movel`` acumula (art. 3º, § 1º), para o cenário e o real
+    medirem a mesma coisa.
+
+    Isto é premissa, não previsão, e a premissa é forte: supõe que os doze
+    meses anteriores mudariam na mesma proporção do período simulado. Vale
+    quando o cenário é um regime novo que já vinha valendo — um reajuste
+    de tabela, um canal que cresceu — e não vale para um pico de um mês
+    só. Congelar a RBT12 também é premissa, e é a que erra a favor da
+    tela: entre as duas, prefiro a que erra contra.
+
+    Fora do Simples não há o que fazer: no MEI o DAS é fixo e não tem
+    faixa (art. 18-A, § 3º, V).
+    """
+    if config.regime != "simples" or config.rbt12 <= 0:
+        return config
+    receita_base = sum((t.valor_bruto for t in base if not t.devolvida), Decimal("0"))
+    if receita_base <= 0:
+        return config
+    receita_cenario = sum(
+        (t.valor_bruto for t in cenario if not t.devolvida), Decimal("0")
+    )
+    nova = (config.rbt12 * receita_cenario / receita_base).quantize(Decimal("0.01"))
+    return replace(config, rbt12=nova)
+
+
 class CenarioCrescimentoCanal(Cenario):
     """Vendas de um canal crescem ``fracao`` (ex.: +20% na loja própria).
 
@@ -261,6 +307,11 @@ class CenarioCrescimentoCanal(Cenario):
     valor bruto — o crescimento herda o mix real de produtos, custos e
     prazos do canal, em vez de inventar vendas médias. Premissa, não
     previsão: a demanda extra é hipótese do usuário.
+
+    A **RBT12 acompanha** a receita do cenário, na mesma proporção (ver
+    ``_rbt12_proporcional``). Crescer sem mover a base do Simples manteria
+    a loja na faixa antiga e devolveria uma margem maior que a real,
+    justamente no número que o lojista usa para decidir crescer.
     """
 
     def __init__(self, canal: str = "loja_propria", fracao: Decimal = Decimal("0.20")):
@@ -289,7 +340,8 @@ class CenarioCrescimentoCanal(Cenario):
                 break
             extras.append(t)
             adicionado += t.valor_bruto
-        return list(transacoes) + extras, config, tabela
+        todas = list(transacoes) + extras
+        return todas, _rbt12_proporcional(config, list(transacoes), todas), tabela
 
 
 class CenarioPreco(Cenario):
@@ -300,6 +352,11 @@ class CenarioPreco(Cenario):
     percentuais e escalam junto). Premissa explícita e honesta: volume
     constante — estimar quanto de venda se perde com preço maior
     (elasticidade) exige histórico de variação de preço e é roadmap.
+
+    A **RBT12 acompanha** o preço novo, na mesma proporção (ver
+    ``_rbt12_proporcional``). Sem isso o cenário mantinha a loja na faixa
+    antiga do Simples e devolvia um ganho inflado — o erro caía do lado de
+    recomendar o aumento.
     """
 
     def __init__(self, delta: Decimal = Decimal("0.05")):
@@ -324,7 +381,7 @@ class CenarioPreco(Cenario):
             )
             for t in transacoes
         ]
-        return novas, config, tabela
+        return novas, _rbt12_proporcional(config, list(transacoes), novas), tabela
 
 
 CENARIOS_PADRAO: tuple[type[Cenario], ...] = (

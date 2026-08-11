@@ -176,14 +176,32 @@ def test_oportunidades_ordenadas_e_entrada_validada():
 # ---------------------------------------------------------------------------
 
 
-def test_cenario_crescimento_dobra_um_canal_conferido_a_mao():
-    """Uma venda na loja própria, +100%: a venda é replicada e a margem dobra."""
+def test_cenario_crescimento_dobra_um_canal_e_a_margem_NAO_dobra():
+    """Reescrito: dobrar o faturamento não dobra o lucro no Simples.
+
+    O teste antigo exigia `impacto == margem base` — a margem dobrando
+    junto com a receita. Isso só vale se a alíquota não se mexer, e ela
+    se mexe: a RBT12 do cenário dobra também (R$ 360.000 → R$ 720.000) e
+    a loja sai da 2ª para a 3ª faixa do Anexo I, de 5,6500% para 7,5750%
+    efetivos.
+
+    Base:    100 − 5,65 − 2,00 (adquirência) − 10 − 40 = 42,35.
+    Cenário: 200 − 15,15 − 4,00 − 20 − 80 = 80,85 → impacto de 38,50, e
+    não de 42,35.
+
+    E a margem percentual **cai** 1,92 ponto ao dobrar o canal. Esse é o
+    tipo de coisa que o lojista precisa saber antes de crescer, e que a
+    simulação de RBT12 congelada nunca mostrou.
+    """
     venda = _venda("100", canal="loja_propria", custo="40", frete="10")
     resultado = CenarioCrescimentoCanal("loja_propria", Decimal("1")).executar(
         [venda], CONFIG
     )
     assert resultado.cenario.receita_bruta == Decimal("200.00")
-    assert resultado.impacto_reais == resultado.base.margem_liquida
+    assert resultado.cenario.aliquota_efetiva == Decimal("0.075750")
+    assert resultado.impacto_reais == Decimal("38.50")
+    assert resultado.impacto_reais < resultado.base.margem_liquida
+    assert resultado.impacto_pp == Decimal("-1.92")
     assert "100% a mais" in resultado.nome
 
 
