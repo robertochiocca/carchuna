@@ -23,6 +23,7 @@ import csv
 import io
 import json
 import math
+import os
 import random
 import re
 import unicodedata
@@ -394,6 +395,35 @@ class ResultadoImportacao:
             "e não entram em nenhum número deste relatório — a lista abaixo diz "
             "o número da linha na sua planilha e o motivo."
         )
+
+
+# ---------------------------------------------------------------------------
+# Política de leitura por caminho
+# ---------------------------------------------------------------------------
+
+# Ler um arquivo por CAMINHO é recurso de uso local, e a ajuda na tela já
+# dizia isso desde sempre: "aponte para um arquivo no SEU computador
+# (funciona com o app rodando localmente)". No dashboard público o campo
+# não serve ao lojista — ele não tem arquivo no servidor — e serve muito
+# bem a um visitante que queira ler o disco de lá.
+#
+# Desligado de fábrica, pelo mesmo motivo que a narrativa por LLM é: quem
+# publica o dashboard não deve expor o disco do servidor sem ter pedido,
+# do mesmo jeito que quem clona o repositório não deve gastar com API sem
+# ter pedido.
+#
+# O interruptor mora aqui e não nos loaders de propósito.
+# `carregar_com_relatorio("/caminho/x.csv")` continua sendo API legítima
+# de biblioteca: quem escreve um script Python já tem o disco inteiro na
+# mão, e recusar ali seria teatro. O que estava errado era o dashboard
+# público oferecer essa API a um visitante anônimo — e é essa fronteira,
+# a da aplicação, que esta função guarda.
+CHAVE_LEITURA_POR_CAMINHO = "CARCHUNA_LER_CAMINHO"
+
+
+def leitura_por_caminho_ligada() -> bool:
+    """O operador autorizou ler arquivo por caminho nesta instância?"""
+    return os.environ.get(CHAVE_LEITURA_POR_CAMINHO, "0") == "1"
 
 
 def carregar_com_relatorio(

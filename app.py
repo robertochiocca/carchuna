@@ -39,6 +39,7 @@ from carchuna.crescimento import AVISO_CRESCIMENTO
 from carchuna.dados import (
     COLUNAS_OBRIGATORIAS,
     decimal_de_texto,
+    leitura_por_caminho_ligada,
     ler_linhas_brutas,
     sugerir_mapeamento,
     transacoes_de_mapa,
@@ -180,6 +181,13 @@ T = {
             "números daqui se atualizam sozinhos em alguns segundos."
         ),
         "caminho_arquivo": "Caminho do arquivo (ex.: C:\\vendas\\maio.xlsx)",
+        "caminho_desligado": (
+            "Este recurso lê um arquivo do disco da máquina onde a Carchuna "
+            "está rodando, então ele vem desligado e só faz sentido no seu "
+            "computador. Para ligar, rode a Carchuna localmente com "
+            "`CARCHUNA_LER_CAMINHO=1`. Nesta instância, use o campo de "
+            "upload acima."
+        ),
         "monitorar": "Atualizar sozinho quando o arquivo mudar",
         "monitorando": "Acompanhando o arquivo — salve a planilha e veja aqui.",
         "importadas": "vendas importadas.",
@@ -541,6 +549,13 @@ T = {
             "here refresh by themselves within seconds."
         ),
         "caminho_arquivo": "File path (e.g.: C:\\sales\\may.xlsx)",
+        "caminho_desligado": (
+            "This feature reads a file from the disk of the machine running "
+            "Carchuna, so it ships disabled and only makes sense on your own "
+            "computer. To enable it, run Carchuna locally with "
+            "`CARCHUNA_LER_CAMINHO=1`. On this instance, use the upload "
+            "field above."
+        ),
         "monitorar": "Refresh automatically when the file changes",
         "monitorando": "Watching the file — save the spreadsheet and see it here.",
         "importadas": "sales imported.",
@@ -1314,10 +1329,16 @@ with st.sidebar:
     caminho_arquivo = ""
     monitorar = False
     with st.expander(t["tempo_real"]):
-        caminho_arquivo = st.text_input(
-            t["caminho_arquivo"], help=t["tempo_real_ajuda"], key="caminho_arquivo"
-        ).strip()
-        monitorar = st.toggle(t["monitorar"], value=bool(caminho_arquivo))
+        # O campo não aparece desligado, em vez de aparecer e recusar:
+        # campo que só devolve erro é pior que campo nenhum, e a caixa de
+        # texto sozinha já convida a tentar um caminho do servidor.
+        if leitura_por_caminho_ligada():
+            caminho_arquivo = st.text_input(
+                t["caminho_arquivo"], help=t["tempo_real_ajuda"], key="caminho_arquivo"
+            ).strip()
+            monitorar = st.toggle(t["monitorar"], value=bool(caminho_arquivo))
+        else:
+            st.info(t["caminho_desligado"])
     linhas_brutas = None
     if upload is not None:
         try:
