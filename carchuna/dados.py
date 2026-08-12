@@ -505,6 +505,8 @@ def ler_linhas_brutas(source, name: str | None = None) -> list[dict]:
     """
     filename = (name or getattr(source, "name", str(source))).lower()
     extensao = filename.rsplit(".", 1)[-1]
+    if extensao in ("csv", "tsv", "json", "xlsx", "pdf"):
+        _conferir_assinatura(source, extensao)
     if extensao in ("csv", "tsv"):
         return _ler_csv(source)
     if extensao == "json":
@@ -826,6 +828,60 @@ def _conferir_quantidade_de_linhas(quantas: int) -> None:
             f"Este arquivo tem {quantas} linhas, e a Carchuna processa até "
             f"{MAX_LINHAS_ARQUIVO} de uma vez. Divida o período em arquivos "
             "menores — por ano, por exemplo."
+        )
+
+
+# Assinaturas de formato. Um arquivo binário se identifica nos primeiros
+# bytes, e o nome dele não identifica nada: quem envia escolhe a
+# extensão. Sem esta conferência, um `.csv` que é zip chegava no leitor
+# de texto e um `.xlsx` que é texto chegava no openpyxl — cada um
+# levantando o erro do parser errado, e o de zip antes de qualquer teto.
+_ASSINATURAS: dict[str, tuple[bytes, ...]] = {
+    "xlsx": (b"PK\x03\x04",),  # todo .xlsx é um zip
+    "pdf": (b"%PDF-",),
+}
+
+# Formatos de texto não têm assinatura própria, mas têm o contrário:
+# nenhum arquivo de texto começa com o cabeçalho de um binário. Um
+# `.csv` que abre com `PK` foi renomeado.
+_ASSINATURAS_BINARIAS = (b"PK\x03\x04", b"%PDF-", b"\x7fELF", b"\x89PNG")
+
+
+def _primeiros_bytes(source, quantos: int = 8) -> bytes:
+    """Espia o começo do arquivo sem consumir o buffer de quem vem depois."""
+    if hasattr(source, "read"):
+        posicao = source.tell() if hasattr(source, "tell") else None
+        inicio = source.read(quantos)
+        if posicao is not None:
+            source.seek(posicao)
+        return inicio if isinstance(inicio, bytes) else str(inicio).encode()
+    with open(source, "rb") as arquivo:
+        return arquivo.read(quantos)
+
+
+def _conferir_assinatura(source, extensao: str) -> None:
+    """A extensão promete um formato; os bytes confirmam ou desmentem.
+
+    Recusa nos dois sentidos, e o segundo é o que importa para quem
+    ataca: extensão de texto com conteúdo binário manda um zip para o
+    leitor de CSV, que é o caminho onde nenhum teto de expansão existe.
+    """
+    inicio = _primeiros_bytes(source)
+    esperadas = _ASSINATURAS.get(extensao)
+    if esperadas is not None:
+        if not any(inicio.startswith(a) for a in esperadas):
+            raise ValueError(
+                f"Este arquivo tem extensão .{extensao} mas o conteúdo não é "
+                f"de um .{extensao}. Confira se ele não foi renomeado, e "
+                "exporte de novo pelo painel do canal."
+            )
+        return
+    if any(inicio.startswith(a) for a in _ASSINATURAS_BINARIAS):
+        raise ValueError(
+            f"Este arquivo tem extensão .{extensao}, que a Carchuna lê como "
+            "texto, mas o conteúdo é de um arquivo binário. Renomear a "
+            "extensão não converte o formato — exporte de novo no formato "
+            "que você quer usar."
         )
 
 

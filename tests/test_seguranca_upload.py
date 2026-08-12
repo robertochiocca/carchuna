@@ -296,11 +296,29 @@ def test_zip_bomb_e_recusado_sem_expandir(tmp_path):
 
 
 def test_xlsx_que_nao_e_zip_recusa_sem_derrubar(tmp_path):
-    """Extensão mentirosa: `.xlsx` que é texto puro."""
+    """Extensão mentirosa: `.xlsx` que é texto puro.
+
+    Desde a conferência de assinatura (V5) quem recusa é ela, um passo
+    antes — sem sequer abrir o zip. A guarda do `_conferir_zip_bomb`
+    continua sendo a de baixo: ela pega o arquivo que **é** zip e está
+    corrompido, que a assinatura deixa passar de propósito.
+    """
     mentiroso = tmp_path / "mentira.xlsx"
     mentiroso.write_text("isto é texto, não uma planilha", encoding="utf-8")
-    with pytest.raises(ValueError, match="não é uma planilha"):
+    with pytest.raises(ValueError, match="não é de um .xlsx"):
         ler_linhas_brutas(str(mentiroso))
+
+
+def test_zip_valido_mas_corrompido_cai_na_guarda_de_baixo(tmp_path):
+    """A assinatura confere o começo; ela não confere o pacote inteiro."""
+    truncado = tmp_path / "truncado.xlsx"
+    with zipfile.ZipFile(truncado, "w") as pacote:
+        pacote.writestr("[Content_Types].xml", "<x/>")
+    bytes_do_zip = truncado.read_bytes()
+    truncado.write_bytes(bytes_do_zip[: len(bytes_do_zip) // 2])
+
+    with pytest.raises(ValueError, match="não é uma planilha|corrompido"):
+        ler_linhas_brutas(str(truncado))
 
 
 def test_o_openpyxl_levantava_OSError_por_fora_de_todo_except():
@@ -353,4 +371,77 @@ def test_as_fixtures_reais_continuam_importando_igual():
     crus = sorted(reais.glob("*_cru.csv"))
     assert crus, "as fixtures reais sumiram"
     for arquivo in crus:
+        assert ler_linhas_brutas(str(arquivo)), arquivo.name
+
+
+# ---------------------------------------------------------------------------
+# V5 — a extensão promete, os bytes confirmam
+#
+# O despacho de parser era `filename.rsplit(".", 1)[-1]`. Quem envia
+# escolhe o nome, então o nome não identificava nada — e a direção que
+# importa para quem ataca é a segunda: extensão de texto com conteúdo
+# binário manda um zip para o leitor de CSV, que é justamente o caminho
+# onde nenhum teto de expansão existe.
+# ---------------------------------------------------------------------------
+
+
+def test_csv_que_na_verdade_e_zip_e_recusado(tmp_path):
+    disfarcado = tmp_path / "vendas.csv"
+    with zipfile.ZipFile(disfarcado, "w") as pacote:
+        pacote.writestr("carga.bin", b"\0" * 1000)
+
+    with pytest.raises(ValueError, match="conteúdo é de um arquivo binário"):
+        ler_linhas_brutas(str(disfarcado))
+
+
+def test_json_que_na_verdade_e_pdf_e_recusado(tmp_path):
+    disfarcado = tmp_path / "vendas.json"
+    disfarcado.write_bytes(b"%PDF-1.7\n" + b"x" * 100)
+
+    with pytest.raises(ValueError, match="conteúdo é de um arquivo binário"):
+        ler_linhas_brutas(str(disfarcado))
+
+
+def test_xlsx_que_na_verdade_e_texto_e_recusado(tmp_path):
+    disfarcado = tmp_path / "planilha.xlsx"
+    disfarcado.write_text("data;canal\n2026-01-01;shopee\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="não é de um .xlsx"):
+        ler_linhas_brutas(str(disfarcado))
+
+
+def test_pdf_que_na_verdade_e_texto_e_recusado(tmp_path):
+    disfarcado = tmp_path / "relatorio.pdf"
+    disfarcado.write_text("isto não é um PDF", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="não é de um .pdf"):
+        ler_linhas_brutas(str(disfarcado))
+
+
+def test_a_conferencia_nao_consome_o_buffer(tmp_path):
+    """Espiar o começo não pode comer o arquivo de quem lê depois.
+
+    O upload do Streamlit chega como buffer, e um `read` sem `seek` de
+    volta faria o parser receber o arquivo já mordido — dado sumindo em
+    silêncio, que é o defeito que este projeto mais persegue.
+    """
+    import io
+
+    conteudo = (CABECALHO + "2026-01-01;shopee;100;40;10\n").encode("utf-8")
+    buffer = io.BytesIO(conteudo)
+    buffer.name = "vendas.csv"
+
+    linhas = ler_linhas_brutas(buffer, name="vendas.csv")
+    assert len(linhas) == 1
+    assert linhas[0]["valor_bruto"] == "100"
+
+
+def test_os_arquivos_de_verdade_continuam_passando(tmp_path):
+    """A conferência não pode recusar o que o lojista realmente exporta."""
+    bom = tmp_path / "vendas.csv"
+    bom.write_text(CABECALHO + "2026-01-01;shopee;100;40;10\n", encoding="utf-8")
+    assert ler_linhas_brutas(str(bom))
+
+    reais = sorted(Path("tests/fixtures/reais").glob("*_cru.csv"))
+    for arquivo in reais:
         assert ler_linhas_brutas(str(arquivo)), arquivo.name
