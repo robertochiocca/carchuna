@@ -1,0 +1,27 @@
+# Atualização de dependência com aviso, em vez de `>=` aberto resolvendo
+# sozinho a cada build. A auditoria da v1 encontrou o repositório sem
+# lockfile e sem nenhum aviso de CVE: o build não era reprodutível e uma
+# versão comprometida entraria calada no próximo deploy do Streamlit
+# Cloud.
+#
+# Semanal e agrupado de propósito: um PR por semana com o conjunto é
+# revisável; quinze PRs soltos viram ruído que ninguém lê, que é o modo
+# mais comum de um projeto pequeno desligar o Dependabot.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dependencias:
+        patterns: ["*"]
+
+  # As actions são pinadas por SHA, então elas SÓ se atualizam por aqui.
+  # Sem esta entrada, pinar por SHA troca "versão que muda sozinha" por
+  # "versão que nunca é corrigida" — e a segunda é pior.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
