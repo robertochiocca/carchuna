@@ -1,8 +1,7 @@
-# Auditoria de segurança da Carchuna — Fase 0 (discovery)
+# Auditoria de segurança da Carchuna
 
 **Data:** 11/08/2026 · **Escopo:** repositório na branch `carchuna/rateio-do-das-e-invariante`
-(11 commits à frente de `origin/main`) · **Fase:** 0 — somente leitura, nenhum arquivo de
-código alterado.
+(11 commits à frente de `origin/main`) · **Fases 0 e 1** concluídas — discovery e correções.
 
 **Baseline registrado antes de qualquer leitura profunda:** `pytest -q` → 558 passed ·
 `ruff check .` → All checks passed · `black --check .` → 72 files unchanged.
@@ -244,11 +243,281 @@ fase — o gate da Fase 0 é leitura, e o PoC pertence aos testes da Fase 1.
 
 ---
 
-## Fim da Fase 0
+# Fase 1 — correções
 
-Nenhum arquivo de código foi alterado. `pytest`, `ruff` e `black` seguem no baseline
-registrado no topo.
+Um commit por vulnerabilidade, na ordem aprovada. **Gate de saída aplicado em cada
+um**: `pytest -q` verde · cobertura ≥ 95% · `ruff check .` · `black --check .` ·
+`python examples/exemplo_diagnostico.py` roda.
 
-**A Fase 1 precisa da sua aprovação.** A ordem que proponho, por severidade e por custo de
-ataque: V1 (cinco caracteres derrubam o app) → V2 (leitura de arquivo do servidor) →
-V3 (tetos de ingestão) → V4/V5/V6 → V7/V8.
+Cada correção foi verificada por mutação: reverter o código faz cair um teste com
+nome. Onde a mutação **não** derrubou nada, o teste foi corrigido antes do commit —
+aconteceu três vezes, e está registrado abaixo.
+
+## 8. Correções implementadas
+
+### V1 — `decimal.InvalidOperation` atravessava toda a defesa · `f24392a`
+
+| | |
+|---|---|
+| **Vulnerabilidade** | `Decimal("1e999")` num campo de dinheiro derruba a aplicação |
+| **Causa raiz** | `_dinheiro` recusa `bool`, `float` e não-finito; `1e999` não é nenhum dos três. O estouro vem em `_q().quantize()`, com uma exceção que herda de `ArithmeticError` — e todo `except` do projeto captura `(ValueError, TypeError)` |
+| **Correção** | `MAX_DINHEIRO = 1e9` e `MAX_PRAZO_RECEBIMENTO_DIAS = 365`, recusados na fronteira com `ValueError` |
+| **Arquivos** | `carchuna/margem.py`, `carchuna/api/schemas.py` |
+| **Razão** | O limite sai da aritmética, não de opinião: o contexto `Decimal` tem 28 dígitos e `quantize` a centavos estoura a partir de `1e26`; o pior caso do motor é `valor × taxa × dias/30` somado sobre a lista, então o teto de um campo é a raiz disso. No teto de tudo, com o teto de 200.000 lançamentos da API, o pior caso dá **2,4e24** — cabe com folga de 40×. E R$ 1 bilhão numa linha é três ordens de grandeza acima do teto do Simples |
+| **Testes** | `test_seguranca_upload.py` (14), `test_seguranca_api.py` (10) |
+| **Resultado** | verde · API: **500 → 422**; CSV: a linha ruim é rejeitada com motivo e as boas entram |
+
+**Eram cinco portas, não uma.** Os campos de dinheiro da transação, as três taxas da
+tabela de custos, e o `prazo_recebimento_dias` — que é `int` puro e não passava por
+`_dinheiro` nenhum, mas multiplica o valor no custo de antecipação.
+
+**O limite não podia ser de plausibilidade.** Uma comissão de 900% da receita continua
+passando aqui de propósito: quem a carimba é `conferir_plausibilidade`. Confundir as
+duas apagaria `test_comissao_de_900_por_cento_e_implausivel_e_a_identidade_nao_percebe`,
+que é o teste que prova que a identidade estrutural não vê absurdo nenhum. Aqui recusa-se
+o que **não é número calculável**; lá carimba-se o que **é número e não cabe na
+realidade**.
+
+### V2 — o dashboard público lia arquivo do disco do servidor · `17f5c83`
+
+| | |
+|---|---|
+| **Vulnerabilidade** | Campo de texto público → `Path(source).read_bytes()` no container |
+| **Causa raiz** | Recurso de uso local exposto na instância pública |
+| **Correção** | O campo depende de `CARCHUNA_LER_CAMINHO=1`, desligado de fábrica, e **some** quando desligado |
+| **Arquivos** | `carchuna/dados.py` (`leitura_por_caminho_ligada`), `app.py` |
+| **Razão** | Mesmo padrão do `CARCHUNA_USAR_LLM`: quem publica o dashboard não deve expor o disco do servidor sem ter pedido. E some em vez de aparecer e recusar — caixa que só devolve erro convida a tentar, e cada tentativa responde alguma coisa |
+| **Testes** | `test_seguranca_caminho.py` (14) |
+| **Resultado** | verde |
+
+**A fronteira é a aplicação, não a biblioteca, e isso é escolha.**
+`carregar_com_relatorio("/x.csv")` continua funcionando: quem escreve um script Python
+já tem o disco inteiro na mão, recusar ali seria teatro, e quebraria os onze arquivos de
+teste que carregam fixture por caminho.
+
+**Custou 14 testes de UI, e eu só vi pela mutação.** Eles usavam o campo como ferramenta
+para pôr arquivo na tela. Ligar o interruptor neles é o certo — o que afirmam é sobre as
+abas e os números. Registro o erro de processo: rodei o gate completo depois de V1 e não
+repeti antes de seguir para o passo seguinte.
+
+### V3 — a ingestão não tinha teto nenhum · `511a40a`
+
+| | |
+|---|---|
+| **Correção** | Profundidade de JSON, razão de compressão de XLSX, linhas por arquivo, páginas de PDF, `maxUploadSize` |
+| **Arquivos** | `carchuna/dados.py`, `.streamlit/config.toml` |
+| **Testes** | `test_seguranca_upload.py` (+11) |
+| **Resultado** | verde |
+
+**Duas exceções novas da família do V1, achadas medindo:**
+
+- `RecursionError` — JSON aninhado. **200 KB de colchete** derrubavam a aplicação. Não é
+  `ValueError` nem `TypeError`.
+- `OSError` — pacote `.xlsx` corrompido, levantado pelo openpyxl. Idem.
+
+**Zip bomb recusado sem expandir:** o tamanho descomprimido está no cabeçalho do zip.
+Medido: 199 KB no disco declarando **210 MB** — razão de **1028×**. Recusado sem um byte
+descomprimido. Planilha real comprime de 10× a 20×.
+
+Tetos: 500.000 linhas (~40 anos do lojista típico), 200 páginas de PDF, `maxUploadSize`
+de 20 MB. **Nenhuma dependência nova** — `zipfile`, `json` e `tomllib` são stdlib.
+
+*Um teste meu não tinha dente:* chamava a guarda de profundidade na mão em vez de passar
+pelo leitor. Corrigido antes do commit.
+
+### V4 — só a busca legal tinha barreira · `ffa6a24`
+
+| | |
+|---|---|
+| **Correção** | `LIMITE_CALCULO_POR_JANELA = 12` num limitador separado, nos cinco endpoints que calculam |
+| **Arquivos** | `carchuna/api/limite.py`, `carchuna/api/main.py` |
+| **Testes** | `test_seguranca_api.py` (+8) |
+| **Resultado** | verde |
+
+O custo aqui é CPU, não dinheiro de terceiro, então a conta é outra: a 30/minuto um
+único IP pediria **quatro minutos de CPU por minuto de relógio**. Os dois contadores não
+se misturam de propósito, e `/saude` fica de fora — é o que um monitor chama.
+
+### V5 — a extensão prometia o formato e ninguém conferia · `0d15b42`
+
+| | |
+|---|---|
+| **Correção** | Assinatura (magic bytes) confere a extensão nos dois sentidos |
+| **Arquivos** | `carchuna/dados.py` |
+| **Testes** | `test_seguranca_upload.py` (+7) |
+| **Resultado** | verde |
+
+A direção que importa é a segunda: extensão de texto com conteúdo binário mandava um zip
+para o leitor de CSV — o caminho onde o teto de expansão não existe, porque ele mora no
+leitor de planilha. A espiada devolve o buffer para trás; há teste para isso, porque um
+`read` sem `seek` entregaria ao parser um arquivo já mordido.
+
+### V6 — o erro do sistema operacional ia cru para a tela · `2c23ae5`
+
+| | |
+|---|---|
+| **Correção** | `OSError` dá sempre a mesma mensagem; `ValueError` do motor continua inteira |
+| **Arquivos** | `app.py` |
+| **Testes** | `test_seguranca_erros.py` (13) |
+| **Resultado** | verde |
+
+**É uma distinção, não uma poda.** As mensagens do motor dizem qual coluna faltou, em que
+linha e o que fazer — são funcionalidade central, e um erro que só diz "erro" empurra o
+lojista para o suporte sem proteger ninguém. O que não sai é o que não foi escrito para
+ninguém ler. Mensagem igual para causas diferentes é o que fecha o oráculo, e o arquivo
+de teste guarda **as duas direções**: uma mutação que poda demais também derruba a suíte.
+
+### V7 — o que o pipeline permitia · `257dca6`
+
+| | |
+|---|---|
+| **Correção** | Actions por SHA, `permissions: contents: read` no CI, `pip-audit`, Dependabot, `.env.example`, `.gitignore` |
+| **Testes** | `test_seguranca_supply_chain.py` (11) |
+| **Resultado** | verde |
+
+`pip-audit` é ferramenta de CI e **não** entrou no `requirements.txt`: o núcleo continua
+com zero dependências, que é propriedade do desenho e não se perde numa correção de
+segurança. A entrada `github-actions` no Dependabot não é enfeite — pinar por SHA sem ela
+troca "versão que muda sozinha" por "versão que nunca é corrigida".
+
+### V8 — a chave do limite era o IP do socket · `516508a`
+
+| | |
+|---|---|
+| **Correção** | `chave_do_chamador()` lê `X-Forwarded-For` **só** com `CARCHUNA_PROXIES_CONFIAVEIS=n` |
+| **Testes** | `test_seguranca_api.py` (+6) |
+| **Resultado** | verde |
+
+Confiar no cabeçalho por padrão entrega o limite a quem ele deveria limitar: um
+`X-Forwarded-For` aleatório por requisição reinicia a contagem. A contagem é da **direita
+para a esquerda**, porque a parte esquerda da lista é escrita pelo cliente. Valor
+inválido cai no socket, nunca no cabeçalho.
+
+*Um teste meu não separava as duas leituras* (um salto só no cabeçalho). Corrigido antes
+do commit.
+
+## 9. Testes de segurança adicionados
+
+| Arquivo | Testes | Cobre |
+|---|---|---|
+| `tests/test_seguranca_upload.py` | 35 | V1 (dinheiro, prazo, taxas), V3 (JSON, zip bomb, linhas, PDF, upload), V5 (assinatura) |
+| `tests/test_seguranca_api.py` | 39 | V1 na porta HTTP, tetos de payload, corpo malformado, V4 (limites), V8 (chave) |
+| `tests/test_seguranca_erros.py` | 13 | V6 nas duas direções — vazamento e poda excessiva |
+| `tests/test_seguranca_caminho.py` | 14 | V2 (política, tela, o que a correção não promete) |
+| `tests/test_seguranca_supply_chain.py` | 11 | V7 (SHA, permissões, auditoria, segredos) |
+| **Total** | **112** | |
+
+**Regressão:** as fixtures reais (`mercado_livre_vendas_cru.csv`, `shopee_pedidos_cru.csv`)
+continuam importando, conferido em `test_as_fixtures_reais_continuam_importando_igual` e
+`test_os_arquivos_de_verdade_continuam_passando`.
+
+Suíte total: **558 → 670 testes**, cobertura **99%** (piso do CI: 95%).
+
+## 10. Score de segurança — DEPOIS
+
+Mesma metodologia da seção 3.
+
+| Categoria | Antes | Depois | O que mudou |
+|---|---|---|---|
+| Segurança de upload | 3 | **8** | assinatura, zip bomb, tetos de linha/página/tamanho. Não é 10: não há sandbox de parsing, e `pdfplumber` roda no mesmo processo |
+| Validação de entrada / API | 5 | **8** | faixa aritmética fechada nas cinco portas. Não é 10: `TypeError` genérico ainda vira `detail=str(erro)` |
+| Exaustão de recurso / abuso | 3 | **6** | limite nos cinco endpoints que calculam + tetos de ingestão. Continua um processo por instância, e o limite é por processo |
+| Gestão de segredos | 8 | **9** | `.env.example`, `.gitignore` completo, `SECURITY.md`. Não é 10: a rotação depende de informação fora do repositório |
+| Tratamento de erro / vazamento | 4 | **8** | `OSError` contido, oráculo fechado, teste varrendo respostas |
+| Segurança de dependências | 2 | **5** | `pip-audit` no CI + Dependabot. **Continua sem lockfile** |
+| CI/CD e supply chain | 3 | **7** | SHA + `contents: read`. `pages.yml` ainda precisa de `contents: write` para o desenho de deploy atual |
+| Logging e observabilidade | 1 | **1** | **não mexi** — fora do escopo desta fase, e continua sendo o ponto mais fraco |
+| Autenticação / Autorização | N/A | N/A | não há usuários na v1 |
+
+## 11. Segredos que exigem rotação
+
+| Nome | Local | Status | Ação |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | secrets do Streamlit Community Cloud | **não vazado** — histórico varrido em todos os blobs de todos os refs | rotação **não é urgente**. Rotacione se a chave for anterior à primeira publicação do app ou se tiver sido usada fora deste projeto |
+| `ANTHROPIC_AUTH_TOKEN` | idem, alternativa à anterior | idem | idem |
+
+Nenhum valor de segredo aparece neste relatório, em teste, em log ou em mensagem de
+commit. O único literal parecido no repositório é `"sk-ant-chave-falsa-de-teste"` em
+`tests/test_app.py`, que é placeholder e está aqui nomeado como tal.
+
+## 12. Configuração necessária no Streamlit Community Cloud
+
+Fora do repositório — precisa ser feito no painel:
+
+1. **`CARCHUNA_LER_CAMINHO` NÃO deve ser definida** (ou deve ser `0`). Definir como `1`
+   reabre a V2 inteira.
+2. **`ANTHROPIC_API_KEY`** só nos secrets do app, nunca no repositório.
+3. **`maxUploadSize`** já vem do `.streamlit/config.toml` versionado (20 MB) — confirme
+   que o Cloud está lendo o arquivo.
+4. **Visibilidade:** o app é público por desenho. Se algum dia receber base real de
+   lojista, isso muda o modelo de ameaças inteiro.
+5. **`CARCHUNA_PROXIES_CONFIAVEIS`:** deixe vazia até saber quantos proxies o Cloud põe
+   na frente. Um número errado é pior que nenhum.
+
+## 13. Configuração necessária no GitHub
+
+Fora do repositório:
+
+1. **Secret Scanning + Push Protection** — ligar. É a única barreira que impede um
+   segredo de entrar no histórico; a varredura desta auditoria é de hoje, não do futuro.
+2. **CodeQL / Code Scanning** — ligar em `Security` → `Code scanning`. Não adicionei o
+   workflow porque habilitar depende do painel, e um arquivo sem a permissão ligada é
+   ruído verde.
+3. **Branch protection na `main`** — exigir CI verde. Hoje o `pages.yml` publica a cada
+   push na `main` sem esperar o CI.
+4. **Default de `permissions:` do repositório** — pôr em *read-only*. O `ci.yml` já
+   declara o mínimo, mas o default vale para qualquer workflow futuro.
+5. **Dependabot** — o arquivo está no repositório; conferir que está ativo em `Security`.
+
+## 14. Riscos remanescentes
+
+**O que a arquitetura atual não permite resolver:**
+
+- **Disponibilidade.** É um processo por instância atendendo todos os visitantes. Cada
+  correção sobe o custo do ataque; nenhuma elimina a classe. Só muda com fila, worker
+  isolado ou limite de infraestrutura.
+- **Limite por processo.** `LimiteDeChamadas` guarda estado em memória. Dois workers são
+  dois limites, e um restart zera a contagem. Resolver exige estado compartilhado, que é
+  a persistência que a v1 não tem por desenho.
+
+**O que não foi feito, e por quê:**
+
+- **Sem lockfile.** Gerar um do meu ambiente seria pior que não ter: a matriz do CI é
+  3.10, 3.11 e 3.12, e um lock só não vale para as três — daria sensação de
+  reprodutibilidade sem a coisa. Precisa de `pip-compile` por versão.
+- **Logging e observabilidade continuam em 1.** Um 500 aparece no log do Cloud e nada
+  mais. Sem isso, um ataque em curso é invisível até alguém reclamar.
+- **`pages.yml` mantém `contents: write` e `--force`.** É o mínimo para o desenho de
+  deploy atual (push direto na `gh-pages`). Trocar por `actions/deploy-pages` é mudança
+  de arquitetura de deploy, fora do escopo desta fase.
+- **Parsing sem sandbox.** `pdfplumber` e `openpyxl` rodam no processo do app. Os tetos
+  reduzem a superfície; uma vulnerabilidade de memória nas bibliotecas continua com o
+  processo inteiro na mão.
+
+**O que não pôde ser verificado** (a seção acima, na Fase 0, continua valendo): a
+configuração do Streamlit Cloud e a do GitHub são externas ao repositório.
+
+## 15. Próximos passos
+
+**P0 — nada.** As duas HIGH e a terceira estão corrigidas e com teste.
+
+**P1 — depende de você, não de código:**
+1. Confirmar que `CARCHUNA_LER_CAMINHO` **não** está definida no Cloud.
+2. Ligar Secret Scanning + Push Protection.
+3. Branch protection na `main` exigindo CI verde.
+
+**P2 — código, quando houver tempo:**
+4. Lockfile por versão da matriz.
+5. Logging estruturado do que é recusado na fronteira — hoje um ataque não deixa rastro.
+6. `TypeError` genérico na API deixar de virar `detail=str(erro)`.
+
+**P3 — quando o roadmap pedir:**
+7. Estado compartilhado do limite, junto com a persistência.
+8. `actions/deploy-pages` no lugar do force push.
+9. Os requisitos da seção 7b, **antes** de auth e persistência entrarem — não depois.
+
+---
+
+*Esta auditoria não conclui que a Carchuna está segura. Ela registra o que foi
+verificado, o que foi achado, o que foi corrigido, o que não pôde ser verificado e o que
+continua em risco.*
