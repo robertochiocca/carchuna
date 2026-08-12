@@ -320,7 +320,9 @@ Medido: 199 KB no disco declarando **210 MB** — razão de **1028×**. Recusado
 descomprimido. Planilha real comprime de 10× a 20×.
 
 Tetos: 500.000 linhas (~40 anos do lojista típico), 200 páginas de PDF, `maxUploadSize`
-de 20 MB. **Nenhuma dependência nova** — `zipfile`, `json` e `tomllib` são stdlib.
+de 20 MB. **Nenhuma dependência nova** — `zipfile` e `json` são stdlib, e o
+`maxUploadSize` é conferido com leitura de linha porque `tomllib` só existe a partir
+do 3.11 e a matriz do CI começa no 3.10.
 
 *Um teste meu não tinha dente:* chamava a guarda de profundidade na mão em vez de passar
 pelo leitor. Corrigido antes do commit.

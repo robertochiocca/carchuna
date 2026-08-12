@@ -23,8 +23,6 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-import tomllib
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
@@ -46,6 +44,8 @@ from carchuna.margem import (
 )
 
 CONFIG = ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("360000"))
+
+RAIZ = Path(__file__).resolve().parents[1]
 
 CABECALHO = "data;canal;valor_bruto;custo_produto;frete_pago\n"
 
@@ -359,10 +359,25 @@ def test_o_teto_de_paginas_do_pdf_esta_declarado():
 
 
 def test_o_teto_de_upload_do_streamlit_esta_configurado():
-    """Sem a seção `[server]`, vale o default de 200 MB."""
-    config = Path(".streamlit/config.toml").read_text(encoding="utf-8")
-    configurado = tomllib.loads(config)
-    assert configurado["server"]["maxUploadSize"] <= 50
+    """Sem a seção `[server]`, vale o default de 200 MB.
+
+    Lido linha a linha, e não com `tomllib`: ele só entrou na stdlib no
+    3.11 e a matriz do CI começa no 3.10. Foi assim que este arquivo
+    derrubou o 3.10 — o import estava no topo do módulo, então nem
+    chegava a coletar os outros trinta e quatro testes. Um parser de
+    TOML como dependência para conferir um número inteiro seria pagar
+    caro por pouco.
+    """
+    config = (RAIZ / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+    assert "[server]" in config, "sem a seção, o valor não vale nada"
+
+    limites = [
+        int(linha.split("=", 1)[1].strip())
+        for linha in config.splitlines()
+        if linha.strip().startswith("maxUploadSize")
+    ]
+    assert limites, "`maxUploadSize` não está declarado"
+    assert limites[0] <= 50
 
 
 def test_as_fixtures_reais_continuam_importando_igual():
