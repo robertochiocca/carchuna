@@ -14,6 +14,11 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     strategy:
+      # Sem isto, a falha do 3.10 CANCELA o 3.11 e o 3.12 e eles não
+      # chegam a rodar — o vermelho aparece nos três sem ninguém saber se
+      # os outros dois passariam. Numa matriz de três, ver as três custa
+      # pouco e é o que diz onde o defeito começa.
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
@@ -34,8 +39,25 @@ jobs:
         # É ferramenta de CI, não do projeto: o núcleo `carchuna/`
         # continua com zero dependências, e o `requirements.txt` não
         # ganhou linha nenhuma.
+        #
+        # O upgrade do setuptools é do RUNNER, não da Carchuna. A imagem
+        # do ubuntu-latest traz setuptools 79.0.1 pré-instalado em
+        # /opt/hostedtoolcache, e ele carrega a PYSEC-2026-3447 —
+        # corrigida em 83.0.0. Não é dependência declarada deste projeto:
+        # não está no requirements.txt nem no pyproject.toml, e mesmo
+        # assim o pip-audit o vê, porque ele audita o ambiente e não o
+        # arquivo.
+        #
+        # Só a 3.10 ficou vermelha porque desde a 3.12 o ensurepip
+        # deixou de instalar setuptools, então nas outras duas ele nem
+        # aparece no ambiente.
+        #
+        # Atualizar em vez de ignorar: existe versão corrigida, e
+        # `--ignore-vuln` mandaria a auditoria calar sobre uma falha real
+        # — que é o oposto do que este passo existe para fazer.
         run: |
           pip install pip-audit
+          pip install --upgrade setuptools
           pip-audit --strict
 
       - name: Lint (ruff)
