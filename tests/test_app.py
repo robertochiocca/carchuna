@@ -18,12 +18,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 
+from carchuna.dados import CHAVE_LEITURA_POR_CAMINHO
+
 pytest.importorskip("streamlit")
 pytest.importorskip("pandas")
 
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _campo_de_caminho_ligado():
+    """Estes testes usam o campo de caminho como ferramenta de injeção.
+
+    Ele vem desligado de fábrica desde a correção de leitura por caminho
+    (o porquê está em `test_seguranca_caminho.py`): no dashboard público
+    ele lia o disco do servidor. Aqui é ligado de propósito, porque o
+    que estes testes afirmam é sobre as abas e os números — apontar um
+    arquivo é só o jeito de colocar dado na tela, e o `file_uploader`
+    não se simula pelo `AppTest`.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv(CHAVE_LEITURA_POR_CAMINHO, "1")
+        yield
+
+
 FIXTURES = Path(__file__).parent / "fixtures" / "reais"
 
 # O app monta 7 abas e faz cálculo sobre 6 meses de vendas sintéticas;

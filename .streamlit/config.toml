@@ -7,3 +7,11 @@ backgroundColor = "#06272E"
 secondaryBackgroundColor = "#0A3840"
 textColor = "#D8E7E5"
 font = "sans serif"
+
+# Teto do upload. Sem esta seção vale o default do Streamlit, de 200 MB —
+# e o app roda num processo compartilhado, sem login, onde um arquivo
+# grande é o jeito mais barato de gastar a memória de todos os
+# visitantes. 20 MB são cerca de 200 mil lançamentos em CSV, muito acima
+# do que uma PME exporta num período.
+[server]
+maxUploadSize = 20

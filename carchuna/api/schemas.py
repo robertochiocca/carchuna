@@ -14,7 +14,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, PlainSerializer
 
-from carchuna.margem import ConfigTributaria, TabelaCustos, Transacao
+from carchuna.margem import (
+    MAX_PRAZO_RECEBIMENTO_DIAS,
+    ConfigTributaria,
+    TabelaCustos,
+    Transacao,
+)
 
 # Decimal serializado como string no JSON: "5.65", nunca 5.65 (float).
 Dinheiro = Annotated[Decimal, PlainSerializer(str, return_type=str, when_used="json")]
@@ -29,7 +34,10 @@ class TransacaoIn(BaseModel):
     custo_produto: Dinheiro
     frete_pago: Dinheiro
     devolvida: bool = False
-    prazo_recebimento_dias: int = Field(default=0, ge=0)
+    # `le` espelha o teto do domínio: sem ele um inteiro gigante só era
+    # recusado depois de virar `Transacao`, e a fronteira da API existe
+    # justamente para o corpo malformado parar antes do motor.
+    prazo_recebimento_dias: int = Field(default=0, ge=0, le=MAX_PRAZO_RECEBIMENTO_DIAS)
     comissao_cobrada: Dinheiro | None = None
     # Estes dois existiam no motor e não na API: quem chamava por HTTP não
     # conseguia mandar o nome do produto (e ficava sem o ranking de

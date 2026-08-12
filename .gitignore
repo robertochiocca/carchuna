@@ -11,6 +11,11 @@ htmlcov/
 .pytest_cache/
 .ruff_cache/
 .streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 *.pdf
 !docs/TUTORIAL.pdf
 .DS_Store
