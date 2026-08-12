@@ -277,3 +277,84 @@ def test_o_endpoint_de_saude_nao_tem_barreira():
     """
     for _ in range(40):
         assert CLIENTE.get("/api/v1/saude").status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# V8 — quem conta como "o mesmo chamador"
+#
+# A chave era `request.client.host`. Atrás de um CDN, todos os visitantes
+# compartilham um IP e o limite vira bloqueio coletivo; e ler
+# `X-Forwarded-For` sem saber quantos proxies existem é pior, porque o
+# cabeçalho é texto que o cliente manda.
+# ---------------------------------------------------------------------------
+
+
+def test_sem_proxy_declarado_o_cabecalho_e_ignorado(monkeypatch):
+    """Confiar no cabeçalho por padrão entrega o limite a quem ele limita.
+
+    `X-Forwarded-For: <aleatório>` a cada requisição reinicia a contagem
+    e o limitador vira decoração.
+    """
+    from carchuna.api.limite import chave_do_chamador
+
+    monkeypatch.delenv("CARCHUNA_PROXIES_CONFIAVEIS", raising=False)
+    assert chave_do_chamador("10.0.0.1", "1.2.3.4, 5.6.7.8") == "10.0.0.1"
+
+
+def test_o_cabecalho_forjado_nao_ganha_janela_nova(monkeypatch):
+    """O mesmo ataque, pela porta HTTP de verdade."""
+    from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA
+
+    monkeypatch.delenv("CARCHUNA_PROXIES_CONFIAVEIS", raising=False)
+    corpo = {"transacoes": [VENDA], "config": CONFIG}
+    ultima = None
+    for i in range(LIMITE_CALCULO_POR_JANELA + 1):
+        ultima = CLIENTE.post(
+            "/api/v1/cenarios",
+            json=corpo,
+            headers={"X-Forwarded-For": f"203.0.113.{i}"},
+        )
+    assert ultima.status_code == 429
+
+
+def test_com_proxy_declarado_o_cliente_real_e_contado(monkeypatch):
+    """Um salto de proxy: o cliente é o penúltimo da lista."""
+    from carchuna.api.limite import chave_do_chamador
+
+    monkeypatch.setenv("CARCHUNA_PROXIES_CONFIAVEIS", "1")
+    assert chave_do_chamador("10.0.0.1", "203.0.113.9, 172.16.0.2") == "203.0.113.9"
+
+
+def test_a_contagem_e_da_direita_para_a_esquerda(monkeypatch):
+    """A parte esquerda da lista é escrita pelo cliente e não vale nada.
+
+    Contar da esquerda deixaria o atacante escolher a própria chave só
+    prefixando a lista.
+    """
+    from carchuna.api.limite import chave_do_chamador
+
+    monkeypatch.setenv("CARCHUNA_PROXIES_CONFIAVEIS", "1")
+    forjado = "mentira1, mentira2, 203.0.113.9, 172.16.0.2"
+    assert chave_do_chamador("10.0.0.1", forjado) == "203.0.113.9"
+
+
+@pytest.mark.parametrize("valor", ["", "sim", "-1", "muitos"])
+def test_valor_invalido_de_proxies_cai_no_socket(monkeypatch, valor):
+    """Configuração errada não pode abrir a porta em silêncio.
+
+    O cabeçalho tem dois saltos de propósito: com um só, tratar o valor
+    inválido como zero ou como um dá o mesmo resultado, e o teste não
+    separaria as duas leituras.
+    """
+    from carchuna.api.limite import chave_do_chamador
+
+    monkeypatch.setenv("CARCHUNA_PROXIES_CONFIAVEIS", valor)
+    assert chave_do_chamador("10.0.0.1", "1.2.3.4, 5.6.7.8") == "10.0.0.1"
+
+
+def test_cabecalho_curto_demais_cai_no_socket(monkeypatch):
+    """Menos saltos que proxies declarados é configuração inconsistente."""
+    from carchuna.api.limite import chave_do_chamador
+
+    monkeypatch.setenv("CARCHUNA_PROXIES_CONFIAVEIS", "2")
+    assert chave_do_chamador("10.0.0.1", "203.0.113.9") == "10.0.0.1"

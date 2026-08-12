@@ -22,7 +22,11 @@ from fastapi import FastAPI, HTTPException, Query, Request
 
 from carchuna import __version__
 from carchuna.analise import AnalisadorMargem
-from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA, LimiteDeChamadas
+from carchuna.api.limite import (
+    LIMITE_CALCULO_POR_JANELA,
+    LimiteDeChamadas,
+    chave_do_chamador,
+)
 from carchuna.api.schemas import (
     MAX_PERGUNTA,
     AchadoOut,
@@ -77,7 +81,10 @@ def _cobrar_limite(request: Request, limitador: LimiteDeChamadas, porque: str) -
     estado é por processo. É barreira contra laço acidental e abuso
     simples, não contra abuso distribuído.
     """
-    chave = request.client.host if request.client else "desconhecido"
+    chave = chave_do_chamador(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+    )
     if limitador.permitir(chave):
         return
     espera = limitador.segundos_para_liberar(chave)
