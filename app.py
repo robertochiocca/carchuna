@@ -181,6 +181,10 @@ T = {
             "números daqui se atualizam sozinhos em alguns segundos."
         ),
         "caminho_arquivo": "Caminho do arquivo (ex.: C:\\vendas\\maio.xlsx)",
+        "falha_arquivo": (
+            "Não consegui abrir esse arquivo. Confira o caminho, se o "
+            "arquivo existe e se você tem permissão para lê-lo."
+        ),
         "caminho_desligado": (
             "Este recurso lê um arquivo do disco da máquina onde a Carchuna "
             "está rodando, então ele vem desligado e só faz sentido no seu "
@@ -549,6 +553,10 @@ T = {
             "here refresh by themselves within seconds."
         ),
         "caminho_arquivo": "File path (e.g.: C:\\sales\\may.xlsx)",
+        "falha_arquivo": (
+            "I could not open that file. Check the path, whether the file "
+            "exists, and whether you have permission to read it."
+        ),
         "caminho_desligado": (
             "This feature reads a file from the disk of the machine running "
             "Carchuna, so it ships disabled and only makes sense on your own "
@@ -1359,7 +1367,15 @@ with st.sidebar:
             )
             if monitorar:
                 st.info(t["monitorando"])
-        except (ValueError, TypeError, OSError, ImportError) as erro:
+        except OSError:
+            # A mensagem do sistema operacional traz errno e o caminho
+            # inteiro, e as três respostas possíveis (não existe, sem
+            # permissão, existe e não parseia) desenham um oráculo de
+            # arquivos do servidor. O motivo do motor é escrito para o
+            # lojista; este não é escrito para ninguém.
+            st.error(t["falha_arquivo"])
+            st.stop()
+        except (ValueError, TypeError, ImportError) as erro:
             st.error(f"{t['falha_importacao']} {erro}")
             st.stop()
     else:
