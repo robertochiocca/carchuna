@@ -187,3 +187,93 @@ def test_busca_legal_acima_do_limite_e_429_com_retry_after():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# V4 — os endpoints que calculam também precisam de barreira
+#
+# Antes, só a busca legal tinha limite, porque era a única que podia
+# gastar dinheiro de terceiro. Os quatro analíticos aceitavam chamada
+# atrás de chamada no teto de lançamentos — e uma delas custa cerca de 8
+# segundos medidos num processo que atende todos os visitantes.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _limites_zerados():
+    """Sem herdar marcas de outro teste — o limitador é global."""
+    from carchuna.api.main import _limite, _limite_calculo
+
+    _limite._marcas.clear()
+    _limite_calculo._marcas.clear()
+    yield
+    _limite._marcas.clear()
+    _limite_calculo._marcas.clear()
+
+
+@pytest.mark.parametrize("rota", ANALITICOS)
+def test_endpoint_analitico_para_no_limite(rota):
+    from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA
+
+    codigos = [_post(rota).status_code for _ in range(LIMITE_CALCULO_POR_JANELA + 1)]
+
+    assert set(codigos[:-1]) == {200}, "o limite mordeu antes da hora"
+    assert codigos[-1] == 429
+
+
+def test_o_429_do_calculo_traz_retry_after_e_diz_o_porque():
+    from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA
+
+    ultima = None
+    for _ in range(LIMITE_CALCULO_POR_JANELA + 1):
+        ultima = _post("/api/v1/cenarios")
+
+    assert ultima.status_code == 429
+    assert int(ultima.headers["Retry-After"]) >= 1
+    assert "decompõe a sua base inteira" in ultima.json()["detail"]
+
+
+def test_preco_alvo_tambem_tem_barreira():
+    from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA
+
+    corpo = {
+        "config": CONFIG,
+        "custo_produto": "40",
+        "frete": "10",
+        "canal": "shopee",
+    }
+    codigos = [
+        CLIENTE.post("/api/v1/preco-alvo", json=corpo).status_code
+        for _ in range(LIMITE_CALCULO_POR_JANELA + 1)
+    ]
+    assert codigos[-1] == 429
+
+
+def test_o_limite_do_calculo_e_separado_do_limite_da_busca_legal():
+    """Custos diferentes, contas diferentes.
+
+    A busca legal pode virar chamada paga; o cálculo gasta CPU. Um
+    limitador só faria a barreira mais cara valer para o recurso mais
+    barato, ou o contrário.
+    """
+    from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA, LIMITE_POR_JANELA
+
+    assert LIMITE_CALCULO_POR_JANELA < LIMITE_POR_JANELA
+
+    for _ in range(LIMITE_CALCULO_POR_JANELA + 1):
+        _post("/api/v1/cenarios")
+    assert _post("/api/v1/cenarios").status_code == 429
+    # a busca legal segue de pé: os contadores não se misturam
+    assert (
+        CLIENTE.get("/api/v1/legal/buscar", params={"q": "simples"}).status_code == 200
+    )
+
+
+def test_o_endpoint_de_saude_nao_tem_barreira():
+    """Verificação de vida não pode ser bloqueada pelo próprio limite.
+
+    É o que um monitor chama para saber se o serviço está de pé, e ele
+    não decompõe base nenhuma.
+    """
+    for _ in range(40):
+        assert CLIENTE.get("/api/v1/saude").status_code == 200

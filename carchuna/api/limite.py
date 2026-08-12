@@ -32,6 +32,15 @@ from collections import deque
 LIMITE_POR_JANELA = 30
 JANELA_SEGUNDOS = 60
 
+# Limite dos endpoints que calculam. O custo aqui é CPU e não dinheiro de
+# terceiro, então a conta é outra: uma chamada no teto de lançamentos
+# leva cerca de 8 segundos de um processo que atende todos os
+# visitantes. A 30/minuto, um único IP pediria quatro minutos de CPU por
+# minuto de relógio. Doze é uma a cada cinco segundos — folgado para
+# pessoa e para integração honesta, apertado para quem quer ocupar a
+# máquina.
+LIMITE_CALCULO_POR_JANELA = 12
+
 
 class LimiteDeChamadas:
     """Janela deslizante por chave, protegida por lock.

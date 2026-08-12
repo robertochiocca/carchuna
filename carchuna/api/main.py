@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 
 from carchuna import __version__
 from carchuna.analise import AnalisadorMargem
-from carchuna.api.limite import LimiteDeChamadas
+from carchuna.api.limite import LIMITE_CALCULO_POR_JANELA, LimiteDeChamadas
 from carchuna.api.schemas import (
     MAX_PERGUNTA,
     AchadoOut,
@@ -60,7 +60,38 @@ app = FastAPI(
 )
 
 _limite = LimiteDeChamadas()
+# Os endpoints que calculam têm limite próprio: o custo deles é CPU do
+# processo compartilhado, não dinheiro de terceiro, e a conta que define
+# o número é outra (ver `limite.py`). Antes só a busca legal tinha
+# barreira, e os quatro analíticos aceitavam chamada atrás de chamada no
+# teto de lançamentos.
+_limite_calculo = LimiteDeChamadas(limite=LIMITE_CALCULO_POR_JANELA)
 _retriever = Retriever()  # índice BM25 construído uma vez, na subida
+
+
+def _cobrar_limite(request: Request, limitador: LimiteDeChamadas, porque: str) -> None:
+    """429 com ``Retry-After`` quando o chamador passou da janela.
+
+    A chave é o IP do socket, e o que isso alcança está escrito em
+    ``limite.py`` — atrás de proxy ele não distingue chamadores, e o
+    estado é por processo. É barreira contra laço acidental e abuso
+    simples, não contra abuso distribuído.
+    """
+    chave = request.client.host if request.client else "desconhecido"
+    if limitador.permitir(chave):
+        return
+    espera = limitador.segundos_para_liberar(chave)
+    raise HTTPException(
+        status_code=429,
+        detail=f"Muitas chamadas seguidas. Tente de novo em {espera}s. {porque}",
+        headers={"Retry-After": str(espera)},
+    )
+
+
+_PORQUE_CALCULO = (
+    "O limite existe porque cada chamada decompõe a sua base inteira, "
+    "num processo que atende todo mundo ao mesmo tempo."
+)
 
 
 def _analisador(corpo: AnaliseRequest) -> AnalisadorMargem:
@@ -93,7 +124,7 @@ def saude() -> dict:
 
 
 @app.post("/api/v1/margem/decompor", response_model=MargemResponse)
-def decompor(corpo: AnaliseRequest) -> MargemResponse:
+def decompor(request: Request, corpo: AnaliseRequest) -> MargemResponse:
     """Decompõe a margem do período, com resumo executivo e conferências.
 
     As conferências vão no corpo da resposta, e não em código HTTP: uma
@@ -102,6 +133,7 @@ def decompor(corpo: AnaliseRequest) -> MargemResponse:
     confiar nele. Devolver 422 aqui esconderia o número de quem tem todo
     o direito de auditá-lo.
     """
+    _cobrar_limite(request, _limite_calculo, _PORQUE_CALCULO)
     analise = _analisador(corpo)
     resumo = analise.resumo_executivo()
     return MargemResponse(
@@ -134,8 +166,9 @@ def decompor(corpo: AnaliseRequest) -> MargemResponse:
 
 
 @app.post("/api/v1/cenarios", response_model=list[CenarioOut])
-def cenarios(corpo: AnaliseRequest) -> list[CenarioOut]:
+def cenarios(request: Request, corpo: AnaliseRequest) -> list[CenarioOut]:
     """Roda a bateria padrão de simulações sobre as vendas enviadas."""
+    _cobrar_limite(request, _limite_calculo, _PORQUE_CALCULO)
     analise = _analisador(corpo)
     return [
         CenarioOut(
@@ -150,8 +183,9 @@ def cenarios(corpo: AnaliseRequest) -> list[CenarioOut]:
 
 
 @app.post("/api/v1/diagnostico", response_model=DiagnosticoResponse)
-def diagnostico(corpo: AnaliseRequest) -> DiagnosticoResponse:
+def diagnostico(request: Request, corpo: AnaliseRequest) -> DiagnosticoResponse:
     """Achados das regras de detecção, com base legal citada do corpus."""
+    _cobrar_limite(request, _limite_calculo, _PORQUE_CALCULO)
     analise = _analisador(corpo)
     return DiagnosticoResponse(
         achados=[
@@ -170,8 +204,9 @@ def diagnostico(corpo: AnaliseRequest) -> DiagnosticoResponse:
 
 
 @app.post("/api/v1/crescimento", response_model=CrescimentoResponse)
-def crescimento(corpo: AnaliseRequest) -> CrescimentoResponse:
+def crescimento(request: Request, corpo: AnaliseRequest) -> CrescimentoResponse:
     """Como faturar mais: mix de canais, preço e espaço no Simples."""
+    _cobrar_limite(request, _limite_calculo, _PORQUE_CALCULO)
     analise = _analisador(corpo)
     return CrescimentoResponse(
         oportunidades=[
@@ -188,8 +223,9 @@ def crescimento(corpo: AnaliseRequest) -> CrescimentoResponse:
 
 
 @app.post("/api/v1/preco-alvo", response_model=PrecoAlvoResponse)
-def preco_alvo(corpo: PrecoAlvoRequest) -> PrecoAlvoResponse:
+def preco_alvo(request: Request, corpo: PrecoAlvoRequest) -> PrecoAlvoResponse:
     """Preço de equilíbrio e preço para a margem alvo (motor invertido)."""
+    _cobrar_limite(request, _limite_calculo, _PORQUE_CALCULO)
     try:
         config = corpo.config.para_dominio()
         tabela = corpo.tabela.para_dominio() if corpo.tabela else None
@@ -234,18 +270,12 @@ def buscar_legal(
     gastar dinheiro de terceiro por requisição. O alcance e os limites
     dessa barreira estão em ``carchuna/api/limite.py``.
     """
-    chave = request.client.host if request.client else "desconhecido"
-    if not _limite.permitir(chave):
-        espera = _limite.segundos_para_liberar(chave)
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Muitas buscas seguidas. Tente de novo em {espera}s. O "
-                "limite existe porque cada busca pode virar uma chamada "
-                "paga ao modelo de linguagem."
-            ),
-            headers={"Retry-After": str(espera)},
-        )
+    _cobrar_limite(
+        request,
+        _limite,
+        "O limite existe porque cada busca pode virar uma chamada paga ao "
+        "modelo de linguagem.",
+    )
     dispositivos = _retriever.buscar(q, top_k=top_k)
     resposta = gerar_resposta(q, dispositivos) or resposta_extrativa(q, dispositivos)
     return BuscaLegalResponse(
