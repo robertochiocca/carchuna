@@ -54,6 +54,31 @@ DATA_CONSULTA_FONTES = date(2026, 7, 19)
 TETO_SIMPLES = Decimal("4800000")  # LC 123/2006, art. 3º, II (EPP)
 TETO_MEI_ANUAL = Decimal("81000")  # LC 123/2006, art. 18-A, § 1º
 
+# ---------------------------------------------------------------------------
+# Faixa aritmética do dinheiro
+#
+# Não é limiar de plausibilidade — esse mora em `validade.py` e responde
+# outra pergunta. Este aqui é a faixa em que a conta **existe**: acima
+# dela, `Decimal.quantize()` levanta `InvalidOperation` e a aplicação cai.
+#
+# O número sai da aritmética, não de opinião. O contexto Decimal padrão
+# tem 28 dígitos significativos, e quantizar a centavos estoura a partir
+# de 1e26. O pior caso do motor é o custo de antecipação —
+# `valor × taxa × dias/30`, somado sobre todos os lançamentos —, então o
+# teto de um campo tem de ser a raiz disso, com folga:
+#
+#     200.000 lançamentos × (1e9)² × 365/30 ≈ 2,4e24  <  1e26
+#
+# Um bilhão de reais num único lançamento é três ordens de grandeza acima
+# do teto do Simples (R$ 4,8 milhões/ano). Nenhuma PME chega perto, e
+# quem chegar tem problema maior que este limite.
+MAX_DINHEIRO = Decimal("1e9")
+
+# Teto do prazo de recebimento. Entra na mesma conta acima: sem ele, o
+# produto cresce sem limite mesmo com todos os valores dentro da faixa.
+# Um ano é generoso — repasse de marketplace se mede em dias.
+MAX_PRAZO_RECEBIMENTO_DIAS = 365
+
 # Anexos do Simples Nacional (LC 123/2006, art. 18, redação da LC 155/2016).
 # Cada faixa: (limite superior da RBT12, alíquota nominal, parcela a deduzir).
 _Faixa = tuple[Decimal, Decimal, Decimal]
@@ -164,6 +189,14 @@ def _dinheiro(valor, campo: str) -> Decimal:
                 "NaN), então a linha é recusada aqui em vez de estragar o "
                 "total. Confira essa célula na planilha."
             )
+        if abs(convertido) > MAX_DINHEIRO:
+            raise ValueError(
+                f"`{campo}` está fora da faixa de dinheiro que a Carchuna "
+                f"calcula (o limite é R$ {_brl(MAX_DINHEIRO)} por "
+                "lançamento). Confira essa célula: notação científica "
+                "exportada por engano (1e9), separador de milhar lido como "
+                "decimal e coluna trocada são as três causas comuns."
+            )
         return convertido
     raise TypeError(f"`{campo}` deve ser Decimal, int ou str, recebeu {type(valor)}.")
 
@@ -213,6 +246,13 @@ class Transacao:
         if self.prazo_recebimento_dias < 0:
             raise ValueError(
                 f"prazo_recebimento_dias negativo: {self.prazo_recebimento_dias}."
+            )
+        if self.prazo_recebimento_dias > MAX_PRAZO_RECEBIMENTO_DIAS:
+            raise ValueError(
+                f"prazo_recebimento_dias = {self.prazo_recebimento_dias} passa "
+                f"de {MAX_PRAZO_RECEBIMENTO_DIAS} dias. Repasse de "
+                "marketplace se mede em dias, não em anos — confira se essa "
+                "coluna não é uma data que veio como número."
             )
 
 
