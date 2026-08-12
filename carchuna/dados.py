@@ -714,6 +714,121 @@ def _decodificar(conteudo: bytes) -> str:
     return conteudo.decode("latin-1", errors="replace")
 
 
+# ---------------------------------------------------------------------------
+# Tetos de ingestão
+#
+# A Carchuna parseia arquivo de origem desconhecida num processo que
+# atende todos os visitantes ao mesmo tempo. Sem teto, o custo do ataque
+# é um arquivo pequeno e o custo da defesa é o processo inteiro.
+#
+# Cada número abaixo é folgado sobre o uso real e apertado sobre o abuso.
+# O lojista típico deste estudo faz ~1.000 lançamentos/mês.
+# ---------------------------------------------------------------------------
+
+# ~40 anos de vendas do lojista típico. Passa disso e não é planilha de
+# PME: é despejo, ou uma coluna que virou linha na exportação.
+MAX_LINHAS_ARQUIVO = 500_000
+
+# Relatório de marketplace não passa de algumas dezenas de páginas, e
+# `extract_tables()` custa caro por página: um PDF pequeno e denso é o
+# jeito mais barato de queimar CPU alheia.
+MAX_PAGINAS_PDF = 200
+
+# O formato de transações tem profundidade 2 (lista de objetos). Vinte é
+# generoso e ainda muito abaixo do limite de recursão do interpretador —
+# que é o ponto: `json.load` estoura com `RecursionError`, que não é
+# `ValueError` nem `TypeError` e portanto não é contido por nenhum
+# `except` deste projeto.
+MAX_PROFUNDIDADE_JSON = 20
+
+# Zip bomb: um `.xlsx` é um zip, e o cabeçalho do zip declara o tamanho
+# descomprimido de cada parte. Dá para conferir antes de expandir, com a
+# stdlib. Planilha real comprime de 10x a 20x; 100x já é assinatura de
+# arquivo montado para expandir, não para ser lido.
+MAX_RAZAO_COMPRESSAO_XLSX = 100
+MAX_BYTES_DESCOMPRIMIDOS_XLSX = 500 * 1024 * 1024
+
+
+def _conferir_zip_bomb(source) -> None:
+    """Recusa o `.xlsx` que expande demais — **antes** de expandir.
+
+    O tamanho descomprimido está no cabeçalho do zip, então esta conta
+    não paga o custo que ela evita. Um arquivo de 199 KB que declara 210
+    MB é recusado sem que um byte seja descomprimido.
+    """
+    import zipfile
+
+    posicao = source.tell() if hasattr(source, "tell") else None
+    try:
+        with zipfile.ZipFile(source) as pacote:
+            comprimido = sum(i.compress_size for i in pacote.infolist()) or 1
+            descomprimido = sum(i.file_size for i in pacote.infolist())
+    except zipfile.BadZipFile:
+        raise ValueError(
+            "Este arquivo tem extensão .xlsx mas não é uma planilha do "
+            "Excel. Confira se ele não foi renomeado, e exporte de novo "
+            "pelo painel do canal."
+        ) from None
+    finally:
+        if posicao is not None:
+            source.seek(posicao)
+
+    razao = descomprimido / comprimido
+    if (
+        descomprimido > MAX_BYTES_DESCOMPRIMIDOS_XLSX
+        or razao > MAX_RAZAO_COMPRESSAO_XLSX
+    ):
+        raise ValueError(
+            "Esta planilha expande para um tamanho que a Carchuna não "
+            "processa. Se ela é uma planilha de vendas de verdade, exporte "
+            "de novo pelo painel do canal ou salve como CSV."
+        )
+
+
+def _conferir_profundidade_json(texto: str) -> None:
+    """Conta aninhamento no texto, sem construir o objeto.
+
+    `json.load` de um documento muito aninhado levanta `RecursionError`,
+    que herda de `RuntimeError` — nenhum dos `except (ValueError,
+    TypeError)` do projeto o captura, e a aplicação cai. Contar colchete
+    antes de parsear resolve sem pagar o parse.
+    """
+    profundidade = maxima = 0
+    dentro_de_texto = escapado = False
+    for caractere in texto:
+        if dentro_de_texto:
+            if escapado:
+                escapado = False
+            elif caractere == "\\":
+                escapado = True
+            elif caractere == '"':
+                dentro_de_texto = False
+            continue
+        if caractere == '"':
+            dentro_de_texto = True
+        elif caractere in "[{":
+            profundidade += 1
+            maxima = max(maxima, profundidade)
+            if maxima > MAX_PROFUNDIDADE_JSON:
+                raise ValueError(
+                    "Este JSON tem estrutura aninhada demais para ser uma "
+                    f"lista de vendas (o limite é {MAX_PROFUNDIDADE_JSON} "
+                    "níveis). A Carchuna espera uma lista de objetos, um "
+                    "por venda."
+                )
+        elif caractere in "]}":
+            profundidade -= 1
+
+
+def _conferir_quantidade_de_linhas(quantas: int) -> None:
+    if quantas > MAX_LINHAS_ARQUIVO:
+        raise ValueError(
+            f"Este arquivo tem {quantas} linhas, e a Carchuna processa até "
+            f"{MAX_LINHAS_ARQUIVO} de uma vez. Divida o período em arquivos "
+            "menores — por ano, por exemplo."
+        )
+
+
 def _abrir_texto(source):
     if hasattr(source, "read"):
         conteudo = source.read()
@@ -815,6 +930,7 @@ def _achar_cabecalho_em_celulas(linhas: list[list[str]]) -> int:
 def _ler_csv(source) -> list[dict]:
     texto = _abrir_texto(source).read()
     linhas = texto.splitlines()
+    _conferir_quantidade_de_linhas(len(linhas))
     inicio, separador = _achar_cabecalho(linhas)
     leitor = csv.DictReader(
         io.StringIO("\n".join(linhas[inicio:])), delimiter=separador
@@ -823,11 +939,13 @@ def _ler_csv(source) -> list[dict]:
 
 
 def _ler_json(source) -> list[dict]:
-    buffer = _abrir_texto(source)
+    texto = _abrir_texto(source).read()
+    _conferir_profundidade_json(texto)
     # parse_float=str preserva os números como texto: dinheiro nunca vira float.
-    dados = json.load(buffer, parse_float=str, parse_int=str)
+    dados = json.loads(texto, parse_float=str, parse_int=str)
     if not isinstance(dados, list):
         raise ValueError("JSON deve ser uma lista de objetos de transação.")
+    _conferir_quantidade_de_linhas(len(dados))
     return [{str(k).strip(): v for k, v in item.items()} for item in dados]
 
 
@@ -874,11 +992,21 @@ def _ler_xlsx(source) -> list[dict]:
             "Importar .xlsx requer `openpyxl` (pip install openpyxl) — "
             "ou exporte a planilha como CSV."
         ) from None
-    planilha = load_workbook(source, read_only=True, data_only=True).active
-    linhas = [
-        [_celula_de_planilha(c) for c in linha]
-        for linha in planilha.iter_rows(values_only=True)
-    ]
+    _conferir_zip_bomb(source)
+    try:
+        planilha = load_workbook(source, read_only=True, data_only=True).active
+    except OSError:
+        # openpyxl levanta OSError para pacote corrompido, e OSError não é
+        # ValueError nem TypeError: subiria por fora de todo `except` do
+        # projeto e derrubaria a tela em vez de recusar o arquivo.
+        raise ValueError(
+            "Não consegui abrir esta planilha: o arquivo parece corrompido "
+            "ou incompleto. Exporte de novo pelo painel do canal."
+        ) from None
+    linhas = []
+    for linha in planilha.iter_rows(values_only=True):
+        linhas.append([_celula_de_planilha(c) for c in linha])
+        _conferir_quantidade_de_linhas(len(linhas))
     if not any(any(c.strip() for c in linha) for linha in linhas):
         raise ValueError(
             "Esta planilha não tem nenhuma linha preenchida. A Carchuna lê a "
@@ -913,6 +1041,13 @@ def _ler_pdf(source) -> list[dict]:
     linhas: list[dict] = []
     cabecalho: list[str] | None = None
     with pdfplumber.open(source) as pdf:
+        if len(pdf.pages) > MAX_PAGINAS_PDF:
+            raise ValueError(
+                f"Este PDF tem {len(pdf.pages)} páginas, e a Carchuna lê até "
+                f"{MAX_PAGINAS_PDF}. Extrair tabela de PDF é caro por "
+                "página — exporte o relatório como CSV ou Excel, que todo "
+                "painel de marketplace oferece."
+            )
         for pagina in pdf.pages:
             for tabela in pagina.extract_tables():
                 for bruta in tabela:
