@@ -329,6 +329,7 @@ T = {
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
         "implausivel_titulo": "Estes números não fecham com a realidade.",
         "reconciliacao_titulo": "Os dois caminhos de cálculo não bateram.",
+        "aviso_titulo": "A conta está feita, mas leia isto antes de usá-la.",
         "motor_falhou": "Esta parte não pôde ser calculada.",
         "motor_falhou_base": (
             "A decomposição da margem não rodou, e sem ela não há nada "
@@ -699,6 +700,7 @@ T = {
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
         "implausivel_titulo": "These numbers don't add up.",
         "reconciliacao_titulo": "The two calculation paths disagree.",
+        "aviso_titulo": "The math is done, but read this before using it.",
         "motor_falhou": "This section could not be computed.",
         "motor_falhou_base": (
             "The margin breakdown did not run, and without it there is "
@@ -1449,6 +1451,7 @@ with st.sidebar:
             value=rbt12_sugerida or 4_200_000,
             step=10_000,
             help=t["rbt12_ajuda"],
+            key="rbt12",
         )
         if rbt12_sugerida:
             st.caption(t["rbt12_sugerida"])
@@ -1621,6 +1624,15 @@ with aba_resumo:
     reconciliacao = _motor("reconciliacao")
     if reconciliacao is not None and not reconciliacao.ok:
         st.error(f"**{t['reconciliacao_titulo']}** {reconciliacao.motivo}")
+
+    # Avisos do motor: o número saiu e vale, mas há algo que ele não
+    # cobre — o ICMS/ISS fora do DAS acima do sublimite, o ritmo de
+    # faturamento que projeta estouro do teto do MEI. Vêm em `warning`,
+    # não em `error`, porque não invalidam nada do que está abaixo; vêm
+    # acima dos números porque uma ressalva lida depois da margem é uma
+    # ressalva que já não foi lida.
+    for aviso in decomposicao.avisos:
+        st.warning(f"**{t['aviso_titulo']}** {aviso}")
 
     if lang == "pt":
         st.info(resumo.frase())

@@ -754,23 +754,39 @@ def test_cada_sinal_do_radar_chega_com_a_propria_nota_de_confianca(tmp_path):
         assert sinal.confianca.frase in tela
 
 
-def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
+def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor():
     """ "E se eu subisse os preços 5%?" na tela, com a premissa junto.
 
     O impacto tem que ser o do motor — que recalcula imposto e comissão
     sobre o preço novo — e não 5% do faturamento. E a premissa do volume
     constante aparece no próprio nome do cenário: sem ela o número vira
     promessa, porque ninguém sabe quanta venda se perde ao subir preço.
+
+    A RBT12 vem fixada em R$ 3.000.000 em vez de usar a demo de fábrica
+    (R$ 4.200.000): naquela, subir 5% leva a RBT12 do cenário a
+    R$ 4.410.000 e o cenário passa a ser omitido de propósito — o caso
+    está no teste seguinte. O que se afirma aqui é sobre o número e a
+    premissa, e para isso a loja precisa estar numa faixa em que o
+    cenário exista.
     """
     from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria
 
-    cenarios = AnalisadorMargem.demo(meses=6).cenarios()
-    preco = [c for c in cenarios if "preços" in c.nome]
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("3000000")
+    )
+    analise = AnalisadorMargem.demo(meses=6, config=config)
+    preco = [c for c in analise.cenarios() if "preços" in c.nome]
     assert len(preco) == 1, "o cenário de preço entra uma vez na bateria"
     (preco,) = preco
     assert "mesmo volume" in preco.nome
 
-    aba_ese = app_demo.tabs[3]
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(3_000_000)
+    teste.run()
+    assert not teste.exception
+
+    aba_ese = teste.tabs[3]
     assert aba_ese.label.strip().startswith("E se")
     nomes = [str(m.value) for m in aba_ese.markdown]
     assert any(preco.nome in n for n in nomes)
@@ -785,8 +801,32 @@ def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
     assert formatado in valores
 
     # o ganho não é 5% do faturamento: imposto e comissão comem parte
-    receita = AnalisadorMargem.demo(meses=6).decomposicao.receita_bruta
-    assert preco.impacto_reais < receita * Decimal("0.05")
+    assert preco.impacto_reais < analise.decomposicao.receita_bruta * Decimal("0.05")
+
+
+def test_o_cenario_de_preco_some_quando_joga_a_loja_para_fora_do_sublimite():
+    """Perto do limite, simular alta de preço é fazer uma pergunta sem resposta.
+
+    A R$ 4.200.000 de RBT12 — o padrão da demo — subir 5% leva o cenário
+    a R$ 4.410.000, mais de 20% acima do sublimite de ICMS/ISS. Nessa
+    faixa o ICMS e/ou o ISS saem do DAS já no mês seguinte (LC 123/2006,
+    art. 20, § 1º) e a Carchuna não sabe calcular a margem: a dedução
+    ficaria só com o DAS e o ganho simulado sairia inflado.
+
+    Publicar o cenário assim mesmo seria pior que omiti-lo, porque ele
+    seria lido como conselho — "suba 5% e ganhe isto" — justamente na
+    faixa em que o número está errado para cima. É o mesmo tratamento
+    que o MEI perto do teto já recebe (`test_teto_do_mei_sazonal.py`), e
+    a bateria continua devolvendo os outros cenários em vez de sumir
+    inteira.
+    """
+    from carchuna.analise import AnalisadorMargem
+
+    resultados = AnalisadorMargem.demo(meses=6).cenarios()  # rbt12 4.200.000
+
+    assert resultados, "a bateria inteira sumiu por causa de um cenário"
+    assert all("preços" not in c.nome for c in resultados)
+    assert all(c.impacto_reais is not None for c in resultados)
 
 
 def test_numero_implausivel_aparece_com_motivo_no_topo_do_resumo(tmp_path):
@@ -830,6 +870,63 @@ def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     assert not teste.exception
     erros = " ".join(e.value for e in teste.error)
     assert "dois e meio" in erros
+
+
+# ---------------------------------------------------------------------------
+# Os avisos do motor no Resumo
+#
+# `DecomposicaoMargem.avisos` existia e não tinha por onde sair: a
+# projeção de estouro do teto do MEI era calculada e morria no objeto.
+# Agora o Resumo publica cada aviso, e o primeiro a aparecer é o do
+# sublimite de ICMS/ISS — que a tela padrão dispara, porque a RBT12
+# sugerida de fábrica é R$ 4.200.000.
+# ---------------------------------------------------------------------------
+
+RBT12 = "rbt12"
+
+
+def test_o_aviso_do_sublimite_aparece_no_resumo(app_demo):
+    """A tela padrão está na faixa, e passou a dizer isso.
+
+    Antes desta mudança a demo publicava a margem de uma empresa acima
+    do sublimite sem uma palavra sobre o ICMS/ISS que ela recolhe por
+    fora do DAS — a linha de tributos ficava incompleta e a margem saía
+    para cima justamente no número que o lojista lê primeiro.
+    """
+    avisos = " ".join(w.value for w in app_demo.warning)
+    assert "sublimite" in avisos
+    assert "4.200.000" in avisos
+    assert "leia isto antes de usá-la" in avisos
+
+
+def test_abaixo_do_sublimite_o_resumo_nao_traz_o_aviso():
+    """Aviso que aparece sempre não é aviso, é decoração."""
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(3_000_000)
+    teste.run()
+    assert not teste.exception
+
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "sublimite" not in avisos
+    # e a tela continua inteira: o Resumo não sumiu junto com o aviso
+    assert teste.metric
+
+
+def test_excesso_grande_explica_na_tela_em_vez_de_estourar():
+    """R$ 4,5 mi: o motor recusa, e a recusa vira frase em vez de traceback.
+
+    Este é o caminho que o campo da barra lateral alcança de fato — o
+    `max_value` dele é o teto do Simples, então a faixa da recusa por
+    sublimite está a um arrasto de distância do lojista.
+    """
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(4_500_000)
+    teste.run()
+    assert not teste.exception
+
+    erros = " ".join(e.value for e in teste.error)
+    assert "sublimite" in erros
+    assert "contador" in erros
 
 
 if __name__ == "__main__":

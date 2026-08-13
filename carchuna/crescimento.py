@@ -28,6 +28,7 @@ from carchuna.margem import (
     ANEXOS_SIMPLES,
     BASE_RATEADA,
     BASE_VARIAVEL,
+    SUBLIMITE_ICMS_ISS,
     TETO_SIMPLES,
     ConfigTributaria,
     TabelaCustos,
@@ -37,9 +38,6 @@ from carchuna.margem import (
     decompor_margem,
 )
 from carchuna.rag.retrieval import Dispositivo, Retriever
-
-# Sublimite estadual do ICMS/ISS dentro do Simples (LC 123/2006, arts. 19-20).
-SUBLIMITE_ICMS_ISS = Decimal("3600000")
 
 AVISO_CRESCIMENTO = (
     "A Carchuna calcula onde crescer rende mais com base nos seus números; "
