@@ -265,5 +265,67 @@ def test_o_mei_nao_recebe_conferencia_de_sublimite():
     assert all("sublimite" not in a.lower() for a in d.avisos)
 
 
+# ---------------------------------------------------------------------------
+# `hipotetico`: a recusa protege o estado real, não a pergunta
+# ---------------------------------------------------------------------------
+
+
+def test_hipotetico_troca_a_recusa_por_carimbo():
+    """Num cenário, atravessar o sublimite é o achado — não motivo de sumir.
+
+    Recusar existe para impedir que o lojista leia como SUA uma margem
+    incompleta. Numa simulação ninguém está naquele estado, e a
+    travessia é a informação mais valiosa que a simulação tem: "subir 5%
+    te leva para uma faixa em que você recolhe ICMS/ISS por fora".
+    """
+    d = decompor_margem(_vendas(), _config("4400000"), hipotetico=True)
+
+    (carimbo,) = d.avisos
+    assert "4.400.000" in carimbo
+    assert "não considera" in carimbo
+    assert "art. 20, § 1º" in carimbo
+
+
+def test_hipotetico_nao_muda_nada_abaixo_da_fronteira():
+    """A bandeira só age onde havia recusa. No resto, é inerte."""
+    for rbt12 in ("1000000", "3600000", "4000000"):
+        normal = decompor_margem(_vendas(), _config(rbt12))
+        hipo = decompor_margem(_vendas(), _config(rbt12), hipotetico=True)
+        assert normal == hipo, f"hipotetico mudou o resultado em {rbt12}"
+
+
+def test_hipotetico_nao_abre_a_porta_acima_do_teto_do_simples():
+    """Fora do Simples, nem cenário existe: não é imposto incompleto.
+
+    Acima de R$ 4,8 mi a empresa está fora do regime. Um cenário
+    calculado com as tabelas do Simples ali não seria incompleto, seria
+    sem sentido — e `hipotetico` não pode virar chave-mestra para isso.
+    """
+    with pytest.raises(ValueError, match="teto do Simples"):
+        decompor_margem(_vendas(), _config("5000000"), hipotetico=True)
+
+
+def test_hipotetico_nao_alcanca_o_teto_do_mei():
+    """O MEI acima do teto continua recusado, com ou sem cenário.
+
+    Mesma razão do teto do Simples: o DAS fixo do MEI é o instrumento
+    errado para quem passou de R$ 81.000, e simular com ele não produz
+    um número incompleto — produz um número que não quer dizer nada.
+    """
+    mei = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76.00"))
+    vendas = [
+        Transacao(
+            data=date(2026, m, 15),
+            canal="loja_propria",
+            valor_bruto=Decimal("7000"),
+            custo_produto=Decimal("0"),
+            frete_pago=Decimal("0"),
+        )
+        for m in range(1, 13)
+    ]  # R$ 84.000 no ano
+    with pytest.raises(ValueError, match="art. 18-A"):
+        decompor_margem(vendas, mei, hipotetico=True)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

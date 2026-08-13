@@ -2016,6 +2016,12 @@ with aba_ese:
             c1.metric(t["margem_cenario"], _brl(resultado.cenario.margem_liquida))
             c2.metric(t["impacto_reais"], _brl(resultado.impacto_reais))
             c3.metric(t["impacto_pp"], f"{resultado.impacto_pp:+.2f}")
+            # Carimbo do cenário: ressalva do estado SIMULADO, embaixo do
+            # número a que ela se refere. Antes o cenário que atravessava
+            # o sublimite sumia da bateria — e a travessia era o que ele
+            # tinha de mais útil a dizer.
+            for aviso in resultado.avisos:
+                st.warning(aviso)
 
 # ---------------------------------------------------------------------------
 with aba_crescer:

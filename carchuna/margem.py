@@ -574,7 +574,9 @@ def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
     return tuple(avisos)
 
 
-def _conferir_sublimite_icms_iss(config: ConfigTributaria) -> tuple[str, ...]:
+def _conferir_sublimite_icms_iss(
+    config: ConfigTributaria, *, hipotetico: bool = False
+) -> tuple[str, ...]:
     """Acima do sublimite, o DAS deixa de ser o imposto todo.
 
     **O que esta conferência é.** Passando de ``SUBLIMITE_ICMS_ISS``, a
@@ -604,6 +606,22 @@ def _conferir_sublimite_icms_iss(config: ConfigTributaria) -> tuple[str, ...]:
     impedir que a Carchuna publique uma margem que ela sabe estar
     incompleta.
 
+    **``hipotetico`` — por que um cenário não é recusado.** A recusa
+    protege o lojista de ler como seu um número que já está errado. Num
+    cenário isso se inverte: ninguém está naquele estado, e a travessia
+    do sublimite é justamente o achado mais valioso da simulação —
+    "subir 5% te leva para uma faixa em que você passa a recolher
+    ICMS/ISS por fora". Omitir o cenário esconderia exatamente isso, e
+    era o que acontecia: ele sumia da bateria em silêncio. Com
+    ``hipotetico=True`` a recusa vira aviso, o número sai carimbado, e o
+    carimbo diz que o ganho mostrado não considera o ICMS/ISS de fora.
+
+    O teto do MEI não recebe o mesmo tratamento, e a diferença é a mesma
+    de sempre: acima do sublimite a empresa continua no Simples e o DAS
+    continua certo, só incompleto; acima do teto do MEI o DAS fixo é o
+    instrumento errado, e um cenário calculado com ele não seria
+    incompleto, seria sem sentido.
+
     **A imprecisão assumida.** O teste da lei é a receita bruta acumulada
     no **ano-calendário**; a ``rbt12`` é uma janela móvel de doze meses.
     Não são a mesma coisa: em julho, a RBT12 carrega o segundo semestre
@@ -624,6 +642,20 @@ def _conferir_sublimite_icms_iss(config: ConfigTributaria) -> tuple[str, ...]:
     if config.rbt12 > TETO_SIMPLES:
         return ()
     if config.rbt12 > EXCESSO_SUBLIMITE_IMEDIATO:
+        if hipotetico:
+            return (
+                f"Este cenário leva a RBT12 a R$ {_brl(config.rbt12)}, mais "
+                f"de 20% acima do sublimite de ICMS/ISS de "
+                f"R$ {_brl(SUBLIMITE_ICMS_ISS)} (Portaria CGSN nº 54/2025). "
+                "Nessa faixa o ICMS e/ou o ISS saem do DAS já no mês "
+                "seguinte ao do excesso (LC 123/2006, art. 20, § 1º) e "
+                "passam a ser recolhidos pelas regras do seu Estado e do "
+                "seu Município. **O ganho mostrado aqui não considera esse "
+                "imposto de fora** — a Carchuna não sabe calculá-lo, porque "
+                "a alíquota depende do estado e do município. Trate o "
+                "número como teto, não como resultado, e leve a simulação "
+                "ao seu contador antes de decidir.",
+            )
         raise ValueError(
             f"A RBT12 informada (R$ {_brl(config.rbt12)}) passa em mais de "
             f"20% do sublimite de ICMS/ISS, que em 2026 é de "
@@ -735,6 +767,8 @@ def decompor_margem(
     transacoes: list[Transacao],
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
+    *,
+    hipotetico: bool = False,
 ) -> DecomposicaoMargem:
     """Decompõe a receita bruta até a margem líquida, dedução a dedução.
 
@@ -751,6 +785,12 @@ def decompor_margem(
     estorna a comissão e o produto retorna ao estoque);
     - o custo de antecipação é ``taxa mensal × prazo/30 × valor`` das
       vendas a prazo nos canais com adquirência própria.
+
+    ``hipotetico=True`` marca que estas entradas são um **cenário**, não
+    o estado da loja: a recusa por excesso de sublimite vira aviso, e o
+    resultado sai carimbado em ``avisos``. Só os cenários passam isso —
+    ver ``_conferir_sublimite_icms_iss``. O padrão, e tudo que descreve a
+    loja de verdade, continua recusando.
     """
     if not transacoes:
         raise ValueError("`transacoes` não pode ser vazio.")
@@ -767,7 +807,7 @@ def decompor_margem(
     if config.regime == "mei":
         avisos = _conferir_teto_do_mei(transacoes)
     else:
-        avisos = _conferir_sublimite_icms_iss(config)
+        avisos = _conferir_sublimite_icms_iss(config, hipotetico=hipotetico)
     devolucoes = _q(
         sum((t.valor_bruto for t in transacoes if t.devolvida), Decimal("0"))
     )

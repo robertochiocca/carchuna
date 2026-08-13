@@ -49,6 +49,11 @@ class ResultadoCenario:
     cenario: DecomposicaoMargem
     impacto_reais: Decimal  # variação da margem líquida (negativo = piora)
     impacto_pp: Decimal  # variação da margem %, em pontos percentuais
+    # Ressalvas do estado SIMULADO que não valem para o estado atual —
+    # hoje, a travessia do sublimite de ICMS/ISS. Ficam separadas de
+    # `cenario.avisos` porque quem lê a lista precisa saber que a
+    # ressalva é do "depois", não do "antes".
+    avisos: tuple[str, ...] = ()
 
 
 class Cenario(ABC):
@@ -74,16 +79,29 @@ class Cenario(ABC):
         config: ConfigTributaria,
         tabela: TabelaCustos | None = None,
     ) -> ResultadoCenario:
-        """Roda o motor de margem no estado atual e no estado chocado."""
+        """Roda o motor de margem no estado atual e no estado chocado.
+
+        A base vai SEM ``hipotetico``: ela é a loja de verdade, e se o
+        estado real não puder ser calculado o cenário não tem de onde
+        partir. O estado chocado vai COM: ali a travessia do sublimite é
+        o achado, não um motivo para sumir da bateria.
+        """
         tabela = tabela or TabelaCustos()
         base = decompor_margem(transacoes, config, tabela)
-        novo = decompor_margem(*self.transformar(transacoes, config, tabela))
+        novo = decompor_margem(
+            *self.transformar(transacoes, config, tabela), hipotetico=True
+        )
+        # Só o que o cenário trouxe A MAIS que o estado atual: a loja que
+        # já está acima do sublimite hoje não precisa ouvir de novo, em
+        # cada um dos seis cenários, o que o Resumo já disse uma vez.
+        novos_avisos = tuple(a for a in novo.avisos if a not in base.avisos)
         return ResultadoCenario(
             nome=self.nome,
             base=base,
             cenario=novo,
             impacto_reais=novo.margem_liquida - base.margem_liquida,
             impacto_pp=novo.margem_pct - base.margem_pct,
+            avisos=novos_avisos,
         )
 
 
@@ -414,6 +432,14 @@ def rodar_cenarios_padrao(
     aviso no meio da lista, porque a lista é de números comparáveis entre
     si e um item "não deu" ali dentro só serve para ser somado por
     engano.
+
+    **O que a omissão NÃO pode engolir é um achado.** Um cenário que
+    atravessa o sublimite de ICMS/ISS sumia daqui em silêncio — e a
+    travessia era a informação mais valiosa que ele tinha para dar. Isso
+    agora não chega a virar exceção: o cenário calcula e volta com
+    ``avisos`` (ver ``Cenario.executar``). O que continua sendo omitido é
+    a pergunta que não cabe nos dados — canal de origem sem venda, MEI
+    cujo cenário passa do teto —, e não a resposta incômoda.
     """
     cenarios: list[Cenario] = [
         CenarioPreco(),
