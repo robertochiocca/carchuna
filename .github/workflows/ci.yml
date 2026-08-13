@@ -63,6 +63,20 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
+      - name: Tipos (mypy)
+        # Confere o que a anotação já promete. O caso concreto: uma função
+        # anotada `-> tuple[str, ...]` que devolvia `str` porque faltou a
+        # vírgula do singleton — string é iterável, então nada estourava e
+        # a tela publicaria a mensagem caractere a caractere.
+        #
+        # Ferramenta de CI, como o ruff e o black: não entra no
+        # `requirements.txt` e o núcleo `carchuna/` segue com zero
+        # dependências. O escopo e os códigos desligados (com o motivo de
+        # cada um) estão em `[tool.mypy]` no pyproject.toml.
+        run: |
+          pip install mypy
+          mypy
+
       - name: Formatação (black)
         run: black --check .
 
