@@ -1163,9 +1163,16 @@ def transacoes_sinteticas(
 ) -> list[Transacao]:
     """Gera vendas sintéticas reprodutíveis de um lojista típico.
 
-    ~R$400 mil/mês distribuídos nos cinco canais, com CMV em torno de
+    ~R$60 mil/mês distribuídos nos cinco canais, com CMV em torno de
     55–65% do preço, frete, ~3% de devoluções e prazos de recebimento
     realistas. Mesma ``seed`` → mesmas transações, sempre.
+
+    **A escala é a do público-alvo, e isso é decisão de produto.** Antes
+    a demo faturava ~R$400 mil/mês — R$ 4,8 milhões ao ano, topo do EPP e
+    acima do sublimite de ICMS/ISS. Quem abria o dashboard público via a
+    margem de uma empresa que não é a dele, com um aviso de que a conta
+    estava incompleta. A Carchuna é para MEI e ME de marketplace; a demo
+    passou a mostrar uma.
     """
     if meses < 1:
         raise ValueError(f"`meses` deve ser >= 1, recebeu {meses}.")
@@ -1177,8 +1184,8 @@ def transacoes_sinteticas(
     dia = inicio
     while dia <= fim:
         for canal, share, prazo in _PERFIL_CANAIS:
-            # nº de vendas do canal no dia calibrado para ~R$400k/mês no total
-            n_vendas = max(0, round(rng.gauss(40 * share / 100, 4)))
+            # nº de vendas do canal no dia calibrado para ~R$60k/mês no total
+            n_vendas = max(0, round(rng.gauss(4.5 * share / 100, 1)))
             for _ in range(n_vendas):
                 valor = Decimal(rng.randint(120, 550))
                 custo = (valor * Decimal(rng.randint(55, 65)) / 100).quantize(

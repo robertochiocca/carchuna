@@ -818,8 +818,14 @@ def test_o_cenario_que_atravessa_o_sublimite_existe_e_vem_carimbado():
     carimbado, dizendo que o ganho não considera o imposto de fora.
     """
     from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria
 
-    resultados = AnalisadorMargem.demo(meses=6).cenarios()  # rbt12 4.200.000
+    # RBT12 explícita: a demo é de R$ 750.000 e não chega perto da
+    # fronteira. Quem está a R$ 4,2 mi é a loja deste caso, não a demo.
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+    )
+    resultados = AnalisadorMargem.demo(meses=6, config=config).cenarios()
     preco = [c for c in resultados if "preços" in c.nome]
 
     assert len(preco) == 1, "o cenário voltou a sumir da bateria"
@@ -841,8 +847,12 @@ def test_o_carimbo_do_cenario_nao_repete_o_aviso_que_o_resumo_ja_deu():
     ATRAVESSA — viraria mais um item de uma lista repetida.
     """
     from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria
 
-    resultados = AnalisadorMargem.demo(meses=6).cenarios()
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+    )
+    resultados = AnalisadorMargem.demo(meses=6, config=config).cenarios()
     com_carimbo = [c for c in resultados if c.avisos]
 
     assert len(com_carimbo) == 1
@@ -923,25 +933,46 @@ def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
 #
 # `DecomposicaoMargem.avisos` existia e não tinha por onde sair: a
 # projeção de estouro do teto do MEI era calculada e morria no objeto.
-# Agora o Resumo publica cada aviso, e o primeiro a aparecer é o do
-# sublimite de ICMS/ISS — que a tela padrão dispara, porque a RBT12
-# sugerida de fábrica é R$ 4.200.000.
+# Agora o Resumo publica cada aviso — e a tela PADRÃO não dispara
+# nenhum, de propósito: a demo é de R$ 750.000/ano, e o banner é uma
+# borda que se alcança digitando a própria RBT12, não a primeira coisa
+# que o visitante vê.
 # ---------------------------------------------------------------------------
 
 RBT12 = "rbt12"
 
 
-def test_o_aviso_do_sublimite_aparece_no_resumo(app_demo):
-    """A tela padrão está na faixa, e passou a dizer isso.
+def test_a_tela_padrao_nao_abre_com_aviso_nenhum():
+    """A demo mostra o produto funcionando, não uma ressalva.
 
-    Antes desta mudança a demo publicava a margem de uma empresa acima
-    do sublimite sem uma palavra sobre o ICMS/ISS que ela recolhe por
-    fora do DAS — a linha de tributos ficava incompleta e a margem saía
-    para cima justamente no número que o lojista lê primeiro.
+    Quando a RBT12 de fábrica era R$ 4,2 mi — topo do EPP, acima do
+    sublimite — a primeira tela de qualquer visitante trazia um aviso de
+    que a conta estava incompleta. A Carchuna é para MEI e ME de
+    marketplace; a demo passou a mostrar uma, e o aviso voltou a
+    significar alguma coisa por aparecer só quando é o caso.
     """
-    avisos = " ".join(w.value for w in app_demo.warning)
+    teste = _rodar()
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "sublimite" not in avisos
+    assert teste.metric  # e a tela está inteira, não vazia
+
+
+def test_o_aviso_do_sublimite_aparece_no_resumo():
+    """Digitando uma RBT12 na faixa, o Resumo diz o que falta na conta.
+
+    Sem isto a Carchuna publicava a margem de uma empresa acima do
+    sublimite sem uma palavra sobre o ICMS/ISS que ela recolhe fora do
+    DAS — a linha de tributos ficava incompleta e a margem saía para
+    cima justamente no número que o lojista lê primeiro.
+    """
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(4_000_000)
+    teste.run()
+    assert not teste.exception
+
+    avisos = " ".join(w.value for w in teste.warning)
     assert "sublimite" in avisos
-    assert "4.200.000" in avisos
+    assert "4.000.000" in avisos
     assert "leia isto antes de usá-la" in avisos
 
 

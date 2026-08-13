@@ -1448,7 +1448,7 @@ with st.sidebar:
             t["rbt12"],
             min_value=1_000,
             max_value=4_800_000,
-            value=rbt12_sugerida or 4_200_000,
+            value=rbt12_sugerida or 750_000,
             step=10_000,
             help=t["rbt12_ajuda"],
             key="rbt12",

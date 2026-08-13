@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 
 from carchuna.dados import carregar_transacoes, transacoes_sinteticas
+from carchuna.margem import SUBLIMITE_ICMS_ISS
 
 CSV_BASICO = (
     "data,canal,valor_bruto,custo_produto,frete_pago,devolvida,"
@@ -167,7 +168,17 @@ def test_canal_normalizado_de_exports_reais(tmp_path):
 
 
 def test_sintetico_reprodutivel_e_na_escala_do_publico_alvo():
-    """Mesma seed → mesmas vendas; receita na casa dos R$ 400 mil/mês."""
+    """Mesma seed → mesmas vendas; receita na casa dos R$ 60 mil/mês.
+
+    A faixa era R$ 250–600 mil/mês, o que dava até R$ 7,2 milhões ao ano
+    — acima do próprio teto do Simples. O público-alvo da Carchuna é MEI
+    e ME de marketplace, e a demo passou a mostrar um: ~R$ 60 mil/mês,
+    ~R$ 740 mil ao ano, abaixo do sublimite de ICMS/ISS.
+
+    A faixa continua larga de propósito: o que se afirma é a ordem de
+    grandeza, não o sorteio. Apertá-la faria este teste quebrar a cada
+    ajuste de perfil de canal sem que nada de errado tivesse acontecido.
+    """
     a = transacoes_sinteticas(meses=3, seed=7)
     b = transacoes_sinteticas(meses=3, seed=7)
     c = transacoes_sinteticas(meses=3, seed=8)
@@ -177,7 +188,10 @@ def test_sintetico_reprodutivel_e_na_escala_do_publico_alvo():
     receita = sum(t.valor_bruto for t in a)
     meses = len({(t.data.year, t.data.month) for t in a})
     media_mensal = receita / meses
-    assert Decimal("250000") < media_mensal < Decimal("600000")
+    assert Decimal("40000") < media_mensal < Decimal("90000")
+    # e a demo tem que caber embaixo do sublimite: era essa a razão da
+    # troca de escala, e sem esta linha ela volta em silêncio
+    assert media_mensal * 12 < SUBLIMITE_ICMS_ISS
 
     canais = {t.canal for t in a}
     assert "mercado_livre" in canais and "fisico" in canais

@@ -17,12 +17,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from carchuna import AnalisadorMargem, ConfigTributaria, TabelaCustos
 
-# Lojista típico do público-alvo: fatura ~R$400k/mês no Anexo I, mas foi
+# Lojista típico do público-alvo: fatura ~R$60k/mês no Anexo I, mas foi
 # configurado (de propósito, para o exemplo) com antecipação cara.
 analise = AnalisadorMargem.demo(
     meses=6,
     config=ConfigTributaria(
-        regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+        regime="simples", anexo_simples="I", rbt12=Decimal("750000")
     ),
     tabela=TabelaCustos(taxa_antecipacao_mensal=Decimal("0.029")),
 )

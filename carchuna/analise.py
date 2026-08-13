@@ -205,8 +205,12 @@ class AnalisadorMargem:
         **kwargs,
     ) -> AnalisadorMargem:
         """Analisador com dados sintéticos reprodutíveis (roda offline)."""
+        # R$ 750.000 acompanha a escala de `transacoes_sinteticas` (~R$60
+        # mil/mês, ~R$740 mil ao ano). RBT12 que não bate com o volume da
+        # própria demo é contradição na primeira tela — e a de R$ 4,2 mi,
+        # além de não bater, punha a demo acima do sublimite de ICMS/ISS.
         config = config or ConfigTributaria(
-            regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+            regime="simples", anexo_simples="I", rbt12=Decimal("750000")
         )
         kwargs.setdefault("origem", f"dados sintéticos de exemplo (seed {seed})")
         return cls(
