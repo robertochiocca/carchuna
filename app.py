@@ -277,7 +277,18 @@ T = {
         "rbt12_ajuda": (
             "Soma de tudo que a empresa faturou nos últimos 12 meses "
             "(o 'RBT12'). Está no extrato do Simples (PGDAS-D) que o "
-            "contador emite todo mês. Define a sua alíquota."
+            "contador emite todo mês. Define a sua alíquota.\n\n"
+            "**Até R$ 3.600.000:** tudo no DAS, e a conta desta tela é o "
+            "imposto todo.\n\n"
+            "**De R$ 3.600.000 a R$ 4.320.000:** a conta sai, com aviso — "
+            "a partir de janeiro do ano que vem você recolhe ICMS e/ou "
+            "ISS por fora do DAS, pelas regras do seu Estado e do seu "
+            "Município (LC 123/2006, art. 20, § 1º), e esse valor não "
+            "está em nenhum número daqui.\n\n"
+            "**Acima de R$ 4.320.000:** a Carchuna não calcula. O "
+            "ICMS/ISS saem do DAS já no mês seguinte e a margem sairia "
+            "para cima; estimar exigiria inventar alíquota de estado e "
+            "de município."
         ),
         "das": "Valor mensal do boleto do MEI (R$)",
         "das_ajuda": "O DAS fixo que você paga todo mês.",
@@ -648,7 +659,17 @@ T = {
         "rbt12_ajuda": (
             "Everything the company billed in the last 12 months (the "
             "'RBT12'). Found in the monthly Simples statement (PGDAS-D). "
-            "It sets your tax rate."
+            "It sets your tax rate.\n\n"
+            "**Up to R$ 3,600,000:** all inside the DAS, and the figures "
+            "on this screen are the whole tax bill.\n\n"
+            "**R$ 3,600,000 to R$ 4,320,000:** the numbers are computed, "
+            "with a warning — from January onwards you pay state ICMS "
+            "and/or municipal ISS outside the DAS (LC 123/2006, art. 20, "
+            "§ 1º), and none of it shows up here.\n\n"
+            "**Above R$ 4,320,000:** Carchuna does not compute. ICMS/ISS "
+            "leave the DAS the following month and the margin would come "
+            "out overstated; estimating would mean inventing state and "
+            "municipal rates."
         ),
         "das": "Monthly MEI flat payment (R$)",
         "das_ajuda": "The fixed DAS you pay every month.",

@@ -976,6 +976,39 @@ def test_o_aviso_do_sublimite_aparece_no_resumo():
     assert "leia isto antes de usá-la" in avisos
 
 
+def test_a_ajuda_do_campo_de_rbt12_diz_os_tres_patamares():
+    """Entre R$ 4,32 mi e o máximo do campo o app só sabe recusar.
+
+    O `max_value` é o teto do Simples, então o lojista chega na zona da
+    recusa arrastando o mouse. Sem os patamares no `help`, a recusa é
+    uma parede que aparece do nada; com eles, é uma fronteira anunciada.
+    """
+    teste = _rodar()
+    ajuda = teste.number_input(RBT12).help
+
+    assert "3.600.000" in ajuda
+    assert "4.320.000" in ajuda
+    assert "art. 20, § 1º" in ajuda
+    assert "não calcula" in ajuda
+
+
+def test_os_patamares_da_ajuda_saem_das_constantes_do_motor():
+    """Texto de ajuda com número na mão diverge do motor na virada do ano.
+
+    O sublimite muda por portaria do CGSN todo ano. No dia em que
+    `SUBLIMITE_ICMS_ISS` for atualizado, este teste quebra e obriga a
+    ajuda a acompanhar — que é o único jeito de a tela não passar 2027
+    afirmando o valor de 2026.
+    """
+    from carchuna.margem import EXCESSO_SUBLIMITE_IMEDIATO, SUBLIMITE_ICMS_ISS
+
+    ajuda = _rodar().number_input(RBT12).help
+
+    for valor in (SUBLIMITE_ICMS_ISS, EXCESSO_SUBLIMITE_IMEDIATO):
+        formatado = f"{valor:,.0f}".replace(",", ".")
+        assert formatado in ajuda, f"a ajuda não cita R$ {formatado}"
+
+
 def test_abaixo_do_sublimite_o_resumo_nao_traz_o_aviso():
     """Aviso que aparece sempre não é aviso, é decoração."""
     teste = _rodar()
