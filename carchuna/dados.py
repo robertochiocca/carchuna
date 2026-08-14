@@ -71,19 +71,48 @@ def _para_decimal(texto: str) -> Decimal:
 
     A ordem das decisões importa, e cada uma existe por um arquivo real:
 
-    1. tem vírgula → formato brasileiro, o ponto é milhar;
-    2. sem vírgula, mas em grupos de três → o ponto é milhar. É o caso que
+    1. os dois separadores presentes e o ponto DEPOIS da vírgula → formato
+       americano, e aí a função recusa;
+    2. tem vírgula → formato brasileiro, o ponto é milhar;
+    3. sem vírgula, mas em grupos de três → o ponto é milhar. É o caso que
        dividia por mil em silêncio: painel que exporta valor redondo manda
        "1.234", e a heurística antiga lia um real e vinte e três;
-    3. um ponto só, com uma ou duas casas → decimal, como sempre foi;
-    4. um ponto só, com exatamente três casas e quatro dígitos ou mais
+    4. um ponto só, com uma ou duas casas → decimal, como sempre foi;
+    5. um ponto só, com exatamente três casas e quatro dígitos ou mais
        antes → **ambíguo de verdade**, e aí a função recusa.
 
-    O passo 4 vai irritar alguém. Irritar é melhor que errar por mil: um
-    valor mil vezes menor não estoura nada, entra na soma e sai na tela
-    como margem, e ninguém tem como desconfiar olhando o resultado.
+    O passo 1 fecha o erro de mil pelo lado oposto ao do passo 5. O ramo
+    brasileiro apagava os pontos e trocava a vírgula por ponto sem olhar a
+    ORDEM dos separadores, então "1,234.56" — Amazon Seller Central e boa
+    parte dos ERPs exportam assim — virava ``Decimal("1.23456")``. Mil
+    vezes menor, calado, e do mesmo jeito que o passo 5 já impedia na
+    outra direção.
+
+    **O que ela não faz: adivinhar locale.** Ninguém converte en-US em
+    silêncio aqui. Um arquivo americano pode trazer "1,234" — que é mil
+    duzentos e trinta e quatro em en-US e um vírgula duzentos e trinta e
+    quatro em pt-BR — e nada no valor diz qual dos dois é. Converter o
+    caso decidível e recusar o indecidível deixaria metade do arquivo
+    numa leitura e metade na outra, que é pior que recusar as duas.
+
+    Os passos 1 e 5 vão irritar alguém. Irritar é melhor que errar por
+    mil: um valor mil vezes menor não estoura nada, entra na soma e sai
+    na tela como margem, e ninguém tem como desconfiar olhando o
+    resultado.
     """
     limpo = str(texto).strip().replace("R$", "").replace(" ", "")
+    if "." in limpo and "," in limpo and limpo.rfind(".") > limpo.rfind(","):
+        americano = limpo.replace(",", "")
+        como_brasileiro = limpo.replace(".", "").replace(",", ".")
+        raise ValueError(
+            f"{texto!r} está em formato americano: a vírgula separa o "
+            f"milhar e o ponto separa os centavos. Lido assim, o valor é "
+            f"{americano}. Lido como brasileiro, que é como a Carchuna lê "
+            f"o resto do arquivo, sairia {como_brasileiro} — mil vezes "
+            "menor, e sem estourar nada. A Carchuna não adivinha o "
+            "formato do arquivo: reexporte a planilha em pt-BR "
+            "(1.234,56) ou converta essa coluna antes de subir."
+        )
     if "," in limpo:  # formato brasileiro: ponto de milhar, vírgula decimal
         return Decimal(limpo.replace(".", "").replace(",", "."))
     if _MILHAR_SEM_CENTAVO.match(limpo):
@@ -121,13 +150,22 @@ def decimal_de_texto(texto: str, campo: str = "valor") -> Decimal:
 
 
 def _decimal_br(texto: str, campo: str, linha: int) -> Decimal:
-    """Como ``decimal_de_texto``, mas com o número da linha na mensagem."""
+    """Como ``decimal_de_texto``, mas com o número da linha na mensagem.
+
+    As recusas do ``_para_decimal`` — formato americano e ponto ambíguo —
+    já explicam o problema; o que falta nelas é ONDE ele está. Sem este
+    prefixo, a linha vira ``LinhaRejeitada`` com um motivo que não diz
+    qual linha nem qual coluna, e quem recebe o relatório não tem por
+    onde começar a consertar a planilha.
+    """
     try:
         return _para_decimal(texto)
     except InvalidOperation:
         raise ValueError(
             f"linha {linha}: `{campo}` = {texto!r} não é um valor monetário válido."
         ) from None
+    except ValueError as recusa:
+        raise ValueError(f"linha {linha}: `{campo}`: {recusa}") from None
 
 
 # Formatos de data tentados, em ordem. `dd/mm` vem antes de qualquer leitura
