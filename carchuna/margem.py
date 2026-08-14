@@ -281,8 +281,37 @@ class Transacao:
                 "comissao_cobrada",
                 _dinheiro(self.comissao_cobrada, "comissao_cobrada"),
             )
-        if self.valor_bruto < 0:
-            raise ValueError(f"valor_bruto negativo: {self.valor_bruto}.")
+        # Os QUATRO campos de dinheiro recusam negativo, não só o
+        # `valor_bruto`.
+        #
+        # O defeito que isto fecha: extrato de repasse de marketplace
+        # lança estorno como valor negativo, e quem monta a planilha põe
+        # esse número na coluna de custo. Uma venda com
+        # `custo_produto=-500` no meio de dez normais levava a margem de
+        # 36,55% para 44,73% — e passava nas TRÊS conferências:
+        # `identidade_estrutural_fecha()` verdadeira (a margem é resíduo,
+        # fecha por definição), `conferir_plausibilidade()` ok (nenhuma
+        # dedução passa da receita) e `reconciliar()` ok (os dois
+        # caminhos somam o mesmo número errado). É o "sinal trocado" que
+        # este módulo diz caçar, entrando pela porta da frente.
+        #
+        # O que a recusa NÃO faz: compensar. Não existe aqui regra que
+        # some estorno negativo em outra linha — inventar compensação
+        # sobre um dado que ninguém conferiu seria trocar um erro
+        # silencioso por outro. Estorno e crédito são lançamento próprio.
+        for campo in ("valor_bruto", "custo_produto", "frete_pago", "comissao_cobrada"):
+            valor = getattr(self, campo)
+            if valor is not None and valor < 0:
+                raise ValueError(
+                    f"{campo} negativo: {valor}. Em campo de dinheiro a "
+                    "Carchuna só aceita valor positivo ou zero. Se isto veio "
+                    "de um estorno, de um crédito ou de um ajuste do "
+                    "marketplace, ele é lançamento próprio e não custo "
+                    "negativo: um custo negativo aumenta a sua margem em "
+                    "silêncio e passa em todas as conferências. Lance o "
+                    "estorno como devolução da venda de origem, ou tire "
+                    "essa linha do arquivo e trate o ajuste à parte."
+                )
         if self.prazo_recebimento_dias < 0:
             raise ValueError(
                 f"prazo_recebimento_dias negativo: {self.prazo_recebimento_dias}."
