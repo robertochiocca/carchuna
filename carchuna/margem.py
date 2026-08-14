@@ -54,6 +54,21 @@ DATA_CONSULTA_FONTES = date(2026, 7, 19)
 TETO_SIMPLES = Decimal("4800000")  # LC 123/2006, art. 3º, II (EPP)
 TETO_MEI_ANUAL = Decimal("81000")  # LC 123/2006, art. 18-A, § 1º
 
+# Passar do teto do MEI não tem um efeito só: tem dois, e a fronteira
+# entre eles são 20% de excesso (LC 123/2006, art. 18-A, § 7º).
+#
+# Até 20% — de R$ 81.000,01 a R$ 97.200 — o lojista CONTINUA MEI até
+# 31/12. O DAS fixo segue sendo o imposto daquele mês; o excesso é
+# recolhido à parte e o desenquadramento vale a partir de janeiro
+# seguinte. Nessa faixa a margem do período está certa, e recusar o
+# cálculo seria negar um número válido.
+#
+# Acima de 20%, o desenquadramento retroage ao início do ano (art. 18-A,
+# § 7º, e art. 3º, § 10): o DAS fixo deixa de descrever o imposto devido
+# do período inteiro que está sendo calculado, e aí a recusa é a resposta
+# honesta.
+TETO_MEI_COM_EXCESSO = TETO_MEI_ANUAL * Decimal("1.2")  # R$ 97.200
+
 # ---------------------------------------------------------------------------
 # Sublimite do ICMS/ISS
 #
@@ -489,16 +504,41 @@ def _brl(valor: Decimal) -> str:
 
 
 def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
-    """Recusa o cálculo do MEI acima do teto; projeção vira aviso, não recusa.
+    """Três faixas no teto do MEI; só a última recusa o cálculo.
 
-    **A recusa é uma só, e é factual**: a receita bruta de um ano do
-    arquivo passou de ``TETO_MEI_ANUAL`` (LC 123/2006, art. 18-A, § 1º).
-    Ali o enquadramento mudou de fato — excesso de mais de 20% desenquadra
-    retroativamente ao início do ano (art. 18-A, § 7º, e art. 3º, § 10) —
-    e o DAS fixo deixou de descrever o imposto devido. Calcular nesse
-    estado erra **para cima**, no campo em que o lojista mais confia, e o
-    custo do desenquadramento retroativo é ordens de grandeza maior que a
-    diferença que a tela mostraria.
+    **A receita que conta é a bruta LÍQUIDA DE DEVOLUÇÃO.** Venda
+    devolvida não compõe a base (LC 123/2006, art. 3º, § 1º) — é o mesmo
+    dispositivo que este módulo já cita para a base do Simples
+    (``base_tributavel = receita - devolucoes``) e que a
+    ``metricas.rbt12_movel`` respeita. Somar as devolvidas aqui recusava
+    quem estava dentro da lei: R$ 83.000 na coluna de valor com R$ 5.000
+    devolvidos são R$ 78.000 de receita bruta, dentro do teto, e a
+    análise inteira era bloqueada.
+
+    **As três faixas, e por que a fronteira são 20%** (art. 18-A, § 7º):
+
+    - até ``TETO_MEI_ANUAL`` → calcula, sem nada a dizer;
+    - de lá até ``TETO_MEI_COM_EXCESSO`` → **calcula e avisa**. O
+      excesso de até 20% não desenquadra no ato: o lojista segue MEI até
+      31/12, o DAS fixo continua sendo o imposto daquele mês e a
+      migração para ME vale a partir de janeiro. A margem do período
+      está certa, e recusá-la seria negar um número válido;
+    - acima disso → **recusa**. O desenquadramento retroage ao início do
+      ano (art. 18-A, § 7º, e art. 3º, § 10), o DAS fixo deixa de
+      descrever o imposto devido do período inteiro que está sendo
+      calculado, e a conta erra **para cima** — no campo em que o
+      lojista mais confia. O custo do desenquadramento retroativo é
+      ordens de grandeza maior que a diferença que a tela mostraria.
+
+    A recusa antiga cobria as duas faixas de cima e por isso era larga
+    demais: bloqueava a análise de quem tinha faturado R$ 85.000 e
+    continuava, para todo efeito daquele ano, MEI.
+
+    **O que o aviso da faixa dos 20% NÃO faz: calcular o DAS
+    complementar.** Há tributo a recolher sobre o excesso, e o valor
+    depende de regra que a Carchuna não implementa. O aviso diz que ele
+    existe e manda ao contador; inventar o número seria pior que não
+    dá-lo.
 
     **A projeção é outra coisa e não recusa nada.** Quando o ano do
     arquivo ainda não fechou, o ritmo dos meses cobertos pode apontar para
@@ -538,21 +578,45 @@ def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
 
     avisos: list[str] = []
     for ano, do_ano in sorted(por_ano.items()):
-        receita = _q(sum((t.valor_bruto for t in do_ano), Decimal("0")))
-        if receita > TETO_MEI_ANUAL:
+        # Devolvida não compõe a receita bruta (art. 3º, § 1º) — mesma
+        # regra da base do Simples, alguns parágrafos abaixo.
+        efetivas = [t for t in do_ano if not t.devolvida]
+        receita = _q(sum((t.valor_bruto for t in efetivas), Decimal("0")))
+        if receita > TETO_MEI_COM_EXCESSO:
             raise ValueError(
-                f"Em {ano} este arquivo soma R$ {_brl(receita)} de "
-                f"faturamento, e isso passa do teto do MEI, que é de "
+                f"Em {ano} este arquivo soma R$ {_brl(receita)} de receita "
+                f"bruta (já sem as devoluções), e isso passa em mais de 20% "
+                f"do teto do MEI de R$ {_brl(TETO_MEI_ANUAL)} por ano — o "
+                f"corte está em R$ {_brl(TETO_MEI_COM_EXCESSO)} (LC "
+                "123/2006, art. 18-A, § 1º e § 7º). A Carchuna não sabe "
+                "calcular a sua margem nesse estado: passando de 20% o "
+                "desenquadramento retroage ao início do ano (art. 18-A, "
+                "§ 7º, e art. 3º, § 10), então o DAS fixo deixa de ser o "
+                "imposto devido do período inteiro que está aqui. Fale com "
+                "o seu contador sobre a migração para o Simples e recalcule "
+                "aqui com o anexo certo; estimar por cima seria mostrar um "
+                "lucro que você não tem."
+            )
+        if receita > TETO_MEI_ANUAL:
+            avisos.append(
+                f"Em {ano} este arquivo soma R$ {_brl(receita)} de receita "
+                f"bruta (já sem as devoluções) e passou do teto do MEI de "
                 f"R$ {_brl(TETO_MEI_ANUAL)} por ano (LC 123/2006, art. 18-A, "
-                "§ 1º). A Carchuna não sabe calcular a sua margem nesse "
-                "estado: acima do teto o enquadramento muda, e quem passa de "
-                "20% do limite é desenquadrado retroativamente ao início do "
-                "ano (art. 18-A, § 7º, e art. 3º, § 10) — o DAS fixo deixa "
-                "de ser o imposto devido. Fale com o seu contador sobre a "
-                "migração para o Simples e recalcule aqui com o anexo certo; "
-                "estimar por cima seria mostrar um lucro que você não tem."
+                "§ 1º). Como o excesso é de até 20%, você **continua MEI até "
+                "31/12** e o DAS fixo segue sendo o imposto do mês: a conta "
+                "desta tela vale para o período. O que muda é depois — há "
+                "tributo a recolher sobre o excesso, e a migração para ME "
+                "vale a partir de janeiro (art. 18-A, § 7º). **A Carchuna "
+                "não calcula esse recolhimento complementar** e não tem como "
+                "calcular; procure o seu contador ainda este ano, porque a "
+                "conta dele é sobre o que já aconteceu."
             )
 
+        # O span sai de TODAS as transações, não só das efetivas: ele mede
+        # a janela que o arquivo cobre, e um mês em que tudo foi devolvido
+        # continua sendo um mês coberto. Tirá-lo daqui encurtaria a janela
+        # e INFLARIA a projeção — o contrário do que a exclusão de
+        # devolvidas existe para fazer.
         meses = {t.data.month for t in do_ano}
         span = max(meses) - min(meses) + 1
         if span >= 12:

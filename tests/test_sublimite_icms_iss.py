@@ -306,23 +306,28 @@ def test_hipotetico_nao_abre_a_porta_acima_do_teto_do_simples():
 
 
 def test_hipotetico_nao_alcanca_o_teto_do_mei():
-    """O MEI acima do teto continua recusado, com ou sem cenário.
+    """O MEI acima do corte dos 20% continua recusado, com ou sem cenário.
 
-    Mesma razão do teto do Simples: o DAS fixo do MEI é o instrumento
-    errado para quem passou de R$ 81.000, e simular com ele não produz
-    um número incompleto — produz um número que não quer dizer nada.
+    Mesma razão do teto do Simples: passando de R$ 97.200 o
+    desenquadramento retroage ao início do ano, o DAS fixo é o
+    instrumento errado, e simular com ele não produz um número
+    incompleto — produz um número que não quer dizer nada.
+
+    A fixture subiu de R$ 84.000 para R$ 102.000 quando a recusa do MEI
+    passou a começar em R$ 97.200: R$ 84.000 hoje é faixa de aviso, e
+    calcular ali é o comportamento certo.
     """
     mei = ConfigTributaria(regime="mei", das_mei_mensal=Decimal("76.00"))
     vendas = [
         Transacao(
             data=date(2026, m, 15),
             canal="loja_propria",
-            valor_bruto=Decimal("7000"),
+            valor_bruto=Decimal("8500"),
             custo_produto=Decimal("0"),
             frete_pago=Decimal("0"),
         )
         for m in range(1, 13)
-    ]  # R$ 84.000 no ano
+    ]  # R$ 102.000 no ano
     with pytest.raises(ValueError, match="art. 18-A"):
         decompor_margem(vendas, mei, hipotetico=True)
 
