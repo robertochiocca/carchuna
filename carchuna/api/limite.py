@@ -42,6 +42,18 @@ JANELA_SEGUNDOS = 60
 # máquina.
 LIMITE_CALCULO_POR_JANELA = 12
 
+# De quantas em quantas chamadas o dicionário de marcas é varrido atrás
+# de chave ociosa. Ver `LimiteDeChamadas._varrer` para o porquê de ser
+# varredura periódica e não remoção por chamada.
+#
+# 256 é o meio-termo entre as duas coisas que a escolha equilibra: varrer
+# demais custa O(chaves) toda hora, varrer de menos deixa o dicionário
+# crescer entre as varreduras. Com um IP novo por chamada — o pior caso
+# — o dicionário chega a 256 entradas antes de encolher, o que é
+# desprezível em memória; com tráfego normal, a varredura roda a cada
+# poucos minutos e não encontra quase nada.
+CHAMADAS_ENTRE_VARREDURAS = 256
+
 
 # Cabeçalho que um proxy reverso usa para dizer quem é o chamador real.
 # Ele é **texto que o cliente manda**: sem um proxy confiável na frente,
@@ -88,11 +100,53 @@ class LimiteDeChamadas:
     começo do seguinte são 60 em dois segundos.
     """
 
-    def __init__(self, limite: int = LIMITE_POR_JANELA, janela: int = JANELA_SEGUNDOS):
+    def __init__(
+        self,
+        limite: int = LIMITE_POR_JANELA,
+        janela: int = JANELA_SEGUNDOS,
+        chamadas_entre_varreduras: int = CHAMADAS_ENTRE_VARREDURAS,
+    ):
         self.limite = limite
         self.janela = janela
+        self.chamadas_entre_varreduras = chamadas_entre_varreduras
         self._marcas: dict[str, deque[float]] = {}
+        self._desde_a_varredura = 0
         self._lock = threading.Lock()
+
+    def _varrer(self, corte: float) -> None:
+        """Remove as chaves que não têm mais marca dentro da janela.
+
+        **Por que varredura periódica e não remoção por chamada.** O
+        código antigo tentava a segunda e não fazia nada: apagava a chave
+        e a recriava na linha seguinte, com um comentário prometendo que
+        chave ociosa não ocuparia memória para sempre. O dicionário nunca
+        encolhia.
+
+        E a promessa não se cumpre nem escrevendo aquele trecho direito,
+        porque a chave que `permitir` está tratando **nunca** é a que
+        precisa sair: no caminho de sucesso ela acabou de receber uma
+        marca, e no caminho negado o deque está cheio. Quem envelhece é o
+        IP que parou de chamar, e ele só é alcançado por alguém que
+        percorra o dicionário.
+
+        Chamado com o lock tomado.
+
+        **O custo, declarado:** a varredura é O(chaves) e roda a cada
+        ``chamadas_entre_varreduras`` chamadas, então o custo amortizado
+        por chamada é O(chaves ÷ N). Não é de graça, e é por isso que não
+        roda em toda chamada.
+
+        **O que continua não resolvendo:** entre duas varreduras o
+        dicionário cresce, e o estado segue por processo — dois workers,
+        dois dicionários. Ver o topo deste módulo.
+        """
+        ociosas = [
+            chave
+            for chave, marcas in self._marcas.items()
+            if not marcas or marcas[-1] <= corte
+        ]
+        for chave in ociosas:
+            del self._marcas[chave]
 
     def permitir(self, chave: str, agora: float | None = None) -> bool:
         """Registra a chamada e diz se ela cabe na janela.
@@ -101,14 +155,14 @@ class LimiteDeChamadas:
         """
         agora = time.monotonic() if agora is None else agora
         with self._lock:
-            marcas = self._marcas.setdefault(chave, deque())
             corte = agora - self.janela
+            self._desde_a_varredura += 1
+            if self._desde_a_varredura >= self.chamadas_entre_varreduras:
+                self._varrer(corte)
+                self._desde_a_varredura = 0
+            marcas = self._marcas.setdefault(chave, deque())
             while marcas and marcas[0] <= corte:
                 marcas.popleft()
-            if not marcas:
-                # chave ociosa não fica ocupando memória para sempre
-                del self._marcas[chave]
-                marcas = self._marcas.setdefault(chave, deque())
             if len(marcas) >= self.limite:
                 return False
             marcas.append(agora)

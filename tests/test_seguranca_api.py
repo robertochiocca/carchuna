@@ -358,3 +358,114 @@ def test_cabecalho_curto_demais_cai_no_socket(monkeypatch):
 
     monkeypatch.setenv("CARCHUNA_PROXIES_CONFIAVEIS", "2")
     assert chave_do_chamador("10.0.0.1", "203.0.113.9") == "10.0.0.1"
+
+
+# ---------------------------------------------------------------------------
+# A limpeza de chave ociosa era um no-op
+#
+# O bloco antigo apagava a chave e a recriava na linha seguinte:
+#
+#     del self._marcas[chave]
+#     marcas = self._marcas.setdefault(chave, deque())
+#
+# O dicionário nunca encolhia, e o comentário ao lado prometia o
+# contrário. Num processo de vida longa, cada IP que passasse uma vez
+# ficava para sempre.
+# ---------------------------------------------------------------------------
+
+
+def test_chave_ociosa_sai_do_dicionario():
+    """O que a promessa antiga dizia, agora conferido.
+
+    Cinco IPs chamam e somem. Muito depois da janela, um IP ativo chama o
+    bastante para disparar a varredura: os cinco saem, o ativo fica.
+    """
+    from carchuna.api.limite import LimiteDeChamadas
+
+    limitador = LimiteDeChamadas(limite=30, janela=60, chamadas_entre_varreduras=5)
+    for i in range(5):
+        limitador.permitir(f"10.0.0.{i}", agora=0.0)
+    assert len(limitador._marcas) == 5
+
+    for n in range(5):
+        limitador.permitir("10.0.0.99", agora=1000.0 + n)
+
+    assert len(limitador._marcas) == 1
+    assert "10.0.0.99" in limitador._marcas
+
+
+def test_a_varredura_nao_afrouxa_o_limite_de_quem_esta_ativo():
+    """Encolher o dicionário não pode virar janela nova de brinde.
+
+    É o risco da correção: uma varredura que levasse a chave ativa junto
+    zeraria a contagem dela, e o limite viraria decoração. A chave ativa
+    tem marca dentro da janela e não é ociosa.
+    """
+    from carchuna.api.limite import LimiteDeChamadas
+
+    limitador = LimiteDeChamadas(limite=30, janela=60, chamadas_entre_varreduras=5)
+
+    permitidas = sum(limitador.permitir("10.0.0.7", agora=0.0) for _ in range(60))
+
+    assert permitidas == 30  # nem uma a mais, apesar das varreduras no meio
+    assert limitador.permitir("10.0.0.7", agora=0.0) is False
+
+
+def test_a_chave_volta_a_ser_aceita_depois_da_janela():
+    """Varrer não é banir: passada a janela, o mesmo IP começa de novo."""
+    from carchuna.api.limite import LimiteDeChamadas
+
+    limitador = LimiteDeChamadas(limite=2, janela=60, chamadas_entre_varreduras=5)
+    assert limitador.permitir("10.0.0.8", agora=0.0)
+    assert limitador.permitir("10.0.0.8", agora=1.0)
+    assert limitador.permitir("10.0.0.8", agora=2.0) is False
+
+    assert limitador.permitir("10.0.0.8", agora=100.0)
+
+
+def test_a_remocao_por_chamada_seria_no_op_e_por_isso_a_varredura():
+    """O porquê do desenho, fixado em teste.
+
+    Trocar a varredura por "remover a chave no fim de `permitir` quando o
+    deque ficar vazio" não encolheria nada: a chave que `permitir` está
+    tratando nunca é a que precisa sair. No caminho de sucesso ela acabou
+    de receber uma marca; no caminho negado o deque está cheio. Este
+    teste mostra as duas pontas.
+    """
+    from carchuna.api.limite import LimiteDeChamadas
+
+    limitador = LimiteDeChamadas(limite=2, janela=60, chamadas_entre_varreduras=10**9)
+
+    limitador.permitir("10.0.0.9", agora=0.0)
+    assert len(limitador._marcas["10.0.0.9"]) == 1  # sucesso: não está vazio
+
+    limitador.permitir("10.0.0.9", agora=1.0)
+    assert limitador.permitir("10.0.0.9", agora=2.0) is False
+    assert len(limitador._marcas["10.0.0.9"]) == 2  # negado: está cheio
+
+
+def test_a_varredura_olha_a_marca_MAIS_NOVA_da_chave():
+    """Olhar a mais antiga daria janela nova de brinde a quem está ativo.
+
+    Uma chave com marca velha E marca recente ainda está dentro da
+    janela: a velha vai embora na poda, a recente conta. Se a varredura
+    decidisse pela marca mais antiga, essa chave seria removida inteira e
+    voltaria com a contagem zerada — o limite viraria decoração para
+    justamente quem chama espaçado o bastante para atravessar a janela.
+
+    Este teste existe porque a primeira bateria de mutação não pegou essa
+    troca: `marcas[0]` no lugar de `marcas[-1]` passava nos outros três.
+    """
+    from carchuna.api.limite import LimiteDeChamadas
+
+    limitador = LimiteDeChamadas(limite=2, janela=60, chamadas_entre_varreduras=1)
+
+    assert limitador.permitir("10.0.0.5", agora=0.0)
+    assert limitador.permitir("10.0.0.5", agora=50.0)  # no limite: [0, 50]
+
+    # outro IP chama em t=61 e dispara a varredura; corte = 1
+    limitador.permitir("10.0.0.6", agora=61.0)
+
+    # a marca de t=50 continua valendo, então sobra UMA chamada, não duas
+    assert limitador.permitir("10.0.0.5", agora=61.0)
+    assert limitador.permitir("10.0.0.5", agora=61.0) is False
