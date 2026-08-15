@@ -28,6 +28,7 @@ from carchuna.margem import (
     ANEXOS_SIMPLES,
     BASE_RATEADA,
     BASE_VARIAVEL,
+    SUBLIMITE_ICMS_ISS,
     TETO_SIMPLES,
     ConfigTributaria,
     TabelaCustos,
@@ -35,11 +36,9 @@ from carchuna.margem import (
     aliquota_efetiva_simples,
     config_do_subconjunto,
     decompor_margem,
+    dinheiro,
 )
 from carchuna.rag.retrieval import Dispositivo, Retriever
-
-# Sublimite estadual do ICMS/ISS dentro do Simples (LC 123/2006, arts. 19-20).
-SUBLIMITE_ICMS_ISS = Decimal("3600000")
 
 AVISO_CRESCIMENTO = (
     "A Carchuna calcula onde crescer rende mais com base nos seus números; "
@@ -102,7 +101,11 @@ def preco_para_margem(
     prazo antecipadas, considere o preço devolvido como piso.
     """
     tabela = tabela or TabelaCustos()
-    custo = Decimal(custo_produto) + Decimal(frete)
+    # `Decimal(x)` cru aceitava `float` calado — e `Decimal(2.49)` traz a
+    # bagagem binária inteira (2,49000000000000021316...). Esta é uma
+    # fronteira como qualquer outra: usa o mesmo guardião do motor, e
+    # `float` sai daqui como `TypeError`, igual em `Transacao`.
+    custo = dinheiro(custo_produto, "custo_produto") + dinheiro(frete, "frete")
     if config.regime == "simples":
         aliquota = aliquota_efetiva_simples(config.rbt12, config.anexo_simples)
     else:  # MEI: DAS fixo mensal não varia com o preço da venda

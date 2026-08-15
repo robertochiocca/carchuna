@@ -273,9 +273,17 @@ def buscar_legal(
     resposta vem em linguagem natural; fora isso, no modo extrativo —
     sempre citando fonte.
 
-    É o único endpoint com limite de chamadas, porque é o único que pode
-    gastar dinheiro de terceiro por requisição. O alcance e os limites
-    dessa barreira estão em ``carchuna/api/limite.py``.
+    É o único endpoint com limite por **custo de terceiro**: cada chamada
+    pode virar uma chamada paga ao modelo, e um laço de shell esvazia o
+    crédito de quem subiu a Carchuna.
+
+    Não é o único com limite. Os cinco endpoints que calculam
+    (``/margem/decompor``, ``/cenarios``, ``/diagnostico``,
+    ``/crescimento``, ``/preco-alvo``) têm o seu, e por outro motivo: ali
+    o recurso escasso é CPU do processo que atende todo mundo. Os dois
+    números são diferentes porque as duas contas são diferentes —
+    ``LIMITE_POR_JANELA`` e ``LIMITE_CALCULO_POR_JANELA``, com o
+    raciocínio de cada um ao lado, em ``carchuna/api/limite.py``.
     """
     _cobrar_limite(
         request,

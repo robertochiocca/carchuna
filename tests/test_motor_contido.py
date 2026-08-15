@@ -180,7 +180,11 @@ def test_motor_caido_nao_vira_mensagem_de_tudo_certo(monkeypatch):
 
     assert not teste.exception
     tudo = " ".join([s.value for s in teste.success] + [i.value for i in teste.info])
-    assert "vazamento" not in tudo.lower()
+    # A mensagem inteira, não a palavra solta: o radar saudável diz "sem
+    # vazamento novo entre os meses" e é outra coisa — casar só por
+    # "vazamento" prendia este teste ao acaso de a demo ter sinal no
+    # radar, e ele quebrava quando a demo ficava saudável.
+    assert "nenhum vazamento detectado" not in tudo.lower()
     assert "nada urgente" not in tudo.lower()
 
 

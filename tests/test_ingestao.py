@@ -76,10 +76,17 @@ def test_esqueleto_sai_no_formato_do_corpus():
         "palavras_chave",
         "fonte",
         "revisado",
+        # `revisado` deixou de ser um booleano solto: quem confere assina
+        # e data. O esqueleto nasce com os três dizendo a mesma coisa —
+        # ninguém conferiu isto. Ver `test_corpus_conferencia.py`.
+        "conferido_em",
+        "conferido_por",
     }
     assert esq["id"] == "lc123-18"
     assert esq["artigo"] == "Art. 18"
     assert esq["revisado"] is False
+    assert esq["conferido_em"] is None
+    assert esq["conferido_por"] is None
     assert esq["resumo"].startswith("TODO")
     assert esq["palavras_chave"] == []
 

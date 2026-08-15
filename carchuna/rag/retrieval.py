@@ -160,6 +160,56 @@ class Dispositivo:
     fonte: str
     revisado: bool
     score: float
+    # Quem conferiu e quando. `revisado: true` sozinho não afirma nada —
+    # não diz se a conferência foi ontem ou há três anos, nem quem a
+    # assinou. O que se confere é o RESUMO (que é interpretação, não
+    # transcrição) e a VIGÊNCIA na data; as duas coisas envelhecem, e sem
+    # data não há como saber se envelheceram.
+    conferido_em: str | None = None
+    conferido_por: str | None = None
+
+
+def conferir_integridade_do_corpus(dispositivos: list[dict]) -> None:
+    """``revisado: true`` sem data e assinatura não afirma nada — recusa.
+
+    **Por que isto é regra e não convenção.** O diferencial que o README
+    vende é "nenhuma afirmação sem lastro", e no corpus o lastro é a
+    conferência humana. Um ``revisado: true`` solto não diz quem
+    conferiu nem quando: não dá para saber se o resumo foi lido por um
+    advogado no mês passado ou marcado em lote por alguém apressado três
+    anos atrás. Sem os dois campos, o ``true`` é decoração — e decoração
+    que a tela publica como selo de qualidade.
+
+    A regra vale nos dois sentidos, e o segundo importa tanto quanto:
+    ``revisado: false`` com data preenchida é contradição, e passaria
+    despercebida num arquivo de 21 itens editado à mão.
+
+    **O que ela NÃO confere:** se a conferência aconteceu de verdade,
+    se a data é honesta, ou se o resumo está certo. Isso nenhum código
+    verifica — é assinatura humana, e vale o que a pessoa que assinou
+    vale. O que esta função impede é o estado incoerente.
+
+    Levanta ``ValueError`` com o id do dispositivo. Roda na construção do
+    ``Retriever``: corpus incoerente não chega à tela.
+    """
+    for disp in dispositivos:
+        identificador = disp.get("id", "<sem id>")
+        revisado = bool(disp.get("revisado", False))
+        em = disp.get("conferido_em")
+        por = disp.get("conferido_por")
+        if revisado and not (em and por):
+            raise ValueError(
+                f"dispositivo {identificador!r} está `revisado: true` sem "
+                "`conferido_em` e `conferido_por` preenchidos. Marcar como "
+                "conferido sem dizer quem conferiu e quando não afirma nada: "
+                "a tela publicaria um selo que ninguém assinou."
+            )
+        if not revisado and (em or por):
+            raise ValueError(
+                f"dispositivo {identificador!r} tem `conferido_em` ou "
+                "`conferido_por` preenchido mas está `revisado: false`. Os "
+                "três campos descrevem um estado só e não podem discordar."
+            )
 
 
 class Retriever:
@@ -175,6 +225,7 @@ class Retriever:
         raw = json.loads(Path(data_path).read_text(encoding="utf-8"))
         self.aviso_corpus: str = raw.get("aviso", "")
         self.dispositivos = raw["dispositivos"]
+        conferir_integridade_do_corpus(self.dispositivos)
         self._docs_tokens: list[list[str]] = []
         for disp in self.dispositivos:
             tokens = normalizar(
@@ -249,6 +300,8 @@ class Retriever:
                         fonte=disp["fonte"],
                         revisado=bool(disp.get("revisado", False)),
                         score=round(score, 3),
+                        conferido_em=disp.get("conferido_em"),
+                        conferido_por=disp.get("conferido_por"),
                     )
                 )
         resultados.sort(key=lambda r: r.score, reverse=True)

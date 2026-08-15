@@ -38,15 +38,22 @@ capacidade — e o momento certo é quando uma tela nova pedir o corte, não ant
    interface `Conector` e o `ConectorArquivo` já existem e são testados; falta só a
    implementação concreta de cada canal.
 3. **Revisão jurídica do corpus.** Os 21 dispositivos de `data/corpus_pme.json` saem de
-   `revisado: false`.
+   `revisado: false` — e, junto, ganham `conferido_em` e `conferido_por`. Os três campos
+   descrevem um estado só: `revisado: true` sem data e sem assinatura é recusado na carga
+   do corpus, porque um selo que ninguém assinou e que não diz quando foi dado não afirma
+   nada. A conferência é dispositivo por dispositivo, e o que se confere é o **resumo**
+   (interpretação, não transcrição) e a **vigência** naquela data.
 4. **Alíquotas de ICMS/ISS conferidas em fonte oficial.** Destrava o Lucro Presumido.
 
 ## Bloqueados por humano — o que depende de mim
 
 - Registrar o app na Shopee Open Platform e no Mercado Livre e obter as credenciais OAuth.
 - Conferir os 21 dispositivos de `data/corpus_pme.json` na fonte oficial e virar
-  `revisado: true`. **Ainda não conferi nenhum**, e por isso o corpus segue marcado como não
-  revisado no próprio arquivo.
+  `revisado: true`, preenchendo `conferido_em` (data ISO) e `conferido_por` no mesmo gesto —
+  os três andam juntos e a carga do corpus recusa qualquer combinação incoerente.
+  **Ainda não conferi nenhum**, e por isso o corpus segue inteiro em `revisado: false`,
+  `conferido_em: null`, `conferido_por: null`. Três dos 21 não vêm do Planalto (`stj-479`,
+  `cmn-4734`, `lei12865-6`) e cada um tem fonte própria a conferir.
 - Conseguir 1 lojista piloto e trocar `tests/fixtures/reais/` por um export de verdade,
   anonimizado. O `PROCEDENCIA.md` ao lado das fixtures declara que elas não são exports reais
   e que os nomes das colunas são palpites meus.
@@ -61,3 +68,49 @@ capacidade — e o momento certo é quando uma tela nova pedir o corte, não ant
   cabeçalhos de navegador. As duas abrem normalmente no navegador:
   <https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm> (art. 18, § 1º) e
   <https://normasinternet2.receita.fazenda.gov.br/#/consulta/externa/92278> (RCGSN 140/2018).
+
+## Lacuna de vigência — o que o corpus não cobre
+
+Registrado aqui, e **não** no corpus, porque não conferi nenhum destes na fonte oficial.
+Corpus é o lugar do que tem lastro; roadmap é o lugar do que eu sei que falta.
+
+- **A reforma do consumo não está no corpus.** Os 21 dispositivos descrevem o Simples Nacional
+  como ele é hoje, e nenhum deles menciona a LC 214/2025. Enquanto isso não for conferido e
+  escrito, a Carchuna responde sobre um regime e o lojista pode estar decidindo sobre outro.
+
+  **E o marco pode não ser a LC 214.** Existe a LC 227/2026, que ajustou a legislação da
+  reforma — **não sei o alcance dela**, e por isso ela está aqui e não no corpus. Antes de
+  escrever qualquer dispositivo sobre reforma, conferir o que a 227 mudou na 214: registrar a
+  214 como marco final seria repetir, com dois anos de antecedência, o erro de citar
+  dispositivo sem abrir a lei.
+
+- **Setembro de 2026 tem DOIS prazos, não um.** Este é o item mais caro da lista, porque o
+  público inteiro da Carchuna decide duas coisas na mesma janela de seis semanas, e a
+  ferramenta hoje não fala de nenhuma das duas:
+
+  1. **Regime de IBS/CBS** — a empresa do Simples escolhe entre continuar no regime unificado
+     e passar ao regime regular.
+  2. **Opção pelo Simples para o ano seguinte** — o prazo passou para o último dia útil de
+     setembro do ano anterior. Em setembro de 2026 se opta para 2027; não é mais janeiro.
+
+  As duas são decisões com data, e o número que esta ferramenta calcula é entrada das duas.
+  É o que torna a ausência do item acima cara, e não só incompleta: uma calculadora de margem
+  que cala na semana da decisão serve para o mês errado.
+
+  Nenhum dos dois prazos foi conferido em fonte oficial — estão aqui como aviso a conferir,
+  não como afirmação da Carchuna.
+
+- **A definição de RBT12 muda a partir de 2027**: passa a considerar os doze meses anteriores
+  ao mês **antecedente** ao da apuração, e não ao próprio mês da apuração — art. 18 da LC
+  123/2006 c/c LC 214/2025 (a conferir; ver a ressalva da LC 227 acima).
+
+  Na prática é um caractere: a janela de `metricas.rbt12_movel` (linha ~125) vira
+  `range(2, 14)`. O efeito não é: de 2027 em diante, quem estiver crescendo perto de uma
+  fronteira de faixa sai tributado pela faixa errada por um mês inteiro — e a alíquota é o
+  número que este projeto existe para não errar.
+
+  **Não implementado de propósito.** Há um `# TODO` no ponto exato do código, com a citação
+  marcada como não conferida. A regra da casa é não mexer em cálculo tributário com base em
+  lei que ninguém abriu, e foi exatamente assim que o art. 18-A, § 2º entrou no projeto como
+  fundamento de uma projeção que ele não fundamenta. O Planalto segue devolvendo HTTP 503
+  fora do navegador.

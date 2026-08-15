@@ -164,6 +164,11 @@ def gerar_esqueletos(
                 "palavras_chave": [],
                 "fonte": fonte,
                 "revisado": False,
+                # O esqueleto nasce não conferido, e os três campos dizem
+                # isso juntos. `revisado: false` com data preenchida seria
+                # contradição; a regra de integridade do corpus recusa.
+                "conferido_em": None,
+                "conferido_por": None,
             }
         )
     return esqueletos
@@ -184,10 +189,17 @@ def _e_esqueleto_intocado(disp: dict) -> bool:
     todo dispositivo tem resumo escrito à mão e segue não revisado, porque
     o que falta é a conferência na fonte oficial, não o trabalho. Apagar
     esses resumos numa reingestão seria destruir horas de escrita.
+
+    ``conferido_em`` entra na conta pela mesma razão, e é a guarda mais
+    barata que existe: dispositivo com data de conferência jamais é
+    esqueleto, qualquer que seja o resto. Sem esta linha, um resumo
+    reescrito para começar com "TODO" depois de conferido derrubaria a
+    conferência numa reingestão.
     """
     resumo = disp.get("resumo", "")
     return (
         not disp.get("revisado")
+        and not disp.get("conferido_em")
         and resumo.startswith("TODO")
         and not disp.get("palavras_chave")
     )

@@ -11,6 +11,7 @@ sem chave, e é isso que o teste prova.
 """
 
 import sys
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -754,23 +755,36 @@ def test_cada_sinal_do_radar_chega_com_a_propria_nota_de_confianca(tmp_path):
         assert sinal.confianca.frase in tela
 
 
-def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
+def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor():
     """ "E se eu subisse os preços 5%?" na tela, com a premissa junto.
 
     O impacto tem que ser o do motor — que recalcula imposto e comissão
     sobre o preço novo — e não 5% do faturamento. E a premissa do volume
     constante aparece no próprio nome do cenário: sem ela o número vira
     promessa, porque ninguém sabe quanta venda se perde ao subir preço.
+
+    A RBT12 vem fixada em R$ 3.000.000 para manter o cenário longe da
+    fronteira do sublimite: o que se afirma aqui é sobre o número e a
+    premissa, e o caso da travessia tem teste próprio logo abaixo.
     """
     from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria
 
-    cenarios = AnalisadorMargem.demo(meses=6).cenarios()
-    preco = [c for c in cenarios if "preços" in c.nome]
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("3000000")
+    )
+    analise = AnalisadorMargem.demo(meses=6, config=config)
+    preco = [c for c in analise.cenarios() if "preços" in c.nome]
     assert len(preco) == 1, "o cenário de preço entra uma vez na bateria"
     (preco,) = preco
     assert "mesmo volume" in preco.nome
 
-    aba_ese = app_demo.tabs[3]
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(3_000_000)
+    teste.run()
+    assert not teste.exception
+
+    aba_ese = teste.tabs[3]
     assert aba_ese.label.strip().startswith("E se")
     nomes = [str(m.value) for m in aba_ese.markdown]
     assert any(preco.nome in n for n in nomes)
@@ -785,8 +799,90 @@ def test_o_cenario_de_preco_aparece_no_e_se_com_o_numero_do_motor(app_demo):
     assert formatado in valores
 
     # o ganho não é 5% do faturamento: imposto e comissão comem parte
-    receita = AnalisadorMargem.demo(meses=6).decomposicao.receita_bruta
-    assert preco.impacto_reais < receita * Decimal("0.05")
+    assert preco.impacto_reais < analise.decomposicao.receita_bruta * Decimal("0.05")
+
+
+def test_o_cenario_que_atravessa_o_sublimite_existe_e_vem_carimbado():
+    """A travessia é o achado, e some junto com o cenário se ele sumir.
+
+    A R$ 4.200.000 de RBT12, subir 5% leva o cenário a R$ 4.410.000 —
+    mais de 20% acima do sublimite, faixa em que o ICMS e/ou o ISS saem
+    do DAS já no mês seguinte (LC 123/2006, art. 20, § 1º). O motor
+    recusa esse estado quando ele é REAL, e por isso o cenário sumia da
+    bateria em silêncio.
+
+    Sumir era o pior dos desfechos: quem simula "subir preços" e está a
+    R$ 4,2 mi precisa saber justamente que essa alavanca atravessa uma
+    fronteira tributária — é a informação mais valiosa que o cenário
+    tinha para dar, e era a única que não chegava. Agora o número sai
+    carimbado, dizendo que o ganho não considera o imposto de fora.
+    """
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria
+
+    # RBT12 explícita: a demo é de R$ 750.000 e não chega perto da
+    # fronteira. Quem está a R$ 4,2 mi é a loja deste caso, não a demo.
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+    )
+    resultados = AnalisadorMargem.demo(meses=6, config=config).cenarios()
+    preco = [c for c in resultados if "preços" in c.nome]
+
+    assert len(preco) == 1, "o cenário voltou a sumir da bateria"
+    (preco,) = preco
+    assert preco.impacto_reais is not None
+
+    (carimbo,) = preco.avisos
+    assert "4.410.000" in carimbo  # a RBT12 A QUE O CENÁRIO LEVA
+    assert "3.600.000" in carimbo
+    assert "art. 20, § 1º" in carimbo
+    assert "não considera" in carimbo
+
+
+def test_o_carimbo_do_cenario_nao_repete_o_aviso_que_o_resumo_ja_deu():
+    """A loja a R$ 4,2 mi já ouviu do Resumo que passou do sublimite.
+
+    Sem o desconto, cada um dos seis cenários carregaria de novo o aviso
+    do estado atual, e o carimbo que importa — o do cenário que
+    ATRAVESSA — viraria mais um item de uma lista repetida.
+    """
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.margem import ConfigTributaria
+
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("4200000")
+    )
+    resultados = AnalisadorMargem.demo(meses=6, config=config).cenarios()
+    com_carimbo = [c for c in resultados if c.avisos]
+
+    assert len(com_carimbo) == 1
+    assert "preços" in com_carimbo[0].nome
+
+
+def test_o_estado_real_acima_do_sublimite_continua_recusado():
+    """O carimbo é do cenário. Ninguém abriu a porta para o estado real.
+
+    `hipotetico` existe para a simulação; se ele vazasse para o caminho
+    normal, a Carchuna passaria a publicar como margem da loja um número
+    que ela sabe estar incompleto — que é o defeito inteiro que a
+    conferência do sublimite existe para impedir.
+    """
+    from carchuna.margem import ConfigTributaria, Transacao, decompor_margem
+
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("4400000")
+    )
+    vendas = [
+        Transacao(
+            data=date(2026, 3, 10),
+            canal="fisico",
+            valor_bruto=Decimal("10000"),
+            custo_produto=Decimal("4000"),
+            frete_pago=Decimal("0"),
+        )
+    ]
+    with pytest.raises(ValueError, match="sublimite"):
+        decompor_margem(vendas, config)
 
 
 def test_numero_implausivel_aparece_com_motivo_no_topo_do_resumo(tmp_path):
@@ -830,6 +926,117 @@ def test_taxa_digitada_errada_avisa_em_vez_de_estourar():
     assert not teste.exception
     erros = " ".join(e.value for e in teste.error)
     assert "dois e meio" in erros
+
+
+# ---------------------------------------------------------------------------
+# Os avisos do motor no Resumo
+#
+# `DecomposicaoMargem.avisos` existia e não tinha por onde sair: a
+# projeção de estouro do teto do MEI era calculada e morria no objeto.
+# Agora o Resumo publica cada aviso — e a tela PADRÃO não dispara
+# nenhum, de propósito: a demo é de R$ 750.000/ano, e o banner é uma
+# borda que se alcança digitando a própria RBT12, não a primeira coisa
+# que o visitante vê.
+# ---------------------------------------------------------------------------
+
+RBT12 = "rbt12"
+
+
+def test_a_tela_padrao_nao_abre_com_aviso_nenhum():
+    """A demo mostra o produto funcionando, não uma ressalva.
+
+    Quando a RBT12 de fábrica era R$ 4,2 mi — topo do EPP, acima do
+    sublimite — a primeira tela de qualquer visitante trazia um aviso de
+    que a conta estava incompleta. A Carchuna é para MEI e ME de
+    marketplace; a demo passou a mostrar uma, e o aviso voltou a
+    significar alguma coisa por aparecer só quando é o caso.
+    """
+    teste = _rodar()
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "sublimite" not in avisos
+    assert teste.metric  # e a tela está inteira, não vazia
+
+
+def test_o_aviso_do_sublimite_aparece_no_resumo():
+    """Digitando uma RBT12 na faixa, o Resumo diz o que falta na conta.
+
+    Sem isto a Carchuna publicava a margem de uma empresa acima do
+    sublimite sem uma palavra sobre o ICMS/ISS que ela recolhe fora do
+    DAS — a linha de tributos ficava incompleta e a margem saía para
+    cima justamente no número que o lojista lê primeiro.
+    """
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(4_000_000)
+    teste.run()
+    assert not teste.exception
+
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "sublimite" in avisos
+    assert "4.000.000" in avisos
+    assert "leia isto antes de usá-la" in avisos
+
+
+def test_a_ajuda_do_campo_de_rbt12_diz_os_tres_patamares():
+    """Entre R$ 4,32 mi e o máximo do campo o app só sabe recusar.
+
+    O `max_value` é o teto do Simples, então o lojista chega na zona da
+    recusa arrastando o mouse. Sem os patamares no `help`, a recusa é
+    uma parede que aparece do nada; com eles, é uma fronteira anunciada.
+    """
+    teste = _rodar()
+    ajuda = teste.number_input(RBT12).help
+
+    assert "3.600.000" in ajuda
+    assert "4.320.000" in ajuda
+    assert "art. 20, § 1º" in ajuda
+    assert "não calcula" in ajuda
+
+
+def test_os_patamares_da_ajuda_saem_das_constantes_do_motor():
+    """Texto de ajuda com número na mão diverge do motor na virada do ano.
+
+    O sublimite muda por portaria do CGSN todo ano. No dia em que
+    `SUBLIMITE_ICMS_ISS` for atualizado, este teste quebra e obriga a
+    ajuda a acompanhar — que é o único jeito de a tela não passar 2027
+    afirmando o valor de 2026.
+    """
+    from carchuna.margem import EXCESSO_SUBLIMITE_IMEDIATO, SUBLIMITE_ICMS_ISS
+
+    ajuda = _rodar().number_input(RBT12).help
+
+    for valor in (SUBLIMITE_ICMS_ISS, EXCESSO_SUBLIMITE_IMEDIATO):
+        formatado = f"{valor:,.0f}".replace(",", ".")
+        assert formatado in ajuda, f"a ajuda não cita R$ {formatado}"
+
+
+def test_abaixo_do_sublimite_o_resumo_nao_traz_o_aviso():
+    """Aviso que aparece sempre não é aviso, é decoração."""
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(3_000_000)
+    teste.run()
+    assert not teste.exception
+
+    avisos = " ".join(w.value for w in teste.warning)
+    assert "sublimite" not in avisos
+    # e a tela continua inteira: o Resumo não sumiu junto com o aviso
+    assert teste.metric
+
+
+def test_excesso_grande_explica_na_tela_em_vez_de_estourar():
+    """R$ 4,5 mi: o motor recusa, e a recusa vira frase em vez de traceback.
+
+    Este é o caminho que o campo da barra lateral alcança de fato — o
+    `max_value` dele é o teto do Simples, então a faixa da recusa por
+    sublimite está a um arrasto de distância do lojista.
+    """
+    teste = _rodar()
+    teste.number_input(RBT12).set_value(4_500_000)
+    teste.run()
+    assert not teste.exception
+
+    erros = " ".join(e.value for e in teste.error)
+    assert "sublimite" in erros
+    assert "contador" in erros
 
 
 if __name__ == "__main__":

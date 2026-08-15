@@ -1,5 +1,5 @@
 {
-  "aviso": "Textos consolidados/condensados a partir das publicações oficiais (Planalto, STJ, Banco Central). Todo dispositivo entra com \"revisado\": false até passar por revisão humana — parte do fluxo por desenho, não um esquecimento. Confira sempre a fonte oficial (link em cada item) antes de agir; isto não é parecer jurídico.",
+  "aviso": "Textos consolidados/condensados a partir das publicações oficiais (Planalto, STJ, Banco Central). Todo dispositivo entra com \"revisado\": false, \"conferido_em\": null e \"conferido_por\": null até passar por revisão humana — parte do fluxo por desenho, não um esquecimento. \"revisado\": true só vale acompanhado da data e de quem conferiu: sem os dois, o campo não afirma nada e a regra de integridade recusa o arquivo. O que se confere é o RESUMO — que é interpretação, não transcrição — e a VIGÊNCIA do dispositivo na data indicada. Confira sempre a fonte oficial (link em cada item) antes de agir; isto não é parecer jurídico.",
   "data_ingestao": "2026-07-19",
   "dispositivos": [
     {
@@ -9,9 +9,25 @@
       "tema": "tributario",
       "texto": "Consideram-se empresas de pequeno porte a sociedade empresária, a sociedade simples, a EIRELI e o empresário que aufiram, em cada ano-calendário, receita bruta superior a R$ 360.000,00 e igual ou inferior a R$ 4.800.000,00. § 1º Considera-se receita bruta o produto da venda de bens e serviços nas operações de conta própria, o preço dos serviços prestados e o resultado nas operações em conta alheia, não incluídas as vendas canceladas e os descontos incondicionais concedidos.",
       "resumo": "Para ser EPP no Simples, a receita anual deve ficar entre R$ 360 mil e R$ 4,8 milhões. Vendas canceladas (devoluções) e descontos incondicionais não contam como receita bruta — ou seja, não pagam imposto.",
-      "palavras_chave": ["simples", "nacional", "limite", "teto", "receita", "bruta", "epp", "microempresa", "devolução", "venda", "cancelada", "desconto", "faturamento"],
+      "palavras_chave": [
+        "simples",
+        "nacional",
+        "limite",
+        "teto",
+        "receita",
+        "bruta",
+        "epp",
+        "microempresa",
+        "devolução",
+        "venda",
+        "cancelada",
+        "desconto",
+        "faturamento"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-13",
@@ -20,9 +36,25 @@
       "tema": "tributario",
       "texto": "O Simples Nacional implica o recolhimento mensal, mediante documento único de arrecadação, dos seguintes impostos e contribuições: I — IRPJ; II — IPI; III — CSLL; IV — COFINS; V — PIS/Pasep; VI — CPP (contribuição patronal previdenciária); VII — ICMS; VIII — ISS.",
       "resumo": "A guia única do Simples (DAS) junta oito tributos: IRPJ, IPI, CSLL, COFINS, PIS, contribuição previdenciária patronal, ICMS e ISS. Você paga tudo num boleto só, com alíquota que depende do seu faturamento e anexo.",
-      "palavras_chave": ["das", "guia", "boleto", "imposto", "tributo", "recolhimento", "mensal", "icms", "iss", "irpj", "cofins", "pis", "simples"],
+      "palavras_chave": [
+        "das",
+        "guia",
+        "boleto",
+        "imposto",
+        "tributo",
+        "recolhimento",
+        "mensal",
+        "icms",
+        "iss",
+        "irpj",
+        "cofins",
+        "pis",
+        "simples"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-17",
@@ -31,9 +63,23 @@
       "tema": "tributario",
       "texto": "Não poderão recolher os impostos e contribuições na forma do Simples Nacional a microempresa ou empresa de pequeno porte que, entre outras hipóteses: explore atividade de prestação cumulativa e contínua de serviços de assessoria creditícia e gestão de crédito; tenha sócio domiciliado no exterior; possua débito com o INSS ou com as Fazendas Públicas Federal, Estadual ou Municipal, cuja exigibilidade não esteja suspensa; exerça atividade de produção ou venda no atacado de determinados produtos como bebidas alcoólicas e cigarros.",
       "resumo": "Nem toda empresa pode ficar no Simples: dívida tributária sem parcelamento, sócio no exterior e certas atividades (bebidas, cigarros, gestão de crédito) impedem ou expulsam do regime.",
-      "palavras_chave": ["vedação", "impedimento", "proibido", "simples", "débito", "dívida", "inss", "fazenda", "sócio", "exterior", "atividade"],
+      "palavras_chave": [
+        "vedação",
+        "impedimento",
+        "proibido",
+        "simples",
+        "débito",
+        "dívida",
+        "inss",
+        "fazenda",
+        "sócio",
+        "exterior",
+        "atividade"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-18",
@@ -42,9 +88,24 @@
       "tema": "tributario",
       "texto": "O valor devido mensalmente pela microempresa ou empresa de pequeno porte optante pelo Simples Nacional será determinado mediante aplicação das alíquotas efetivas, calculadas a partir das alíquotas nominais constantes das tabelas dos Anexos I a V. § 1º Para efeito de determinação da alíquota nominal, o sujeito passivo utilizará a receita bruta acumulada nos doze meses anteriores ao do período de apuração (RBT12). § 1º-A A alíquota efetiva é o resultado de: (RBT12 × Aliq − PD) / RBT12, em que Aliq é a alíquota nominal e PD a parcela a deduzir constantes dos Anexos.",
       "resumo": "O imposto do Simples não é a alíquota 'cheia' da tabela: a alíquota efetiva sai da fórmula (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12, usando a receita dos últimos 12 meses. É essa fórmula que a Carchuna aplica.",
-      "palavras_chave": ["alíquota", "efetiva", "nominal", "fórmula", "rbt12", "faixa", "anexo", "parcela", "deduzir", "cálculo", "das", "simples"],
+      "palavras_chave": [
+        "alíquota",
+        "efetiva",
+        "nominal",
+        "fórmula",
+        "rbt12",
+        "faixa",
+        "anexo",
+        "parcela",
+        "deduzir",
+        "cálculo",
+        "das",
+        "simples"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-anexo1",
@@ -53,9 +114,24 @@
       "tema": "tributario",
       "texto": "Alíquotas e partilha do Simples Nacional — comércio (vigência a partir de 01/01/2018): 1ª faixa, até R$ 180.000,00: alíquota 4,00%, sem parcela a deduzir; 2ª faixa, de 180.000,01 a 360.000,00: 7,30%, deduzir R$ 5.940,00; 3ª faixa, de 360.000,01 a 720.000,00: 9,50%, deduzir R$ 13.860,00; 4ª faixa, de 720.000,01 a 1.800.000,00: 10,70%, deduzir R$ 22.500,00; 5ª faixa, de 1.800.000,01 a 3.600.000,00: 14,30%, deduzir R$ 87.300,00; 6ª faixa, de 3.600.000,01 a 4.800.000,00: 19,00%, deduzir R$ 378.000,00.",
       "resumo": "Tabela do comércio no Simples: seis faixas de faturamento, de 4% (até R$ 180 mil/ano) a 19% nominal (até R$ 4,8 mi/ano) — sempre com a parcela a deduzir, que baixa a alíquota efetiva.",
-      "palavras_chave": ["anexo", "comércio", "loja", "revenda", "tabela", "faixa", "alíquota", "parcela", "deduzir", "simples", "e-commerce", "marketplace"],
+      "palavras_chave": [
+        "anexo",
+        "comércio",
+        "loja",
+        "revenda",
+        "tabela",
+        "faixa",
+        "alíquota",
+        "parcela",
+        "deduzir",
+        "simples",
+        "e-commerce",
+        "marketplace"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-18a",
@@ -64,20 +140,52 @@
       "tema": "tributario",
       "texto": "O Microempreendedor Individual — MEI poderá optar pelo recolhimento dos impostos e contribuições abrangidos pelo Simples Nacional em valores fixos mensais, independentemente da receita bruta por ele auferida no mês. § 1º Considera-se MEI o empresário individual que tenha auferido receita bruta, no ano-calendário anterior, de até R$ 81.000,00, optante pelo Simples Nacional e que não esteja impedido de optar pela sistemática.",
       "resumo": "MEI é quem fatura até R$ 81 mil por ano e paga um valor fixo por mês (DAS-MEI), em vez de percentual sobre as vendas. Passou do teto, precisa migrar para ME no Simples.",
-      "palavras_chave": ["mei", "microempreendedor", "individual", "limite", "teto", "81", "mil", "das", "fixo", "mensal", "desenquadramento"],
+      "palavras_chave": [
+        "mei",
+        "microempreendedor",
+        "individual",
+        "limite",
+        "teto",
+        "81",
+        "mil",
+        "das",
+        "fixo",
+        "mensal",
+        "desenquadramento"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-19",
       "lei": "Lei Complementar nº 123/2006",
       "artigo": "Arts. 19 e 20 (sublimites)",
       "tema": "tributario",
-      "texto": "Os Estados poderão optar pela aplicação de sublimite de receita bruta anual para efeito de recolhimento do ICMS na forma do Simples Nacional. A empresa cuja receita bruta acumulada ultrapassar R$ 3.600.000,00 estará automaticamente impedida de recolher o ICMS e o ISS na forma do Simples Nacional no ano seguinte (ou no mês seguinte, conforme o excesso), devendo apurá-los 'por fora', pelas regras normais.",
-      "resumo": "Mesmo dentro do teto de R$ 4,8 mi do Simples, quem passa de R$ 3,6 mi/ano sai do ICMS/ISS 'dentro da guia' e passa a apurar esses dois impostos por fora — o custo tributário muda antes de estourar o teto.",
-      "palavras_chave": ["sublimite", "icms", "iss", "3,6", "milhões", "estadual", "municipal", "impedimento", "apuração", "fora", "simples"],
+      "texto": "Art. 19, caput: os Estados cuja participação no Produto Interno Bruto brasileiro seja de até 1% poderão optar pela aplicação, em seus territórios, de sublimite de receita bruta anual de até R$ 1.800.000,00 para efeito de recolhimento do ICMS e do ISS na forma do Simples Nacional. Art. 19, § 4º: para os demais Estados, e para aqueles que não exercerem a opção do caput, aplica-se obrigatoriamente o sublimite de R$ 3.600.000,00. Art. 20: ultrapassado o sublimite aplicável, a empresa fica impedida de recolher o ICMS e o ISS na forma do Simples Nacional, devendo apurá-los pelas regras normais do Estado e do Município; conforme o art. 20, § 1º, o impedimento vale a partir do ano seguinte ou, se o excesso for superior a 20%, já a partir do mês seguinte.",
+      "resumo": "O sublimite de ICMS/ISS não é um número só: são duas hipóteses. Estado com até 1% do PIB pode optar por R$ 1.800.000,00 (art. 19, caput); nos demais — e nos que não exerceram a opção — vale obrigatoriamente R$ 3.600.000,00 (art. 19, § 4º). Passando do sublimite que se aplica a você, o ICMS e o ISS saem da guia do Simples e passam a ser apurados por fora, pelas regras do seu Estado e do seu Município — o custo tributário muda antes de o teto de R$ 4,8 mi ser estourado. Qual dos dois vale depende do seu Estado no ano-calendário: confirme com o seu contador.",
+      "palavras_chave": [
+        "sublimite",
+        "icms",
+        "iss",
+        "3,6",
+        "milhões",
+        "estadual",
+        "municipal",
+        "impedimento",
+        "apuração",
+        "fora",
+        "simples",
+        "1,8",
+        "opcional",
+        "pib",
+        "estados"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-30",
@@ -86,9 +194,22 @@
       "tema": "tributario",
       "texto": "A exclusão do Simples Nacional será feita de ofício ou mediante comunicação da própria empresa. A exclusão por comunicação obrigatória ocorre, entre outras hipóteses, quando a receita bruta ultrapassa o limite legal, produzindo efeitos a partir do ano-calendário seguinte — ou do mês seguinte, quando o excesso for superior a 20% do limite. A falta de comunicação, quando obrigatória, sujeita a empresa a multa.",
       "resumo": "'Sair do Simples' tem regra e prazo: estourou o teto em até 20%, sai no ano seguinte; estourou mais de 20%, sai já no mês seguinte — e não comunicar gera multa. Planejar a saída evita surpresa no caixa.",
-      "palavras_chave": ["exclusão", "sair", "desenquadramento", "teto", "estourar", "limite", "comunicação", "multa", "ofício", "simples"],
+      "palavras_chave": [
+        "exclusão",
+        "sair",
+        "desenquadramento",
+        "teto",
+        "estourar",
+        "limite",
+        "comunicação",
+        "multa",
+        "ofício",
+        "simples"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "stj-479",
@@ -97,9 +218,23 @@
       "tema": "financeiro",
       "texto": "As instituições financeiras respondem objetivamente pelos danos gerados por fortuito interno relativo a fraudes e delitos praticados por terceiros no âmbito de operações bancárias.",
       "resumo": "Se houve fraude dentro da operação bancária (conta invadida, transferência fraudulenta, cartão clonado), o banco responde independentemente de culpa. Vale também para a conta PJ do lojista.",
-      "palavras_chave": ["banco", "fraude", "golpe", "clonado", "cartão", "conta", "invadida", "transferência", "responsabilidade", "objetiva", "pix"],
+      "palavras_chave": [
+        "banco",
+        "fraude",
+        "golpe",
+        "clonado",
+        "cartão",
+        "conta",
+        "invadida",
+        "transferência",
+        "responsabilidade",
+        "objetiva",
+        "pix"
+      ],
       "fonte": "https://www.stj.jus.br/docs_internet/revista/eletronica/stj-revista-sumulas-2017_44_capSumulas479-483.pdf",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "cdc-49",
@@ -108,9 +243,24 @@
       "tema": "consumidor",
       "texto": "O consumidor pode desistir do contrato, no prazo de 7 dias a contar de sua assinatura ou do ato de recebimento do produto ou serviço, sempre que a contratação de fornecimento de produtos e serviços ocorrer fora do estabelecimento comercial, especialmente por telefone ou a domicílio. Parágrafo único. Se o consumidor exercitar o direito de arrependimento, os valores eventualmente pagos, a qualquer título, durante o prazo de reflexão, serão devolvidos, de imediato, monetariamente atualizados.",
       "resumo": "Na venda online, o comprador tem 7 dias para se arrepender e receber tudo de volta — inclusive o frete. Para o lojista, isso é custo estrutural do e-commerce: devolução dentro dos 7 dias não é 'prejuízo anormal', é lei.",
-      "palavras_chave": ["arrependimento", "devolução", "7", "sete", "dias", "internet", "online", "e-commerce", "reembolso", "frete", "desistência", "marketplace"],
+      "palavras_chave": [
+        "arrependimento",
+        "devolução",
+        "7",
+        "sete",
+        "dias",
+        "internet",
+        "online",
+        "e-commerce",
+        "reembolso",
+        "frete",
+        "desistência",
+        "marketplace"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "cdc-42",
@@ -119,9 +269,22 @@
       "tema": "consumidor",
       "texto": "O consumidor cobrado em quantia indevida tem direito à repetição do indébito, por valor igual ao dobro do que pagou em excesso, acrescido de correção monetária e juros legais, salvo hipótese de engano justificável.",
       "resumo": "Cobrança indevida dá direito a receber o dobro de volta. O lojista pode invocar a regra quando ele próprio é consumidor de um serviço (ex.: tarifa bancária cobrada errada) — com análise caso a caso.",
-      "palavras_chave": ["cobrança", "indevida", "dobro", "repetição", "indébito", "tarifa", "taxa", "errada", "devolução", "restituição"],
+      "palavras_chave": [
+        "cobrança",
+        "indevida",
+        "dobro",
+        "repetição",
+        "indébito",
+        "tarifa",
+        "taxa",
+        "errada",
+        "devolução",
+        "restituição"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "cdc-39",
@@ -130,9 +293,22 @@
       "tema": "contratual",
       "texto": "É vedado ao fornecedor de produtos ou serviços, dentre outras práticas abusivas: I — condicionar o fornecimento de produto ou de serviço ao fornecimento de outro produto ou serviço (venda casada); V — exigir do consumidor vantagem manifestamente excessiva.",
       "resumo": "Venda casada e vantagem excessiva são práticas abusivas. Exemplo típico para o lojista: condicionar a maquininha ou o repasse à contratação obrigatória de outro serviço pode configurar a prática, quando a relação for de consumo.",
-      "palavras_chave": ["venda", "casada", "prática", "abusiva", "condicionar", "obrigar", "maquininha", "vantagem", "excessiva", "adquirência"],
+      "palavras_chave": [
+        "venda",
+        "casada",
+        "prática",
+        "abusiva",
+        "condicionar",
+        "obrigar",
+        "maquininha",
+        "vantagem",
+        "excessiva",
+        "adquirência"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "cdc-51",
@@ -141,9 +317,22 @@
       "tema": "contratual",
       "texto": "São nulas de pleno direito, entre outras, as cláusulas contratuais que estabeleçam obrigações consideradas iníquas, abusivas, que coloquem o consumidor em desvantagem exagerada, ou sejam incompatíveis com a boa-fé ou a equidade. § 1º Presume-se exagerada, entre outros casos, a vantagem que restringe direitos ou obrigações fundamentais inerentes à natureza do contrato, de tal modo a ameaçar seu objeto ou o equilíbrio contratual.",
       "resumo": "Cláusula abusiva em contrato de adesão é nula. PMEs conseguem, em certos casos (vulnerabilidade técnica reconhecida pelo Judiciário), discutir cláusulas desequilibradas de contratos de marketplace e adquirência.",
-      "palavras_chave": ["cláusula", "abusiva", "nula", "contrato", "adesão", "desvantagem", "equilíbrio", "marketplace", "retenção", "repasse"],
+      "palavras_chave": [
+        "cláusula",
+        "abusiva",
+        "nula",
+        "contrato",
+        "adesão",
+        "desvantagem",
+        "equilíbrio",
+        "marketplace",
+        "retenção",
+        "repasse"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "ctn-165",
@@ -152,9 +341,25 @@
       "tema": "tributario",
       "texto": "O sujeito passivo tem direito, independentemente de prévio protesto, à restituição total ou parcial do tributo, seja qual for a modalidade do seu pagamento, nos seguintes casos: I — cobrança ou pagamento espontâneo de tributo indevido ou maior que o devido em face da legislação tributária aplicável; II — erro na identificação do sujeito passivo, na determinação da alíquota aplicável, no cálculo do montante do débito ou na elaboração ou conferência de qualquer documento relativo ao pagamento.",
       "resumo": "Pagou imposto a mais (ex.: anexo errado do Simples, alíquota errada)? A lei garante o direito de pedir a restituição do que foi pago indevidamente — inclusive por erro de cálculo.",
-      "palavras_chave": ["restituição", "recuperar", "imposto", "pago", "maior", "indevido", "erro", "alíquota", "cálculo", "repetição", "indébito", "anexo", "errado"],
+      "palavras_chave": [
+        "restituição",
+        "recuperar",
+        "imposto",
+        "pago",
+        "maior",
+        "indevido",
+        "erro",
+        "alíquota",
+        "cálculo",
+        "repetição",
+        "indébito",
+        "anexo",
+        "errado"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/l5172compilado.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "ctn-168",
@@ -163,9 +368,22 @@
       "tema": "tributario",
       "texto": "O direito de pleitear a restituição extingue-se com o decurso do prazo de 5 (cinco) anos, contados: I — nas hipóteses dos incisos I e II do artigo 165, da data da extinção do crédito tributário.",
       "resumo": "O pedido de restituição de tributo pago a maior tem prazo: 5 anos contados do pagamento. Erros antigos de enquadramento ainda podem ser recuperáveis dentro dessa janela — verifique com seu contador.",
-      "palavras_chave": ["prazo", "5", "cinco", "anos", "prescrição", "restituição", "recuperar", "imposto", "janela", "retroativo"],
+      "palavras_chave": [
+        "prazo",
+        "5",
+        "cinco",
+        "anos",
+        "prescrição",
+        "restituição",
+        "recuperar",
+        "imposto",
+        "janela",
+        "retroativo"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/l5172compilado.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lei12865-6",
@@ -174,9 +392,23 @@
       "tema": "financeiro",
       "texto": "Para os efeitos desta Lei, considera-se arranjo de pagamento o conjunto de regras e procedimentos que disciplina a prestação de determinado serviço de pagamento ao público; e instituição de pagamento a pessoa jurídica que, aderindo a um ou mais arranjos, tenha como atividade principal ou acessória a execução de serviços de pagamento, como o credenciamento de estabelecimentos para a aceitação de instrumentos de pagamento (adquirência). Os arranjos e as instituições de pagamento integram o Sistema de Pagamentos Brasileiro e sujeitam-se à regulação do Banco Central do Brasil.",
       "resumo": "A 'maquininha' tem lei e regulador: adquirentes e credenciadoras são instituições de pagamento reguladas pelo Banco Central. Tarifas e práticas do setor não são terra sem lei — há normas e canais de reclamação (BCB).",
-      "palavras_chave": ["maquininha", "adquirência", "credenciadora", "instituição", "pagamento", "arranjo", "banco", "central", "regulação", "cartão", "tarifa"],
+      "palavras_chave": [
+        "maquininha",
+        "adquirência",
+        "credenciadora",
+        "instituição",
+        "pagamento",
+        "arranjo",
+        "banco",
+        "central",
+        "regulação",
+        "cartão",
+        "tarifa"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12865.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "cmn-4734",
@@ -185,9 +417,23 @@
       "tema": "financeiro",
       "texto": "Dispõe sobre as condições e os procedimentos para a realização de operações de crédito garantidas por recebíveis de arranjo de pagamento e sobre o registro desses recebíveis. As agendas de recebíveis de cartão devem ser registradas em sistema de registro autorizado, e o estabelecimento comercial pode negociar seus recebíveis (antecipação) com qualquer instituição, não apenas com a credenciadora da maquininha.",
       "resumo": "Desde o registro de recebíveis (2021), a agenda de cartão do lojista é dele: dá para cotar a antecipação em vários bancos e fintechs, não só na própria maquininha. Taxa de antecipação alta demais é, hoje, um custo negociável.",
-      "palavras_chave": ["antecipação", "recebíveis", "agenda", "cartão", "registro", "portabilidade", "negociar", "taxa", "maquininha", "trava", "bancária"],
+      "palavras_chave": [
+        "antecipação",
+        "recebíveis",
+        "agenda",
+        "cartão",
+        "registro",
+        "portabilidade",
+        "negociar",
+        "taxa",
+        "maquininha",
+        "trava",
+        "bancária"
+      ],
       "fonte": "https://www.bcb.gov.br/estabilidadefinanceira/exibenormativo?tipo=Resolu%C3%A7%C3%A3o&numero=4734",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lgpd-basico",
@@ -196,9 +442,22 @@
       "tema": "operacional",
       "texto": "A LGPD disciplina o tratamento de dados pessoais, inclusive nos meios digitais, por pessoa natural ou jurídica. O tratamento somente pode ser realizado nas hipóteses legais do art. 7º, entre elas o consentimento do titular, o cumprimento de obrigação legal e a execução de contrato. O tratamento deve observar boa-fé e os princípios de finalidade, adequação, necessidade, segurança e prestação de contas.",
       "resumo": "Loja online trata dados pessoais de clientes (nome, endereço, compras) e por isso está sujeita à LGPD: precisa de base legal, finalidade clara e segurança. Vazamento e uso indevido geram responsabilidade.",
-      "palavras_chave": ["lgpd", "dados", "pessoais", "cliente", "cadastro", "consentimento", "vazamento", "segurança", "e-commerce", "privacidade"],
+      "palavras_chave": [
+        "lgpd",
+        "dados",
+        "pessoais",
+        "cliente",
+        "cadastro",
+        "consentimento",
+        "vazamento",
+        "segurança",
+        "e-commerce",
+        "privacidade"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "mci-7",
@@ -207,9 +466,22 @@
       "tema": "operacional",
       "texto": "O acesso à internet é essencial ao exercício da cidadania, e ao usuário são assegurados, entre outros, os direitos à inviolabilidade e sigilo do fluxo de suas comunicações e de suas comunicações privadas armazenadas; a informações claras e completas constantes dos contratos de prestação de serviços; e ao não fornecimento a terceiros de seus dados pessoais, salvo mediante consentimento livre, expresso e informado ou nas hipóteses previstas em lei.",
       "resumo": "O Marco Civil garante sigilo das comunicações e clareza contratual na internet. Para o lojista, soma-se à LGPD nas obrigações sobre dados de clientes e nos direitos perante provedores e plataformas.",
-      "palavras_chave": ["marco", "civil", "internet", "sigilo", "dados", "contrato", "plataforma", "provedor", "informação", "clara"],
+      "palavras_chave": [
+        "marco",
+        "civil",
+        "internet",
+        "sigilo",
+        "dados",
+        "contrato",
+        "plataforma",
+        "provedor",
+        "informação",
+        "clara"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l12965.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "d7962",
@@ -218,9 +490,23 @@
       "tema": "operacional",
       "texto": "Regulamenta o CDC para dispor sobre a contratação no comércio eletrônico, abrangendo: informações claras a respeito do produto, serviço e do fornecedor (nome empresarial, CNPJ, endereço); atendimento facilitado ao consumidor; e respeito ao direito de arrependimento. Os sítios eletrônicos de compras coletivas e os marketplaces devem apresentar as informações do fornecedor de forma clara e ostensiva.",
       "resumo": "A loja virtual deve exibir CNPJ, endereço e canais de atendimento, e garantir o arrependimento de 7 dias. É a régua mínima de conformidade do e-commerce — inclusive dentro dos marketplaces.",
-      "palavras_chave": ["e-commerce", "loja", "virtual", "site", "cnpj", "endereço", "atendimento", "arrependimento", "conformidade", "marketplace", "decreto"],
+      "palavras_chave": [
+        "e-commerce",
+        "loja",
+        "virtual",
+        "site",
+        "cnpj",
+        "endereço",
+        "atendimento",
+        "arrependimento",
+        "conformidade",
+        "marketplace",
+        "decreto"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/decreto/d7962.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     },
     {
       "id": "lc123-atividades-anexos",
@@ -229,9 +515,23 @@
       "tema": "tributario",
       "texto": "O contribuinte deverá considerar, destacadamente, para fim de pagamento, as receitas decorrentes: da revenda de mercadorias, tributadas na forma do Anexo I; da venda de mercadorias industrializadas pelo contribuinte, tributadas na forma do Anexo II; e da prestação de serviços, tributadas na forma dos Anexos III, IV ou V, conforme a atividade. Cada tipo de receita segue o seu anexo — a mesma empresa pode ter receitas em anexos diferentes.",
       "resumo": "O anexo não é escolha: revenda (comércio) é Anexo I, indústria é Anexo II, serviços caem nos Anexos III a V conforme a atividade. Recolher no anexo errado significa pagar alíquota errada — para mais ou para menos.",
-      "palavras_chave": ["anexo", "atividade", "enquadramento", "errado", "revenda", "comércio", "indústria", "serviço", "cnae", "segregação", "receita"],
+      "palavras_chave": [
+        "anexo",
+        "atividade",
+        "enquadramento",
+        "errado",
+        "revenda",
+        "comércio",
+        "indústria",
+        "serviço",
+        "cnae",
+        "segregação",
+        "receita"
+      ],
       "fonte": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm",
-      "revisado": false
+      "revisado": false,
+      "conferido_em": null,
+      "conferido_por": null
     }
   ]
 }

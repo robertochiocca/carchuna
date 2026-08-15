@@ -122,6 +122,23 @@ def rbt12_movel(
     """
     if not transacoes:
         return None
+    # TODO (vigência 2027) — art. 18 da LC 123/2006 c/c LC 214/2025: a
+    # definição de RBT12 passa a considerar os doze meses anteriores ao
+    # mês ANTECEDENTE ao da apuração, e não ao próprio mês da apuração.
+    #
+    # Na prática é um caractere: a janela vira `range(2, 14)`. O efeito
+    # não é: de 2027 em diante, quem estiver crescendo perto de uma
+    # fronteira de faixa sai tributado pela faixa errada durante um mês
+    # inteiro, e a alíquota é o número que este projeto existe para não
+    # errar.
+    #
+    # NÃO implementado de propósito, e a citação acima ainda não foi
+    # conferida em fonte oficial — o Planalto devolve HTTP 503 fora do
+    # navegador. Trocar a janela agora seria mudar cálculo tributário com
+    # base em lei que ninguém abriu, que é exatamente como o art. 18-A,
+    # § 2º entrou neste projeto como fundamento de uma projeção que ele
+    # não fundamenta. O aviso está no ROADMAP.md; o cálculo segue a regra
+    # vigente até a conferência.
     janela = {_mes_anterior(mes, n) for n in range(1, 13)}
     meses_do_arquivo = {_mes_de(t.data) for t in transacoes}
     faltando = janela - meses_do_arquivo

@@ -277,7 +277,18 @@ T = {
         "rbt12_ajuda": (
             "Soma de tudo que a empresa faturou nos últimos 12 meses "
             "(o 'RBT12'). Está no extrato do Simples (PGDAS-D) que o "
-            "contador emite todo mês. Define a sua alíquota."
+            "contador emite todo mês. Define a sua alíquota.\n\n"
+            "**Até R$ 3.600.000:** tudo no DAS, e a conta desta tela é o "
+            "imposto todo.\n\n"
+            "**De R$ 3.600.000 a R$ 4.320.000:** a conta sai, com aviso — "
+            "a partir de janeiro do ano que vem você recolhe ICMS e/ou "
+            "ISS por fora do DAS, pelas regras do seu Estado e do seu "
+            "Município (LC 123/2006, art. 20, § 1º), e esse valor não "
+            "está em nenhum número daqui.\n\n"
+            "**Acima de R$ 4.320.000:** a Carchuna não calcula. O "
+            "ICMS/ISS saem do DAS já no mês seguinte e a margem sairia "
+            "para cima; estimar exigiria inventar alíquota de estado e "
+            "de município."
         ),
         "das": "Valor mensal do boleto do MEI (R$)",
         "das_ajuda": "O DAS fixo que você paga todo mês.",
@@ -329,6 +340,7 @@ T = {
         "sem_acoes": "Nada urgente detectado — seus números parecem saudáveis.",
         "implausivel_titulo": "Estes números não fecham com a realidade.",
         "reconciliacao_titulo": "Os dois caminhos de cálculo não bateram.",
+        "aviso_titulo": "A conta está feita, mas leia isto antes de usá-la.",
         "motor_falhou": "Esta parte não pôde ser calculada.",
         "motor_falhou_base": (
             "A decomposição da margem não rodou, e sem ela não há nada "
@@ -482,6 +494,7 @@ T = {
         "sem_achados": "Nenhum vazamento detectado. Bom sinal.",
         "base_legal": "A lei que sustenta isto:",
         "pendente": " · _revisão humana pendente_",
+        "conferido_em": " · _conferido em {data}_",
         "fonte_oficial": "fonte oficial",
         "pergunte": "Pergunte com suas palavras",
         "pergunta_exemplo": (
@@ -647,7 +660,17 @@ T = {
         "rbt12_ajuda": (
             "Everything the company billed in the last 12 months (the "
             "'RBT12'). Found in the monthly Simples statement (PGDAS-D). "
-            "It sets your tax rate."
+            "It sets your tax rate.\n\n"
+            "**Up to R$ 3,600,000:** all inside the DAS, and the figures "
+            "on this screen are the whole tax bill.\n\n"
+            "**R$ 3,600,000 to R$ 4,320,000:** the numbers are computed, "
+            "with a warning — from January onwards you pay state ICMS "
+            "and/or municipal ISS outside the DAS (LC 123/2006, art. 20, "
+            "§ 1º), and none of it shows up here.\n\n"
+            "**Above R$ 4,320,000:** Carchuna does not compute. ICMS/ISS "
+            "leave the DAS the following month and the margin would come "
+            "out overstated; estimating would mean inventing state and "
+            "municipal rates."
         ),
         "das": "Monthly MEI flat payment (R$)",
         "das_ajuda": "The fixed DAS you pay every month.",
@@ -699,6 +722,7 @@ T = {
         "sem_acoes": "Nothing urgent detected — your numbers look healthy.",
         "implausivel_titulo": "These numbers don't add up.",
         "reconciliacao_titulo": "The two calculation paths disagree.",
+        "aviso_titulo": "The math is done, but read this before using it.",
         "motor_falhou": "This section could not be computed.",
         "motor_falhou_base": (
             "The margin breakdown did not run, and without it there is "
@@ -855,6 +879,7 @@ T = {
         "sem_achados": "No leaks detected. Good sign.",
         "base_legal": "The law behind this:",
         "pendente": " · _human review pending_",
+        "conferido_em": " · _checked on {data}_",
         "fonte_oficial": "official source",
         "pergunte": "Ask in your own words",
         "pergunta_exemplo": (
@@ -1446,9 +1471,10 @@ with st.sidebar:
             t["rbt12"],
             min_value=1_000,
             max_value=4_800_000,
-            value=rbt12_sugerida or 4_200_000,
+            value=rbt12_sugerida or 750_000,
             step=10_000,
             help=t["rbt12_ajuda"],
+            key="rbt12",
         )
         if rbt12_sugerida:
             st.caption(t["rbt12_sugerida"])
@@ -1621,6 +1647,15 @@ with aba_resumo:
     reconciliacao = _motor("reconciliacao")
     if reconciliacao is not None and not reconciliacao.ok:
         st.error(f"**{t['reconciliacao_titulo']}** {reconciliacao.motivo}")
+
+    # Avisos do motor: o número saiu e vale, mas há algo que ele não
+    # cobre — o ICMS/ISS fora do DAS acima do sublimite, o ritmo de
+    # faturamento que projeta estouro do teto do MEI. Vêm em `warning`,
+    # não em `error`, porque não invalidam nada do que está abaixo; vêm
+    # acima dos números porque uma ressalva lida depois da margem é uma
+    # ressalva que já não foi lida.
+    for aviso in decomposicao.avisos:
+        st.warning(f"**{t['aviso_titulo']}** {aviso}")
 
     if lang == "pt":
         st.info(resumo.frase())
@@ -2004,6 +2039,12 @@ with aba_ese:
             c1.metric(t["margem_cenario"], _brl(resultado.cenario.margem_liquida))
             c2.metric(t["impacto_reais"], _brl(resultado.impacto_reais))
             c3.metric(t["impacto_pp"], f"{resultado.impacto_pp:+.2f}")
+            # Carimbo do cenário: ressalva do estado SIMULADO, embaixo do
+            # número a que ela se refere. Antes o cenário que atravessava
+            # o sublimite sumia da bateria — e a travessia era o que ele
+            # tinha de mais útil a dizer.
+            for aviso in resultado.avisos:
+                st.warning(aviso)
 
 # ---------------------------------------------------------------------------
 with aba_crescer:
@@ -2089,7 +2130,16 @@ with aba_diagnostico:
             st.write(achado.explicacao)
             st.markdown(f"**{t['base_legal']}**")
             for disp in achado.base_legal:
-                pendente = "" if disp.revisado else t["pendente"]
+                # Dois estados visíveis, não um. "Sem aviso" era o jeito
+                # de dizer conferido, e ausência de aviso não diz nada:
+                # some junto se alguém marcar `revisado` por engano, e
+                # nunca diz QUANDO — que é a parte que envelhece.
+                if not disp.revisado:
+                    pendente = t["pendente"]
+                elif disp.conferido_em:
+                    pendente = t["conferido_em"].format(data=disp.conferido_em)
+                else:
+                    pendente = t["pendente"]
                 st.markdown(
                     f"- **{disp.lei}, {disp.artigo}**{pendente} — {disp.resumo} "
                     f"[[{t['fonte_oficial']}]({disp.fonte})]"

@@ -183,6 +183,12 @@ class DispositivoOut(BaseModel):
     fonte: str
     revisado: bool
     score: float
+    # Quem consome a API precisa dos mesmos três campos que a tela: sem a
+    # data e a assinatura, `revisado: true` não diz se a conferência foi
+    # ontem ou há três anos. Saem `null` enquanto o dispositivo não foi
+    # conferido, que é o estado de todos os 21 hoje.
+    conferido_em: str | None = None
+    conferido_por: str | None = None
 
 
 class AchadoOut(BaseModel):

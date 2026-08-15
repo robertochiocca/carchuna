@@ -54,6 +54,61 @@ DATA_CONSULTA_FONTES = date(2026, 7, 19)
 TETO_SIMPLES = Decimal("4800000")  # LC 123/2006, art. 3º, II (EPP)
 TETO_MEI_ANUAL = Decimal("81000")  # LC 123/2006, art. 18-A, § 1º
 
+# Passar do teto do MEI não tem um efeito só: tem dois, e a fronteira
+# entre eles são 20% de excesso (LC 123/2006, art. 18-A, § 7º).
+#
+# Até 20% — de R$ 81.000,01 a R$ 97.200 — o lojista CONTINUA MEI até
+# 31/12. O DAS fixo segue sendo o imposto daquele mês; o excesso é
+# recolhido à parte e o desenquadramento vale a partir de janeiro
+# seguinte. Nessa faixa a margem do período está certa, e recusar o
+# cálculo seria negar um número válido.
+#
+# Acima de 20%, o desenquadramento retroage ao início do ano (art. 18-A,
+# § 7º, e art. 3º, § 10): o DAS fixo deixa de descrever o imposto devido
+# do período inteiro que está sendo calculado, e aí a recusa é a resposta
+# honesta.
+TETO_MEI_COM_EXCESSO = TETO_MEI_ANUAL * Decimal("1.2")  # R$ 97.200
+
+# ---------------------------------------------------------------------------
+# Sublimite do ICMS/ISS
+#
+# Passando dele, a empresa CONTINUA no Simples para os tributos federais,
+# mas recolhe ICMS e/ou ISS **fora do DAS**, pelas regras normais do
+# Estado e do Município (LC 123/2006, arts. 19 e 20; art. 9º da Resolução
+# CGSN nº 140/2018). A Carchuna não calcula esse ICMS/ISS de fora e não
+# tem como calcular — é o mesmo bloqueio do Lucro Presumido no ROADMAP:
+# cada alíquota depende do estado e do município.
+#
+# **Este valor muda todo ano.** O sublimite é fixado ano a ano por
+# portaria do CGSN; R$ 3.600.000 é o do ano-calendário **2026**, pela
+# Portaria CGSN nº 54/2025. Reconferir na virada do ano, como se
+# reconfere o DAS do MEI.
+#
+# **E não é um número só na lei.** O art. 19 tem duas hipóteses: Estado
+# cuja participação no PIB seja de até 1% pode optar por sublimite de
+# R$ 1.800.000 (caput); nos demais, e nos que não exercerem a opção,
+# vale obrigatoriamente R$ 3.600.000 (§ 4º). A Carchuna assume o de
+# R$ 3.600.000 para todo mundo — é simplificação declarada, não leitura
+# da lei, e ela erra para quem estiver num Estado que tenha adotado o
+# opcional: nesse caso o aviso e a recusa saem TARDE DEMAIS, porque a
+# fronteira real do lojista é a metade disto.
+#
+# Corrigir exige saber o Estado do lojista e quais Estados exerceram a
+# opção no ano-calendário — nenhum dos dois está no arquivo de vendas
+# nem foi conferido em fonte oficial. Enquanto não estiver, a
+# simplificação fica escrita aqui e no corpus (`lc123-19`), que descreve
+# as duas hipóteses corretamente.
+#
+# Consulta: mesma ressalva do `DATA_CONSULTA_FONTES` acima — o valor não
+# foi conferido automaticamente na fonte oficial.
+SUBLIMITE_ICMS_ISS = Decimal("3600000")
+
+# Excesso de mais de 20% sobre o sublimite tira o ICMS/ISS do DAS já no
+# mês seguinte ao do excesso; até 20%, a saída fica para janeiro do ano
+# seguinte (LC 123/2006, art. 20, § 1º). É essa diferença de prazo que
+# separa a recusa do aviso em `_conferir_sublimite_icms_iss`.
+EXCESSO_SUBLIMITE_IMEDIATO = SUBLIMITE_ICMS_ISS * Decimal("1.2")  # R$ 4.320.000
+
 # ---------------------------------------------------------------------------
 # Faixa aritmética do dinheiro
 #
@@ -201,6 +256,18 @@ def _dinheiro(valor, campo: str) -> Decimal:
     raise TypeError(f"`{campo}` deve ser Decimal, int ou str, recebeu {type(valor)}.")
 
 
+# Nome público do guardião de dinheiro.
+#
+# "Dinheiro é `Decimal`, `float` é recusado com `TypeError`" é regra da
+# trilogia, e ela vale em toda fronteira que recebe valor de fora — não
+# só na `Transacao`. `crescimento.py` fazia `Decimal(custo) + Decimal(frete)`
+# cru na calculadora de preço, e `Decimal(2.49)` aceita o float em
+# silêncio, com a bagagem binária inteira: 2,4900000000000002131628...
+#
+# Quem escrever fronteira nova chama isto, e não `Decimal()`.
+dinheiro = _dinheiro
+
+
 # ---------------------------------------------------------------------------
 # Estruturas de dados
 # ---------------------------------------------------------------------------
@@ -241,8 +308,37 @@ class Transacao:
                 "comissao_cobrada",
                 _dinheiro(self.comissao_cobrada, "comissao_cobrada"),
             )
-        if self.valor_bruto < 0:
-            raise ValueError(f"valor_bruto negativo: {self.valor_bruto}.")
+        # Os QUATRO campos de dinheiro recusam negativo, não só o
+        # `valor_bruto`.
+        #
+        # O defeito que isto fecha: extrato de repasse de marketplace
+        # lança estorno como valor negativo, e quem monta a planilha põe
+        # esse número na coluna de custo. Uma venda com
+        # `custo_produto=-500` no meio de dez normais levava a margem de
+        # 36,55% para 44,73% — e passava nas TRÊS conferências:
+        # `identidade_estrutural_fecha()` verdadeira (a margem é resíduo,
+        # fecha por definição), `conferir_plausibilidade()` ok (nenhuma
+        # dedução passa da receita) e `reconciliar()` ok (os dois
+        # caminhos somam o mesmo número errado). É o "sinal trocado" que
+        # este módulo diz caçar, entrando pela porta da frente.
+        #
+        # O que a recusa NÃO faz: compensar. Não existe aqui regra que
+        # some estorno negativo em outra linha — inventar compensação
+        # sobre um dado que ninguém conferiu seria trocar um erro
+        # silencioso por outro. Estorno e crédito são lançamento próprio.
+        for campo in ("valor_bruto", "custo_produto", "frete_pago", "comissao_cobrada"):
+            valor = getattr(self, campo)
+            if valor is not None and valor < 0:
+                raise ValueError(
+                    f"{campo} negativo: {valor}. Em campo de dinheiro a "
+                    "Carchuna só aceita valor positivo ou zero. Se isto veio "
+                    "de um estorno, de um crédito ou de um ajuste do "
+                    "marketplace, ele é lançamento próprio e não custo "
+                    "negativo: um custo negativo aumenta a sua margem em "
+                    "silêncio e passa em todas as conferências. Lance o "
+                    "estorno como devolução da venda de origem, ou tire "
+                    "essa linha do arquivo e trate o ajuste à parte."
+                )
         if self.prazo_recebimento_dias < 0:
             raise ValueError(
                 f"prazo_recebimento_dias negativo: {self.prazo_recebimento_dias}."
@@ -464,16 +560,41 @@ def _brl(valor: Decimal) -> str:
 
 
 def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
-    """Recusa o cálculo do MEI acima do teto; projeção vira aviso, não recusa.
+    """Três faixas no teto do MEI; só a última recusa o cálculo.
 
-    **A recusa é uma só, e é factual**: a receita bruta de um ano do
-    arquivo passou de ``TETO_MEI_ANUAL`` (LC 123/2006, art. 18-A, § 1º).
-    Ali o enquadramento mudou de fato — excesso de mais de 20% desenquadra
-    retroativamente ao início do ano (art. 18-A, § 7º, e art. 3º, § 10) —
-    e o DAS fixo deixou de descrever o imposto devido. Calcular nesse
-    estado erra **para cima**, no campo em que o lojista mais confia, e o
-    custo do desenquadramento retroativo é ordens de grandeza maior que a
-    diferença que a tela mostraria.
+    **A receita que conta é a bruta LÍQUIDA DE DEVOLUÇÃO.** Venda
+    devolvida não compõe a base (LC 123/2006, art. 3º, § 1º) — é o mesmo
+    dispositivo que este módulo já cita para a base do Simples
+    (``base_tributavel = receita - devolucoes``) e que a
+    ``metricas.rbt12_movel`` respeita. Somar as devolvidas aqui recusava
+    quem estava dentro da lei: R$ 83.000 na coluna de valor com R$ 5.000
+    devolvidos são R$ 78.000 de receita bruta, dentro do teto, e a
+    análise inteira era bloqueada.
+
+    **As três faixas, e por que a fronteira são 20%** (art. 18-A, § 7º):
+
+    - até ``TETO_MEI_ANUAL`` → calcula, sem nada a dizer;
+    - de lá até ``TETO_MEI_COM_EXCESSO`` → **calcula e avisa**. O
+      excesso de até 20% não desenquadra no ato: o lojista segue MEI até
+      31/12, o DAS fixo continua sendo o imposto daquele mês e a
+      migração para ME vale a partir de janeiro. A margem do período
+      está certa, e recusá-la seria negar um número válido;
+    - acima disso → **recusa**. O desenquadramento retroage ao início do
+      ano (art. 18-A, § 7º, e art. 3º, § 10), o DAS fixo deixa de
+      descrever o imposto devido do período inteiro que está sendo
+      calculado, e a conta erra **para cima** — no campo em que o
+      lojista mais confia. O custo do desenquadramento retroativo é
+      ordens de grandeza maior que a diferença que a tela mostraria.
+
+    A recusa antiga cobria as duas faixas de cima e por isso era larga
+    demais: bloqueava a análise de quem tinha faturado R$ 85.000 e
+    continuava, para todo efeito daquele ano, MEI.
+
+    **O que o aviso da faixa dos 20% NÃO faz: calcular o DAS
+    complementar.** Há tributo a recolher sobre o excesso, e o valor
+    depende de regra que a Carchuna não implementa. O aviso diz que ele
+    existe e manda ao contador; inventar o número seria pior que não
+    dá-lo.
 
     **A projeção é outra coisa e não recusa nada.** Quando o ano do
     arquivo ainda não fechou, o ritmo dos meses cobertos pode apontar para
@@ -513,21 +634,45 @@ def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
 
     avisos: list[str] = []
     for ano, do_ano in sorted(por_ano.items()):
-        receita = _q(sum((t.valor_bruto for t in do_ano), Decimal("0")))
-        if receita > TETO_MEI_ANUAL:
+        # Devolvida não compõe a receita bruta (art. 3º, § 1º) — mesma
+        # regra da base do Simples, alguns parágrafos abaixo.
+        efetivas = [t for t in do_ano if not t.devolvida]
+        receita = _q(sum((t.valor_bruto for t in efetivas), Decimal("0")))
+        if receita > TETO_MEI_COM_EXCESSO:
             raise ValueError(
-                f"Em {ano} este arquivo soma R$ {_brl(receita)} de "
-                f"faturamento, e isso passa do teto do MEI, que é de "
+                f"Em {ano} este arquivo soma R$ {_brl(receita)} de receita "
+                f"bruta (já sem as devoluções), e isso passa em mais de 20% "
+                f"do teto do MEI de R$ {_brl(TETO_MEI_ANUAL)} por ano — o "
+                f"corte está em R$ {_brl(TETO_MEI_COM_EXCESSO)} (LC "
+                "123/2006, art. 18-A, § 1º e § 7º). A Carchuna não sabe "
+                "calcular a sua margem nesse estado: passando de 20% o "
+                "desenquadramento retroage ao início do ano (art. 18-A, "
+                "§ 7º, e art. 3º, § 10), então o DAS fixo deixa de ser o "
+                "imposto devido do período inteiro que está aqui. Fale com "
+                "o seu contador sobre a migração para o Simples e recalcule "
+                "aqui com o anexo certo; estimar por cima seria mostrar um "
+                "lucro que você não tem."
+            )
+        if receita > TETO_MEI_ANUAL:
+            avisos.append(
+                f"Em {ano} este arquivo soma R$ {_brl(receita)} de receita "
+                f"bruta (já sem as devoluções) e passou do teto do MEI de "
                 f"R$ {_brl(TETO_MEI_ANUAL)} por ano (LC 123/2006, art. 18-A, "
-                "§ 1º). A Carchuna não sabe calcular a sua margem nesse "
-                "estado: acima do teto o enquadramento muda, e quem passa de "
-                "20% do limite é desenquadrado retroativamente ao início do "
-                "ano (art. 18-A, § 7º, e art. 3º, § 10) — o DAS fixo deixa "
-                "de ser o imposto devido. Fale com o seu contador sobre a "
-                "migração para o Simples e recalcule aqui com o anexo certo; "
-                "estimar por cima seria mostrar um lucro que você não tem."
+                "§ 1º). Como o excesso é de até 20%, você **continua MEI até "
+                "31/12** e o DAS fixo segue sendo o imposto do mês: a conta "
+                "desta tela vale para o período. O que muda é depois — há "
+                "tributo a recolher sobre o excesso, e a migração para ME "
+                "vale a partir de janeiro (art. 18-A, § 7º). **A Carchuna "
+                "não calcula esse recolhimento complementar** e não tem como "
+                "calcular; procure o seu contador ainda este ano, porque a "
+                "conta dele é sobre o que já aconteceu."
             )
 
+        # O span sai de TODAS as transações, não só das efetivas: ele mede
+        # a janela que o arquivo cobre, e um mês em que tudo foi devolvido
+        # continua sendo um mês coberto. Tirá-lo daqui encurtaria a janela
+        # e INFLARIA a projeção — o contrário do que a exclusão de
+        # devolvidas existe para fazer.
         meses = {t.data.month for t in do_ano}
         span = max(meses) - min(meses) + 1
         if span >= 12:
@@ -547,6 +692,118 @@ def _conferir_teto_do_mei(transacoes: list[Transacao]) -> tuple[str, ...]:
             "meses do ano dispara este aviso sem estar perto do teto."
         )
     return tuple(avisos)
+
+
+def _conferir_sublimite_icms_iss(
+    config: ConfigTributaria, *, hipotetico: bool = False
+) -> tuple[str, ...]:
+    """Acima do sublimite, o DAS deixa de ser o imposto todo.
+
+    **O que esta conferência é.** Passando de ``SUBLIMITE_ICMS_ISS``, a
+    empresa continua no Simples para os tributos federais, mas recolhe
+    ICMS e/ou ISS **fora do DAS**, pelas regras normais do Estado e do
+    Município (LC 123/2006, arts. 19 e 20). A dedução ``tributos`` desta
+    decomposição cobre só o DAS — então, nessa faixa, ela fica incompleta
+    e a margem sai **para cima**. É o mesmo erro direcional que o motor já
+    se recusa a cometer no MEI acima do teto, e recebe o mesmo tratamento.
+
+    **A diferença entre recusar e avisar é de prazo, e vem da lei.**
+    Excesso de mais de 20% sobre o sublimite tira o ICMS/ISS do DAS já no
+    mês seguinte ao do excesso; até 20%, a saída fica para janeiro do ano
+    seguinte (art. 20, § 1º). Por isso:
+
+    - acima de ``EXCESSO_SUBLIMITE_IMEDIATO`` → **recusa**, porque o
+      período que está sendo calculado provavelmente já é um período em
+      que o ICMS/ISS saiu do DAS, e o número sairia errado para cima;
+    - entre o sublimite e ele → **aviso**, porque o cálculo do período
+      corrente pode continuar valendo, e recusar seria negar um número
+      que ainda está certo.
+
+    **O que esta conferência NÃO é.** Ela não calcula o ICMS/ISS de fora,
+    nem estima. Não dá para: cada alíquota depende do estado e do
+    município, e nenhuma foi conferida em fonte oficial — é o mesmo
+    bloqueio que mantém o Lucro Presumido no ROADMAP. O que ela faz é
+    impedir que a Carchuna publique uma margem que ela sabe estar
+    incompleta.
+
+    **``hipotetico`` — por que um cenário não é recusado.** A recusa
+    protege o lojista de ler como seu um número que já está errado. Num
+    cenário isso se inverte: ninguém está naquele estado, e a travessia
+    do sublimite é justamente o achado mais valioso da simulação —
+    "subir 5% te leva para uma faixa em que você passa a recolher
+    ICMS/ISS por fora". Omitir o cenário esconderia exatamente isso, e
+    era o que acontecia: ele sumia da bateria em silêncio. Com
+    ``hipotetico=True`` a recusa vira aviso, o número sai carimbado, e o
+    carimbo diz que o ganho mostrado não considera o ICMS/ISS de fora.
+
+    O teto do MEI não recebe o mesmo tratamento, e a diferença é a mesma
+    de sempre: acima do sublimite a empresa continua no Simples e o DAS
+    continua certo, só incompleto; acima do teto do MEI o DAS fixo é o
+    instrumento errado, e um cenário calculado com ele não seria
+    incompleto, seria sem sentido.
+
+    **A imprecisão assumida.** O teste da lei é a receita bruta acumulada
+    no **ano-calendário**; a ``rbt12`` é uma janela móvel de doze meses.
+    Não são a mesma coisa: em julho, a RBT12 carrega o segundo semestre
+    do ano anterior, que não conta para o sublimite deste ano. Usar a
+    RBT12 como gatilho é **proxy conservador** — dispara antes da hora
+    para quem cresceu no ano passado e desacelerou, e nunca depois. Isso
+    está aqui escrito e não corrigido de propósito: corrigir exigiria a
+    receita do ano-calendário, que a configuração não traz.
+
+    Devolve os avisos. Quem chama publica.
+    """
+    if config.regime != "simples":
+        return ()
+    # Acima do teto do Simples não há sublimite a discutir: a empresa está
+    # fora do regime inteiro, não só do ICMS/ISS. Quem responde nessa faixa
+    # é `aliquota_efetiva_simples`, com a mensagem do teto — dizer aqui que
+    # o problema é o sublimite trocaria o fato maior pelo menor.
+    if config.rbt12 > TETO_SIMPLES:
+        return ()
+    if config.rbt12 > EXCESSO_SUBLIMITE_IMEDIATO:
+        if hipotetico:
+            return (
+                f"Este cenário leva a RBT12 a R$ {_brl(config.rbt12)}, mais "
+                f"de 20% acima do sublimite de ICMS/ISS de "
+                f"R$ {_brl(SUBLIMITE_ICMS_ISS)} (Portaria CGSN nº 54/2025). "
+                "Nessa faixa o ICMS e/ou o ISS saem do DAS já no mês "
+                "seguinte ao do excesso (LC 123/2006, art. 20, § 1º) e "
+                "passam a ser recolhidos pelas regras do seu Estado e do "
+                "seu Município. **O ganho mostrado aqui não considera esse "
+                "imposto de fora** — a Carchuna não sabe calculá-lo, porque "
+                "a alíquota depende do estado e do município. Trate o "
+                "número como teto, não como resultado, e leve a simulação "
+                "ao seu contador antes de decidir.",
+            )
+        raise ValueError(
+            f"A RBT12 informada (R$ {_brl(config.rbt12)}) passa em mais de "
+            f"20% do sublimite de ICMS/ISS, que em 2026 é de "
+            f"R$ {_brl(SUBLIMITE_ICMS_ISS)} (Portaria CGSN nº 54/2025). "
+            "Nesse excesso o ICMS e/ou o ISS saem do DAS já no mês seguinte "
+            "e passam a ser recolhidos pelas regras do seu Estado e do seu "
+            "Município (LC 123/2006, art. 20, § 1º). A Carchuna não sabe "
+            "calcular a sua margem nesse estado: ela calcula o DAS, e o "
+            "DAS deixou de ser o imposto todo — o que ela mostrasse sairia "
+            "para cima, no campo em que você mais confia. Fale com o seu "
+            "contador sobre o ICMS/ISS por fora e some esse valor por "
+            "conta; estimar por aqui seria inventar alíquota de estado e "
+            "de município."
+        )
+    if config.rbt12 > SUBLIMITE_ICMS_ISS:
+        return (
+            f"A RBT12 informada (R$ {_brl(config.rbt12)}) passou do "
+            f"sublimite de ICMS/ISS de R$ {_brl(SUBLIMITE_ICMS_ISS)}, que "
+            "vale para 2026 (Portaria CGSN nº 54/2025). Como o excesso é "
+            "de até 20%, o ICMS e/ou o ISS só saem do DAS em janeiro do "
+            "ano que vem (LC 123/2006, art. 20, § 1º), e a conta deste "
+            "período continua valendo. **Mas a linha de tributos aqui é só "
+            "o DAS**: a partir da virada, você vai recolher ICMS/ISS por "
+            "fora, pelas regras do seu Estado e do seu Município, e esse "
+            "valor não está em nenhum número desta tela. Fale com o seu "
+            "contador antes de planejar o ano que vem com esta margem.",
+        )
+    return ()
 
 
 BASE_RATEADA = "rateada"
@@ -630,6 +887,8 @@ def decompor_margem(
     transacoes: list[Transacao],
     config: ConfigTributaria,
     tabela: TabelaCustos | None = None,
+    *,
+    hipotetico: bool = False,
 ) -> DecomposicaoMargem:
     """Decompõe a receita bruta até a margem líquida, dedução a dedução.
 
@@ -646,6 +905,12 @@ def decompor_margem(
     estorna a comissão e o produto retorna ao estoque);
     - o custo de antecipação é ``taxa mensal × prazo/30 × valor`` das
       vendas a prazo nos canais com adquirência própria.
+
+    ``hipotetico=True`` marca que estas entradas são um **cenário**, não
+    o estado da loja: a recusa por excesso de sublimite vira aviso, e o
+    resultado sai carimbado em ``avisos``. Só os cenários passam isso —
+    ver ``_conferir_sublimite_icms_iss``. O padrão, e tudo que descreve a
+    loja de verdade, continua recusando.
     """
     if not transacoes:
         raise ValueError("`transacoes` não pode ser vazio.")
@@ -661,6 +926,8 @@ def decompor_margem(
     avisos: tuple[str, ...] = ()
     if config.regime == "mei":
         avisos = _conferir_teto_do_mei(transacoes)
+    else:
+        avisos = _conferir_sublimite_icms_iss(config, hipotetico=hipotetico)
     devolucoes = _q(
         sum((t.valor_bruto for t in transacoes if t.devolvida), Decimal("0"))
     )

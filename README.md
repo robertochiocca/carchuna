@@ -116,7 +116,7 @@ Terceira plataforma de uma trilogia andaluza: [Calahonda](https://github.com/rob
 1. **Nenhuma afirmação sem lastro** — toda saída ou é calculada por código testado, ou é citada de fonte oficial com link. A IA nunca inventa.
 2. **Degradação graciosa** — funciona de ponta a ponta **sem chave de API**: cálculo local + modo extrativo.
 3. **PT-BR do lojista** — "maquininha" → adquirência, "antecipar" → antecipação de recebíveis, "ML" → Mercado Livre.
-4. **Honestidade técnica** — a tabela de status separa o implementado do roadmap; dispositivos legais entram com `"revisado": false` até revisão humana.
+4. **Honestidade técnica** — a tabela de status separa o implementado do roadmap; dispositivos legais entram com `"revisado": false`, `"conferido_em": null` e `"conferido_por": null` até revisão humana. Os três campos descrevem um estado só: `revisado: true` sem data e sem quem assinou é recusado na carga do corpus, porque um selo que ninguém assinou não afirma nada.
 5. **Camadas trocáveis** — motores atrás de interfaces estáveis (padrão `Retriever` do DireitoAberto).
 6. **Dinheiro é `Decimal`** — `float` em campo monetário é rejeitado com `TypeError`; na API, dinheiro trafega como *string* no JSON.
 
@@ -159,8 +159,8 @@ O núcleo é **Python puro, zero dependências** — Streamlit, matplotlib e Fas
 | `cenarios.py` — comissão +2 p.p., Selic +3 p.p., devoluções dobram, mudança de anexo, **migração de canal**, **vender X% a mais em um canal**, **subir os preços X%** (com a premissa de volume constante no nome do cenário) | pronto — implementado e testado |
 | `crescimento.py` — **como faturar mais, com prova**: mix de canais (onde cada real rende mais), calculadora de preço (motor invertido, preço de equilíbrio e preço-alvo) e espaço para crescer dentro do Simples (faixa, sublimite, teto) | pronto — implementado e testado |
 | `rag/` — BM25 + sinônimos do lojista + LLM opcional com fallback extrativo | pronto — implementado e testado |
-| `rag/ingestao.py` + `scripts/ingerir_planalto.py` — extrai artigos de uma lei do Planalto (incluindo `Art. 18-A`, que a LC 123 usa à exaustão) e gera esqueletos no formato do corpus; a mesclagem nunca sobrescreve dispositivo com conteúdo humano | pronto — implementado e testado. Resolve a **digitação**, não a conferência: todo esqueleto sai `revisado: false` com resumo TODO |
-| `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | bloqueado por humano — conferir cada dispositivo na fonte oficial e virar `revisado: true` no arquivo; só o Roberto (ou um advogado) pode fazer isso |
+| `rag/ingestao.py` + `scripts/ingerir_planalto.py` — extrai artigos de uma lei do Planalto (incluindo `Art. 18-A`, que a LC 123 usa à exaustão) e gera esqueletos no formato do corpus; a mesclagem nunca sobrescreve dispositivo com conteúdo humano nem dispositivo já conferido | pronto — implementado e testado. Resolve a **digitação**, não a conferência: todo esqueleto sai `revisado: false`, sem data e sem assinatura, com resumo TODO |
+| `data/corpus_pme.json` — 21 dispositivos (LC 123, CDC, CTN, Bacen, LGPD…) | bloqueado por humano — conferir cada dispositivo na fonte oficial e preencher `revisado: true` **com** `conferido_em` e `conferido_por`; só o Roberto (ou um advogado) pode fazer isso, e é dispositivo por dispositivo. O que se confere é o **resumo** (interpretação, não transcrição) e a **vigência** na data. **Nenhum foi conferido ainda**, e 3 dos 21 não vêm do Planalto (`stj-479`, `cmn-4734`, `lei12865-6`) |
 | `diagnostico.py` — `MotorDiagnostico` com 4 regras plugáveis gerando achados com base legal | pronto — implementado e testado |
 | `api/` — FastAPI + Pydantic, stateless, `/api/v1` com OpenAPI em `/docs` | pronto — implementado e testado |
 | `conectores/` — interface `Conector` + `ConectorArquivo` (CSV/JSON/XLSX de qualquer canal, com filtro de período) | pronto — implementado e testado |
@@ -207,7 +207,7 @@ print(analise.resumo_executivo().frase())
 
 A narrativa em linguagem natural vem **desligada de fábrica**: ligue com `CARCHUNA_USAR_LLM=1` e uma credencial de API no ambiente. Desligada por padrão porque cada pergunta vira uma chamada paga, e quem clona o repositório não deve gastar sem ter pedido. **Sem ela tudo funciona em modo extrativo** — o cálculo nunca depende de LLM, e `/api/v1/saude` diz em português por que a narrativa não está saindo, quando não está.
 
-A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-la como dado, não como instrução: sem isso, escrever "ignore as regras acima" no campo de busca disputaria autoridade com as regras que proíbem prometer recuperação tributária. `/api/v1/legal/buscar` é também o único endpoint com limite de chamadas — 30 por minuto por IP —, porque é o único que gasta dinheiro de terceiro por requisição; o alcance e os limites dessa barreira estão escritos em `carchuna/api/limite.py`.
+A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-la como dado, não como instrução: sem isso, escrever "ignore as regras acima" no campo de busca disputaria autoridade com as regras que proíbem prometer recuperação tributária. `/api/v1/legal/buscar` é o único endpoint com limite por **custo de terceiro** — 30 por minuto por IP —, porque é o único que pode gastar dinheiro alheio por requisição. Não é o único com limite: os cinco endpoints que calculam têm o seu, mais apertado (12 por minuto), porque ali o recurso escasso é CPU do processo que atende todo mundo. Os dois números são diferentes porque as duas contas são diferentes, e o alcance de cada barreira está escrito em `carchuna/api/limite.py`.
 
 ### Publicação (site e app no ar)
 

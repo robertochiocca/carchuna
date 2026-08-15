@@ -313,5 +313,75 @@ def test_o_simples_nao_e_afetado_pelo_teto_do_mei():
     )
 
 
+# ---------------------------------------------------------------------------
+# Dinheiro negativo: os quatro campos, não só o `valor_bruto`
+#
+# Só o `valor_bruto` recusava negativo. `custo_produto`, `frete_pago` e
+# `comissao_cobrada` aceitavam — e custo negativo aumenta a margem.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "campo",
+    ["valor_bruto", "custo_produto", "frete_pago", "comissao_cobrada"],
+)
+def test_dinheiro_negativo_e_recusado_nos_quatro_campos(campo):
+    """A mensagem tem que dizer QUAL campo: são quatro candidatos."""
+    with pytest.raises(ValueError) as erro:
+        _venda(**{campo: Decimal("-500")})
+    assert campo in str(erro.value)
+
+
+@pytest.mark.parametrize(
+    "campo",
+    ["valor_bruto", "custo_produto", "frete_pago", "comissao_cobrada"],
+)
+def test_zero_continua_valido_nos_quatro_campos(campo):
+    """Recusar negativo não pode ter recusado o zero junto.
+
+    Frete zero é venda retirada na loja; comissão zero é canal próprio;
+    custo zero é serviço ou brinde. Todos existem em arquivo de verdade.
+    """
+    venda = _venda(**{campo: Decimal("0")})
+    assert getattr(venda, campo) == Decimal("0")
+
+
+def test_a_recusa_do_negativo_ensina_o_que_fazer():
+    """Estorno é lançamento próprio, e a mensagem precisa dizer isso.
+
+    Sem esta frase, o lojista que recebeu a recusa tira o sinal de menos
+    e transforma um estorno de R$ 500 num custo de R$ 500 — trocando um
+    erro por outro, agora na direção oposta.
+    """
+    with pytest.raises(ValueError) as erro:
+        _venda(custo_produto=Decimal("-500"))
+
+    mensagem = str(erro.value)
+    assert "estorno" in mensagem
+    assert "devolução" in mensagem  # o lançamento certo para o caso comum
+
+
+def test_o_estorno_na_coluna_de_custo_para_na_fronteira():
+    """O defeito inteiro: nenhuma das três conferências pegava isto.
+
+    Dez vendas normais mais uma com `custo_produto=-500` davam margem de
+    44,73% em vez de 36,55%, com `identidade_estrutural_fecha()`
+    verdadeira, `conferir_plausibilidade()` ok e `reconciliar()` ok. Cada
+    uma por um motivo diferente: a identidade fecha por definição (a
+    margem é resíduo), a plausibilidade não vê dedução maior que a
+    receita, e a reconciliação soma o mesmo número errado pelos dois
+    caminhos.
+
+    Nenhuma delas olha o SINAL da entrada — e é por isso que a recusa
+    tem de ser na fronteira, ao construir a `Transacao`, e não em mais
+    uma conferência depois do cálculo.
+    """
+    normais = [_venda() for _ in range(10)]
+    assert len(normais) == 10  # as boas continuam construindo
+
+    with pytest.raises(ValueError, match="custo_produto"):
+        _venda(custo_produto=Decimal("-500"))
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
