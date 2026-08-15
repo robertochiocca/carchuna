@@ -207,7 +207,7 @@ print(analise.resumo_executivo().frase())
 
 A narrativa em linguagem natural vem **desligada de fábrica**: ligue com `CARCHUNA_USAR_LLM=1` e uma credencial de API no ambiente. Desligada por padrão porque cada pergunta vira uma chamada paga, e quem clona o repositório não deve gastar sem ter pedido. **Sem ela tudo funciona em modo extrativo** — o cálculo nunca depende de LLM, e `/api/v1/saude` diz em português por que a narrativa não está saindo, quando não está.
 
-A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-la como dado, não como instrução: sem isso, escrever "ignore as regras acima" no campo de busca disputaria autoridade com as regras que proíbem prometer recuperação tributária. `/api/v1/legal/buscar` é também o único endpoint com limite de chamadas — 30 por minuto por IP —, porque é o único que gasta dinheiro de terceiro por requisição; o alcance e os limites dessa barreira estão escritos em `carchuna/api/limite.py`.
+A pergunta do lojista vai para o modelo **delimitada**, e o prompt manda tratá-la como dado, não como instrução: sem isso, escrever "ignore as regras acima" no campo de busca disputaria autoridade com as regras que proíbem prometer recuperação tributária. `/api/v1/legal/buscar` é o único endpoint com limite por **custo de terceiro** — 30 por minuto por IP —, porque é o único que pode gastar dinheiro alheio por requisição. Não é o único com limite: os cinco endpoints que calculam têm o seu, mais apertado (12 por minuto), porque ali o recurso escasso é CPU do processo que atende todo mundo. Os dois números são diferentes porque as duas contas são diferentes, e o alcance de cada barreira está escrito em `carchuna/api/limite.py`.
 
 ### Publicação (site e app no ar)
 

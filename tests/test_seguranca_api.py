@@ -11,6 +11,7 @@ sem auth é indisponibilidade a custo zero para quem chama.
 """
 
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -469,3 +470,70 @@ def test_a_varredura_olha_a_marca_MAIS_NOVA_da_chave():
     # a marca de t=50 continua valendo, então sobra UMA chamada, não duas
     assert limitador.permitir("10.0.0.5", agora=61.0)
     assert limitador.permitir("10.0.0.5", agora=61.0) is False
+
+
+# ---------------------------------------------------------------------------
+# Tarefa 5: o guardião de dinheiro na calculadora, e a docstring que mentia
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("campo", ["custo_produto", "frete"])
+def test_a_calculadora_de_preco_recusa_float(campo):
+    """`preco_para_margem` fazia `Decimal(x)` cru e aceitava float calado.
+
+    "Dinheiro é `Decimal`, `float` é recusado com `TypeError`" é regra da
+    trilogia e vale em toda fronteira, não só na `Transacao`.
+    `Decimal(2.49)` não estoura — devolve 2,49000000000000021316..., com
+    a bagagem binária inteira, e esse número vai para dentro do preço que
+    o lojista vai praticar.
+    """
+    from carchuna.crescimento import preco_para_margem
+    from carchuna.margem import ConfigTributaria
+
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("360000")
+    )
+    argumentos = {"custo_produto": Decimal("40"), "frete": Decimal("10")}
+    argumentos[campo] = 40.0  # o float
+
+    with pytest.raises(TypeError) as erro:
+        preco_para_margem(canal="shopee", config=config, **argumentos)
+    assert campo in str(erro.value)
+
+
+def test_a_calculadora_de_preco_continua_aceitando_decimal_e_texto():
+    """Recusar float não pode ter recusado o que já entrava."""
+    from carchuna.crescimento import preco_para_margem
+    from carchuna.margem import ConfigTributaria
+
+    config = ConfigTributaria(
+        regime="simples", anexo_simples="I", rbt12=Decimal("360000")
+    )
+    por_decimal = preco_para_margem(Decimal("40"), Decimal("10"), "shopee", config)
+    por_texto = preco_para_margem("40", "10", "shopee", config)
+
+    assert por_decimal == por_texto == Decimal("62.23")
+
+
+def test_a_docstring_da_busca_legal_nao_diz_mais_que_e_a_unica_com_limite():
+    """A frase virou falsa quando o limite de CPU entrou, e ficou lá.
+
+    `_limite_calculo` cobre cinco endpoints desde então. Uma docstring
+    que promete exclusividade a uma barreira que não é exclusiva é pior
+    que nenhuma: quem lê acredita que os outros endpoints estão abertos.
+    """
+    from carchuna.api.main import buscar_legal
+
+    doc = buscar_legal.__doc__ or ""
+    assert "custo de terceiro" in doc
+    assert "único endpoint com limite de chamadas" not in doc
+    # e cita os dois limites, que são números diferentes por motivos diferentes
+    assert "LIMITE_POR_JANELA" in doc
+    assert "LIMITE_CALCULO_POR_JANELA" in doc
+
+
+def test_o_readme_tambem_parou_de_afirmar_a_exclusividade():
+    """A mesma frase estava no README, e um lastro falso não vale menos lá."""
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text("utf-8")
+    assert "também o único endpoint com limite de chamadas" not in readme
+    assert "único endpoint com limite por **custo de terceiro**" in readme

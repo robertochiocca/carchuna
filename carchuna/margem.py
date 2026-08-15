@@ -241,6 +241,18 @@ def _dinheiro(valor, campo: str) -> Decimal:
     raise TypeError(f"`{campo}` deve ser Decimal, int ou str, recebeu {type(valor)}.")
 
 
+# Nome público do guardião de dinheiro.
+#
+# "Dinheiro é `Decimal`, `float` é recusado com `TypeError`" é regra da
+# trilogia, e ela vale em toda fronteira que recebe valor de fora — não
+# só na `Transacao`. `crescimento.py` fazia `Decimal(custo) + Decimal(frete)`
+# cru na calculadora de preço, e `Decimal(2.49)` aceita o float em
+# silêncio, com a bagagem binária inteira: 2,4900000000000002131628...
+#
+# Quem escrever fronteira nova chama isto, e não `Decimal()`.
+dinheiro = _dinheiro
+
+
 # ---------------------------------------------------------------------------
 # Estruturas de dados
 # ---------------------------------------------------------------------------
