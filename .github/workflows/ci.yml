@@ -73,8 +73,21 @@ jobs:
         # `requirements.txt` e o núcleo `carchuna/` segue com zero
         # dependências. O escopo e os códigos desligados (com o motivo de
         # cada um) estão em `[tool.mypy]` no pyproject.toml.
+        #
+        # A VERSÃO É PINADA, e ela entrou aqui por um vermelho de verdade.
+        # `pip install mypy` sem versão trouxe a 2.3.0 sozinha, e foi ela
+        # que apertou a leitura de stubs de terceiro a ponto de abortar a
+        # checagem no runner 3.12. O defeito estava no `[tool.mypy]` e foi
+        # corrigido lá (`no_site_packages`), mas o gatilho foi a troca de
+        # versão que ninguém pediu — mesmo raciocínio que já vale para os
+        # SHAs das actions logo acima: ferramenta que decide se o build
+        # passa não pode mudar sem alguém decidir.
+        #
+        # Para subir de versão: troque o número aqui, rode `mypy` local na
+        # versão nova e veja o que ela passou a apontar. Se a lista crescer,
+        # a decisão é o que fazer com os achados — não é desligar o passo.
         run: |
-          pip install mypy
+          pip install mypy==2.3.0
           mypy
 
       - name: Formatação (black)
