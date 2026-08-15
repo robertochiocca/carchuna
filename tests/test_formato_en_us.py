@@ -205,3 +205,96 @@ def test_o_campo_digitado_tambem_recusa():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# O que sobrou da primeira correção: o empate SEM ponto
+#
+# Exigir os dois separadores fechou o caso com centavos ("1,234.56") e
+# deixou aberto o caso sem eles. "2,500" é dois mil e quinhentos em en-US
+# e dois e meio em pt-BR, e o ramo brasileiro escolhia calado — o mesmo
+# fator de mil, e desta vez com a docstring afirmando, três linhas acima,
+# que a Carchuna não adivinha locale.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("entrada", ["2,500", "1,200", "12,345", "123,456"])
+def test_virgula_com_tres_casas_e_empate_e_nao_passa(entrada):
+    with pytest.raises(ValueError):
+        _para_decimal(entrada)
+
+
+@pytest.mark.parametrize(
+    ("entrada", "americano", "brasileiro"),
+    [("2,500", "2500", "2.500"), ("1,200", "1200", "1.200")],
+)
+def test_o_empate_da_virgula_mostra_as_duas_leituras(entrada, americano, brasileiro):
+    """A recusa vale pelo que ensina: os dois números lado a lado."""
+    with pytest.raises(ValueError) as erro:
+        _para_decimal(entrada)
+
+    mensagem = str(erro.value)
+    assert americano in mensagem
+    assert brasileiro in mensagem
+    assert "mil vezes" in mensagem
+
+
+def test_duas_virgulas_sem_ponto_ganham_mensagem_de_formato():
+    """ "1,234,567" já era recusado, mas com a mensagem errada.
+
+    Caía no ramo brasileiro, virava "1.234.567" e estourava
+    `InvalidOperation` — que chega ao lojista como "não é um valor
+    monetário válido". Verdade, e inútil: o valor É válido, num formato
+    que a Carchuna não lê. Agora a mensagem diz isso.
+    """
+    with pytest.raises(ValueError) as erro:
+        _para_decimal("1,234,567")
+
+    mensagem = str(erro.value)
+    assert "americano" in mensagem
+    assert "não adivinha" in mensagem
+
+
+@pytest.mark.parametrize(
+    ("entrada", "esperado"),
+    [
+        # grupo de milhar não começa em zero: meio real, sem empate
+        ("0,500", "0.500"),
+        ("0,750", "0.750"),
+        # grupo líder de milhar tem no máximo três dígitos em en-US:
+        # "1234,567" não é milhar americano válido, logo é decimal pt-BR
+        ("1234,567", "1234.567"),
+        ("98765,432", "98765.432"),
+        # menos de três casas nunca foi milhar
+        ("12,34", "12.34"),
+        ("1,5", "1.5"),
+        # mais de três casas também não
+        ("12,3456", "12.3456"),
+    ],
+)
+def test_os_empates_aparentes_que_nao_sao_continuam_passando(entrada, esperado):
+    """A recusa nova não pode ter engolido decimal brasileiro legítimo.
+
+    São as duas ressalvas que fazem a regra ser precisa em vez de larga —
+    e a segunda delas é a que mantém funcionando o `0,500` que o
+    `test_milhar_sem_centavo.py` já protegia do outro lado.
+    """
+    assert _para_decimal(entrada) == Decimal(esperado)
+
+
+def test_o_empate_da_virgula_tambem_vira_linha_rejeitada(tmp_path):
+    """Pelo caminho de importação, com linha e coluna, como o resto."""
+    arquivo = tmp_path / "vendas.csv"
+    arquivo.write_text(
+        f"{CABECALHO}\n"
+        "01/05/2026;shopee;Capa;100,00;40,00;10,00\n"
+        "02/05/2026;shopee;Fone;2,500;90,00;12,00\n",
+        encoding="utf-8",
+    )
+    resultado = carregar_com_relatorio(arquivo)
+
+    assert len(resultado.transacoes) == 1
+    (rejeitada,) = resultado.rejeitadas
+    assert rejeitada.numero == 3
+    assert "valor_bruto" in rejeitada.motivo
+    assert "2500" in rejeitada.motivo

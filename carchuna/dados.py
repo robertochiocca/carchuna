@@ -65,6 +65,21 @@ _MILHAR_SEM_CENTAVO = re.compile(r"^[+-]?[1-9]\d{0,2}(\.\d{3})+$")
 # casas, e as duas leituras diferem por mil.
 _PONTO_AMBIGUO = re.compile(r"^[+-]?\d{4,}\.\d{3}$")
 
+# "2,500", "1,200", "123,456" — o mesmo empate, do lado da vírgula, e sem
+# ponto nenhum no valor para desempatar pela ordem. Em en-US é milhar
+# (dois mil e quinhentos); em pt-BR é decimal de três casas (dois e meio).
+# Mil vezes de diferença, de novo.
+#
+# A ressalva do primeiro grupo é a mesma do `_MILHAR_SEM_CENTAVO`, e ela
+# resolve um caso inteiro sozinha: ninguém escreve quinhentos reais como
+# "0,500", porque grupo de milhar não começa em zero. Então "0,500" é
+# decimal sem empate e continua passando — meio real.
+#
+# Quatro dígitos ou mais antes da vírgula também não empatam: "1234,567"
+# não é milhar válido em en-US (o grupo líder tem no máximo três), então
+# só pode ser decimal pt-BR.
+_MILHAR_COM_VIRGULA_AMBIGUO = re.compile(r"^[+-]?[1-9]\d{0,2},\d{3}$")
+
 
 def _para_decimal(texto: str) -> Decimal:
     """'R$ 1.234,56', '1.234' ou '1234.56' → Decimal, sem passar por float.
@@ -73,32 +88,43 @@ def _para_decimal(texto: str) -> Decimal:
 
     1. os dois separadores presentes e o ponto DEPOIS da vírgula → formato
        americano, e aí a função recusa;
-    2. tem vírgula → formato brasileiro, o ponto é milhar;
-    3. sem vírgula, mas em grupos de três → o ponto é milhar. É o caso que
+    2. duas vírgulas ou mais e nenhum ponto → americano também: pt-BR tem
+       um separador decimal só, então não há leitura brasileira. Recusa;
+    3. uma vírgula com exatamente três casas e o grupo líder começando em
+       1–9 → **empate**: "2,500" é dois mil e quinhentos em en-US e dois
+       e meio em pt-BR. Recusa;
+    4. tem vírgula → formato brasileiro, o ponto é milhar;
+    5. sem vírgula, mas em grupos de três → o ponto é milhar. É o caso que
        dividia por mil em silêncio: painel que exporta valor redondo manda
        "1.234", e a heurística antiga lia um real e vinte e três;
-    4. um ponto só, com uma ou duas casas → decimal, como sempre foi;
-    5. um ponto só, com exatamente três casas e quatro dígitos ou mais
-       antes → **ambíguo de verdade**, e aí a função recusa.
+    6. um ponto só, com uma ou duas casas → decimal, como sempre foi;
+    7. um ponto só, com exatamente três casas e quatro dígitos ou mais
+       antes → **empate** do lado do ponto. Recusa.
 
-    O passo 1 fecha o erro de mil pelo lado oposto ao do passo 5. O ramo
-    brasileiro apagava os pontos e trocava a vírgula por ponto sem olhar a
-    ORDEM dos separadores, então "1,234.56" — Amazon Seller Central e boa
-    parte dos ERPs exportam assim — virava ``Decimal("1.23456")``. Mil
-    vezes menor, calado, e do mesmo jeito que o passo 5 já impedia na
-    outra direção.
+    Os passos 1, 2 e 3 fecham o erro de mil pelo lado americano; o 7 o
+    fechava pelo lado brasileiro desde antes. O ramo brasileiro apagava
+    os pontos e trocava a vírgula por ponto sem olhar a ORDEM dos
+    separadores, então "1,234.56" — Amazon Seller Central e boa parte dos
+    ERPs exportam assim — virava ``Decimal("1.23456")``.
 
-    **O que ela não faz: adivinhar locale.** Ninguém converte en-US em
-    silêncio aqui. Um arquivo americano pode trazer "1,234" — que é mil
-    duzentos e trinta e quatro em en-US e um vírgula duzentos e trinta e
-    quatro em pt-BR — e nada no valor diz qual dos dois é. Converter o
-    caso decidível e recusar o indecidível deixaria metade do arquivo
-    numa leitura e metade na outra, que é pior que recusar as duas.
+    **O que ela não faz: adivinhar locale.** E isto passou a ser verdade
+    no passo 3, que antes não existia. A primeira versão desta correção
+    escrevia aqui que "1,234" é indecidível e, três linhas abaixo, mandava
+    o valor para o ramo brasileiro assim mesmo — que é adivinhar, com a
+    documentação dizendo o contrário. Um "2,500" de export americano
+    entrava como dois e meio.
 
-    Os passos 1 e 5 vão irritar alguém. Irritar é melhor que errar por
-    mil: um valor mil vezes menor não estoura nada, entra na soma e sai
-    na tela como margem, e ninguém tem como desconfiar olhando o
-    resultado.
+    **O que o empate custa, e a quem.** Quem tem coluna de preço com três
+    casas decimais de verdade — combustível, preço unitário de atacado —
+    é recusado junto, e a saída é escrever com dois decimais ou reexportar
+    sem ambiguidade. É caro, e é menos caro que a alternativa: um valor
+    mil vezes menor não estoura nada, entra na soma e sai na tela como
+    margem, e ninguém tem como desconfiar olhando o resultado.
+
+    Dois empates aparentes que NÃO são, e por isso continuam passando:
+    "0,500" (grupo de milhar não começa em zero — é meio real) e
+    "1234,567" (grupo líder de milhar tem no máximo três dígitos em
+    en-US — é decimal brasileiro).
     """
     limpo = str(texto).strip().replace("R$", "").replace(" ", "")
     if "." in limpo and "," in limpo and limpo.rfind(".") > limpo.rfind(","):
@@ -112,6 +138,32 @@ def _para_decimal(texto: str) -> Decimal:
             "menor, e sem estourar nada. A Carchuna não adivinha o "
             "formato do arquivo: reexporte a planilha em pt-BR "
             "(1.234,56) ou converta essa coluna antes de subir."
+        )
+    if "." not in limpo and limpo.count(",") > 1:
+        # Duas vírgulas e nenhum ponto só existem em en-US: pt-BR tem um
+        # separador decimal só. Antes isto caía no ramo brasileiro e
+        # virava "1.234.567", que estoura `InvalidOperation` e chega ao
+        # lojista como "não é um valor monetário válido" — verdade, e
+        # inútil. Agora recebe a mensagem que diz qual é o problema.
+        raise ValueError(
+            f"{texto!r} está em formato americano: a vírgula separa o "
+            "milhar. Em pt-BR só existe um separador decimal, então este "
+            "valor não tem leitura brasileira possível. A Carchuna não "
+            "adivinha o formato do arquivo: reexporte a planilha em pt-BR "
+            f"({limpo.replace(',', '.')},00) ou converta essa coluna antes "
+            "de subir."
+        )
+    if _MILHAR_COM_VIRGULA_AMBIGUO.match(limpo):
+        americano = limpo.replace(",", "")
+        brasileiro = limpo.replace(",", ".")
+        raise ValueError(
+            f"{texto!r} pode ser {americano} (vírgula de milhar, como a "
+            f"Amazon e vários ERPs exportam) ou {brasileiro} (três casas "
+            "decimais, formato brasileiro), e a diferença entre as duas "
+            "leituras é de mil vezes. A Carchuna não adivinha o formato "
+            "do arquivo: reexporte a planilha em pt-BR com os centavos "
+            "(2.500,00 para dois mil e quinhentos; 2,50 para dois e "
+            "cinquenta) ou confira essa coluna."
         )
     if "," in limpo:  # formato brasileiro: ponto de milhar, vírgula decimal
         return Decimal(limpo.replace(".", "").replace(",", "."))
