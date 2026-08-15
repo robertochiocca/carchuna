@@ -109,6 +109,22 @@ files = ["carchuna"]
 # conferência de tipos depender de dependência que o projeto não tem.
 ignore_missing_imports = true
 
+# A checagem NÃO olha o que está instalado no ambiente, e isso é o ponto.
+#
+# Sem esta linha o CI ficou vermelho só no 3.12: `relatorio.py` importa
+# matplotlib, o mypy seguia o import até o `numpy/__init__.pyi` do runner
+# e tentava parsear aquele stub — que usa `type` do PEP 695 — sob o
+# `python_version` declarado aqui, 3.10. Erro de sintaxe em arquivo de
+# terceiro, com a checagem inteira abortada. No 3.10 e no 3.11 o pip
+# resolvia um numpy mais antigo e o problema não aparecia: a matriz
+# achava três respostas diferentes para a mesma pergunta.
+#
+# O núcleo `carchuna/` tem zero dependências por desenho. Conferir os
+# tipos dele não pode depender de qual versão de biblioteca opcional o
+# runner instalou hoje — com isto, a resposta é a mesma nas três versões
+# da matriz e na máquina de quem clona.
+no_site_packages = true
+
 # ==========================================================================
 # DÍVIDA, não isenção permanente.
 #
