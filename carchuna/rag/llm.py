@@ -293,6 +293,28 @@ def gerar_resposta(pergunta: str, dispositivos) -> str | None:
         return None
 
 
+def selo_de_conferencia(disp) -> str:
+    """O que vai ao lado da citação: pendente, ou conferido com a data.
+
+    Antes só havia um estado visível — "[revisão humana pendente]" — e o
+    outro era a ausência dele. Ausência de aviso é o pior jeito de dizer
+    "isto foi conferido": some junto com o aviso quando alguém marca
+    ``revisado: true`` por engano, e não diz QUANDO.
+
+    A data importa porque é ela que envelhece. Resumo é interpretação e
+    vigência muda: "conferido em 2026-08-14" é uma informação com prazo,
+    e quem lê consegue julgar se ainda serve. Um selo sem data, não.
+    """
+    if not getattr(disp, "revisado", False):
+        return " [revisão humana pendente]"
+    if disp.conferido_em:
+        return f" [conferido em {disp.conferido_em}]"
+    # `revisado` sem data não deveria existir — `conferir_integridade_do_corpus`
+    # recusa o corpus nesse estado. Se chegar aqui, o dispositivo veio de
+    # outro caminho: mostra o estado bruto em vez de fingir conferência.
+    return " [conferido, sem data registrada]"
+
+
 def resposta_extrativa(pergunta: str, dispositivos) -> str:
     """Fallback sem LLM: apresenta os dispositivos encontrados com orientação."""
     if not dispositivos:
@@ -308,8 +330,9 @@ def resposta_extrativa(pergunta: str, dispositivos) -> str:
         "dispositivos legais:\n"
     ]
     for disp in dispositivos:
-        pendente = "" if disp.revisado else " [revisão humana pendente]"
-        linhas.append(f"• {disp.lei}, {disp.artigo}{pendente}: {disp.resumo}")
+        linhas.append(
+            f"• {disp.lei}, {disp.artigo}{selo_de_conferencia(disp)}: {disp.resumo}"
+        )
     linhas.append(
         "\nIsto é informação geral, não parecer jurídico nem promessa de "
         "recuperação de valores. Confirme com seu contador ou advogado "

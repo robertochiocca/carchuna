@@ -81,8 +81,23 @@ TETO_MEI_COM_EXCESSO = TETO_MEI_ANUAL * Decimal("1.2")  # R$ 97.200
 #
 # **Este valor muda todo ano.** O sublimite é fixado ano a ano por
 # portaria do CGSN; R$ 3.600.000 é o do ano-calendário **2026**, pela
-# Portaria CGSN nº 54/2025, uniforme para todos os Estados e o DF.
-# Reconferir na virada do ano, como se reconfere o DAS do MEI.
+# Portaria CGSN nº 54/2025. Reconferir na virada do ano, como se
+# reconfere o DAS do MEI.
+#
+# **E não é um número só na lei.** O art. 19 tem duas hipóteses: Estado
+# cuja participação no PIB seja de até 1% pode optar por sublimite de
+# R$ 1.800.000 (caput); nos demais, e nos que não exercerem a opção,
+# vale obrigatoriamente R$ 3.600.000 (§ 4º). A Carchuna assume o de
+# R$ 3.600.000 para todo mundo — é simplificação declarada, não leitura
+# da lei, e ela erra para quem estiver num Estado que tenha adotado o
+# opcional: nesse caso o aviso e a recusa saem TARDE DEMAIS, porque a
+# fronteira real do lojista é a metade disto.
+#
+# Corrigir exige saber o Estado do lojista e quais Estados exerceram a
+# opção no ano-calendário — nenhum dos dois está no arquivo de vendas
+# nem foi conferido em fonte oficial. Enquanto não estiver, a
+# simplificação fica escrita aqui e no corpus (`lc123-19`), que descreve
+# as duas hipóteses corretamente.
 #
 # Consulta: mesma ressalva do `DATA_CONSULTA_FONTES` acima — o valor não
 # foi conferido automaticamente na fonte oficial.

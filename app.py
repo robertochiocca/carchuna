@@ -494,6 +494,7 @@ T = {
         "sem_achados": "Nenhum vazamento detectado. Bom sinal.",
         "base_legal": "A lei que sustenta isto:",
         "pendente": " · _revisão humana pendente_",
+        "conferido_em": " · _conferido em {data}_",
         "fonte_oficial": "fonte oficial",
         "pergunte": "Pergunte com suas palavras",
         "pergunta_exemplo": (
@@ -878,6 +879,7 @@ T = {
         "sem_achados": "No leaks detected. Good sign.",
         "base_legal": "The law behind this:",
         "pendente": " · _human review pending_",
+        "conferido_em": " · _checked on {data}_",
         "fonte_oficial": "official source",
         "pergunte": "Ask in your own words",
         "pergunta_exemplo": (
@@ -2128,7 +2130,16 @@ with aba_diagnostico:
             st.write(achado.explicacao)
             st.markdown(f"**{t['base_legal']}**")
             for disp in achado.base_legal:
-                pendente = "" if disp.revisado else t["pendente"]
+                # Dois estados visíveis, não um. "Sem aviso" era o jeito
+                # de dizer conferido, e ausência de aviso não diz nada:
+                # some junto se alguém marcar `revisado` por engano, e
+                # nunca diz QUANDO — que é a parte que envelhece.
+                if not disp.revisado:
+                    pendente = t["pendente"]
+                elif disp.conferido_em:
+                    pendente = t["conferido_em"].format(data=disp.conferido_em)
+                else:
+                    pendente = t["pendente"]
                 st.markdown(
                     f"- **{disp.lei}, {disp.artigo}**{pendente} — {disp.resumo} "
                     f"[[{t['fonte_oficial']}]({disp.fonte})]"

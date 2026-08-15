@@ -122,6 +122,18 @@ def rbt12_movel(
     """
     if not transacoes:
         return None
+    # TODO (vigência 2027): a definição de RBT12 muda a partir de 2027 —
+    # passa a considerar os doze meses anteriores ao mês ANTECEDENTE ao da
+    # apuração, e não ao próprio mês da apuração. A janela abaixo desloca
+    # um mês, e todo mês de 2027 em diante sai tributado pela faixa
+    # errada quando a receita estiver crescendo perto de uma fronteira.
+    #
+    # Não implementado de propósito. Falta o número do dispositivo, e a
+    # regra da casa é não mexer em cálculo tributário citando lei que não
+    # foi conferida em fonte oficial — foi assim que o art. 18-A, § 2º
+    # entrou aqui como fundamento de uma projeção que ele não fundamenta.
+    # A citação entra neste comentário quando o Roberto confirmar na lei;
+    # até lá o aviso está no ROADMAP.md e o cálculo segue a regra vigente.
     janela = {_mes_anterior(mes, n) for n in range(1, 13)}
     meses_do_arquivo = {_mes_de(t.data) for t in transacoes}
     faltando = janela - meses_do_arquivo
