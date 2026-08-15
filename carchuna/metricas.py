@@ -122,18 +122,23 @@ def rbt12_movel(
     """
     if not transacoes:
         return None
-    # TODO (vigência 2027): a definição de RBT12 muda a partir de 2027 —
-    # passa a considerar os doze meses anteriores ao mês ANTECEDENTE ao da
-    # apuração, e não ao próprio mês da apuração. A janela abaixo desloca
-    # um mês, e todo mês de 2027 em diante sai tributado pela faixa
-    # errada quando a receita estiver crescendo perto de uma fronteira.
+    # TODO (vigência 2027) — art. 18 da LC 123/2006 c/c LC 214/2025: a
+    # definição de RBT12 passa a considerar os doze meses anteriores ao
+    # mês ANTECEDENTE ao da apuração, e não ao próprio mês da apuração.
     #
-    # Não implementado de propósito. Falta o número do dispositivo, e a
-    # regra da casa é não mexer em cálculo tributário citando lei que não
-    # foi conferida em fonte oficial — foi assim que o art. 18-A, § 2º
-    # entrou aqui como fundamento de uma projeção que ele não fundamenta.
-    # A citação entra neste comentário quando o Roberto confirmar na lei;
-    # até lá o aviso está no ROADMAP.md e o cálculo segue a regra vigente.
+    # Na prática é um caractere: a janela vira `range(2, 14)`. O efeito
+    # não é: de 2027 em diante, quem estiver crescendo perto de uma
+    # fronteira de faixa sai tributado pela faixa errada durante um mês
+    # inteiro, e a alíquota é o número que este projeto existe para não
+    # errar.
+    #
+    # NÃO implementado de propósito, e a citação acima ainda não foi
+    # conferida em fonte oficial — o Planalto devolve HTTP 503 fora do
+    # navegador. Trocar a janela agora seria mudar cálculo tributário com
+    # base em lei que ninguém abriu, que é exatamente como o art. 18-A,
+    # § 2º entrou neste projeto como fundamento de uma projeção que ele
+    # não fundamenta. O aviso está no ROADMAP.md; o cálculo segue a regra
+    # vigente até a conferência.
     janela = {_mes_anterior(mes, n) for n in range(1, 13)}
     meses_do_arquivo = {_mes_de(t.data) for t in transacoes}
     faltando = janela - meses_do_arquivo

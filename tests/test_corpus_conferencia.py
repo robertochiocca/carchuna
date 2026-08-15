@@ -407,3 +407,77 @@ def test_o_retriever_recusa_corpus_incoerente_na_carga(tmp_path):
 
     with pytest.raises(ValueError, match="conferido_em"):
         Retriever(data_path=arquivo)
+
+
+# ---------------------------------------------------------------------------
+# A lacuna de vigência: registrada no ROADMAP, nunca no corpus
+# ---------------------------------------------------------------------------
+
+
+def _roadmap() -> str:
+    """O ROADMAP com o espaço normalizado.
+
+    O Markdown quebra linha no meio das frases, então procurar por
+    "último dia útil de setembro" no texto cru falha por causa de um
+    `\n` — e o teste estaria reclamando da largura da coluna, não do
+    conteúdo. Colapsar o espaço faz a asserção falar do que importa.
+    """
+    bruto = (Path(__file__).resolve().parents[1] / "ROADMAP.md").read_text("utf-8")
+    return " ".join(bruto.split())
+
+
+def test_a_reforma_nao_entrou_no_corpus_por_engano():
+    """O corpus é o lugar do que tem lastro; o roadmap, do que falta.
+
+    Nenhuma das leis da reforma foi conferida em fonte oficial. Se uma
+    delas aparecer no corpus sem que a data de conferência exista, é
+    porque alguém escreveu de memória — que é o defeito que este projeto
+    inteiro existe para não cometer.
+    """
+    corpus_cru = CORPUS.read_text("utf-8")
+    for lei in ("214/2025", "227/2026"):
+        assert lei not in corpus_cru, f"LC {lei} no corpus sem conferência"
+
+
+def test_o_roadmap_registra_as_duas_leis_da_reforma():
+    """A LC 227/2026 existe e pode ter mexido no que a 214 dizia.
+
+    Registrar a 214 como marco final seria repetir, com antecedência, o
+    erro de citar dispositivo sem abrir a lei.
+    """
+    roadmap = _roadmap()
+    assert "LC 214/2025" in roadmap
+    assert "LC 227/2026" in roadmap
+    assert "não sei o alcance" in roadmap.lower()
+
+
+def test_o_roadmap_registra_os_DOIS_prazos_de_setembro():
+    """Eram dois, e o registro anterior trazia um.
+
+    Além da escolha do regime de IBS/CBS, o prazo de opção pelo Simples
+    passou para o último dia útil de setembro do ano anterior — em
+    setembro de 2026 se opta para 2027. O público da Carchuna decide as
+    duas coisas na mesma janela.
+    """
+    roadmap = _roadmap()
+    assert "DOIS prazos" in roadmap
+    assert "IBS/CBS" in roadmap
+    assert "último dia útil de setembro" in roadmap
+    assert "2027" in roadmap
+
+
+def test_o_todo_da_rbt12_cita_a_lei_e_nao_mudou_a_janela():
+    """A citação entrou; o cálculo, não. As duas coisas são o ponto.
+
+    A janela continua `range(1, 13)` — a regra vigente. Trocar por
+    `range(2, 14)` agora seria mudar cálculo tributário com base em lei
+    que ainda não foi aberta na fonte.
+    """
+    fonte = (
+        Path(__file__).resolve().parents[1] / "carchuna" / "metricas.py"
+    ).read_text("utf-8")
+
+    assert "art. 18 da LC 123/2006 c/c LC 214/2025" in fonte
+    assert "range(2, 14)" in fonte  # o que vai mudar, escrito
+    assert "range(1, 13)" in fonte  # o que ainda vale, rodando
+    assert "NÃO implementado de propósito" in fonte
