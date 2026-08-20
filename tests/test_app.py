@@ -58,6 +58,31 @@ IDIOMA = "idioma"
 CAMINHO = "caminho_arquivo"
 
 
+RAIZ = Path(__file__).resolve().parents[1]
+
+
+def _funcoes_da_interface():
+    """Toda função de toda camada da interface, com o arquivo de origem.
+
+    Os guardas estruturais abaixo liam a árvore sintática do `app.py`
+    apenas. Quando os ajudantes saíram dele para `paginas/`, a varredura
+    passou a apontar para um arquivo que não tem mais o que ela procura —
+    e guarda que não encontra nada passa calado, que é o pior desfecho
+    possível para um teste estrutural.
+
+    Varrer o pacote inteiro faz a verificação seguir o código, e não o
+    caminho de um arquivo.
+    """
+    import ast
+
+    arquivos = [RAIZ / "app.py", *sorted((RAIZ / "paginas").glob("*.py"))]
+    for caminho in arquivos:
+        arvore = ast.parse(caminho.read_text(encoding="utf-8"))
+        for no in ast.walk(arvore):
+            if isinstance(no, ast.FunctionDef):
+                yield no, caminho.name
+
+
 def _rodar() -> AppTest:
     """Roda o app do zero, no caminho padrão (sem upload, dados sintéticos)."""
     return AppTest.from_file(APP, default_timeout=TIMEOUT).run()
@@ -412,14 +437,13 @@ def test_nenhuma_funcao_que_desenha_widget_esta_cacheada():
         "caption",
         "markdown",
     }
-    arvore = ast.parse(Path(APP).read_text(encoding="utf-8"))
     problemas = []
-    for no in ast.walk(arvore):
-        if not isinstance(no, ast.FunctionDef):
-            continue
+    cacheadas = 0
+    for no, _ in _funcoes_da_interface():
         cacheada = any("cache" in ast.unparse(d) for d in no.decorator_list)
         if not cacheada:
             continue
+        cacheadas += 1
         for interno in ast.walk(no):
             if (
                 isinstance(interno, ast.Call)
@@ -432,21 +456,31 @@ def test_nenhuma_funcao_que_desenha_widget_esta_cacheada():
                     f"{no.name}() é cacheada e chama st.{interno.func.attr}"
                 )
     assert not problemas, "; ".join(problemas)
+    # Sem esta linha o teste passa por vacuidade: se as funções cacheadas
+    # mudarem de arquivo e a varredura não acompanhar, ela não encontra
+    # nada, o laço não roda e o guarda desarma em silêncio. Foi o que
+    # aconteceu na extração do `app.py` em páginas, e passou despercebido
+    # no primeiro run.
+    assert cacheadas >= 3, f"a varredura achou {cacheadas} funções cacheadas"
 
 
-def test_o_retriever_continua_cacheado():
-    """O corpus é lido e indexado uma vez, não a cada clique de widget."""
+def test_as_tres_funcoes_cacheadas_continuam_cacheadas():
+    """O corpus é lido e indexado uma vez, não a cada clique de widget.
+
+    As três são nomeadas uma a uma de propósito: com a extração em
+    páginas elas mudaram de arquivo, e a garantia é sobre o decorador
+    continuar em cada uma — não sobre existir cache em algum lugar.
+    """
     import ast
 
-    arvore = ast.parse(Path(APP).read_text(encoding="utf-8"))
-    cacheadas = {
+    nomes = {
         no.name
-        for no in ast.walk(arvore)
-        if isinstance(no, ast.FunctionDef)
-        and any("cache" in ast.unparse(d) for d in no.decorator_list)
+        for no, _ in _funcoes_da_interface()
+        if any("cache" in ast.unparse(d) for d in no.decorator_list)
     }
-    assert "_retriever_cacheado" in cacheadas
-    assert "_resultados_cacheados" in cacheadas
+    assert "_retriever_cacheado" in nomes
+    assert "_resultados_cacheados" in nomes
+    assert "_composicao_cacheada" in nomes
 
 
 def test_o_app_nao_usa_parametro_do_streamlit_com_remocao_marcada():

@@ -161,32 +161,42 @@ def test_a_tela_roda_as_duas_conferencias_e_nao_so_a_plausibilidade():
     ela só falha se o motor estiver quebrado, que é exatamente o defeito
     que ela existe para pegar.
 
-    Então este lê a árvore sintática do `app.py`: a reconciliação é
+    Então este lê a árvore sintática da interface: a reconciliação é
     chamada, o resultado entra na bandeja que as abas consomem, e ele é
     mostrado em `st.error` como a plausibilidade já era.
+
+    A varredura cobre o `app.py` **e** o pacote `paginas/`, porque a
+    extração da interface em camadas moveu as duas chamadas para dentro
+    de `paginas/_estado.py`. Um guarda estrutural preso ao caminho de um
+    arquivo deixa de guardar no dia em que o código anda — e o valor
+    dele é justamente sobreviver a esse dia.
     """
     import ast
 
-    fonte = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
-    arvore = ast.parse(fonte)
+    raiz = Path(__file__).resolve().parents[1]
+    arvores = [
+        ast.parse(caminho.read_text(encoding="utf-8"))
+        for caminho in [raiz / "app.py", *sorted((raiz / "paginas").glob("*.py"))]
+    ]
+    nos = [no for arvore in arvores for no in ast.walk(arvore)]
 
     chamadas = {
         no.func.id
-        for no in ast.walk(arvore)
+        for no in nos
         if isinstance(no, ast.Call) and isinstance(no.func, ast.Name)
     }
     assert {"reconciliar", "conferir_plausibilidade"} <= chamadas
 
     chaves = {
         no.value
-        for no in ast.walk(arvore)
+        for no in nos
         if isinstance(no, ast.Constant) and isinstance(no.value, str)
     }
     assert {"reconciliacao", "plausibilidade"} <= chaves
 
     mostrados = {
         ast.unparse(no)
-        for no in ast.walk(arvore)
+        for no in nos
         if isinstance(no, ast.Call)
         and isinstance(no.func, ast.Attribute)
         and no.func.attr == "error"
