@@ -147,3 +147,68 @@ def test_o_nivel_muda_exatamente_nos_limiares_de_80_e_55():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# Pior caso: uma nota que resume vários sinais não pode ser melhor que o pior
+# ---------------------------------------------------------------------------
+
+
+def test_um_sinal_estimado_puxa_o_conjunto_para_estimado():
+    """Basta um para a nota do conjunto deixar de afirmar.
+
+    A tela de Resumo publica uma nota só acima de uma lista com sinais de
+    naturezas diferentes. Se ela se declarar `calculado` porque a maioria
+    é, empresta autoridade de dado ao palpite que está na mesma lista.
+    """
+    from carchuna.confianca import base_pior_caso
+
+    assert base_pior_caso("calculado", "calculado", "estimado") == "estimado"
+    assert base_pior_caso("estimado") == "estimado"
+
+
+def test_todos_calculados_continuam_calculados():
+    """O ramo bom segue alcançável — senão a correção troca um ramo morto
+    por outro, que é o defeito que ela existe para consertar."""
+    from carchuna.confianca import base_pior_caso
+
+    assert base_pior_caso("calculado", "calculado") == "calculado"
+
+
+def test_conjunto_vazio_e_calculado_porque_nao_ha_premissa_nenhuma():
+    """Sem sinal na tela não há palpite a qualificar."""
+    from carchuna.confianca import base_pior_caso
+
+    assert base_pior_caso() == "calculado"
+
+
+def test_rotulo_desconhecido_e_erro_e_nao_silencio():
+    """Rótulo novo tem de estourar, não escorregar para `calculado`.
+
+    Se um terceiro valor aparecesse e esta função o ignorasse, a nota
+    passaria a afirmar sobre uma natureza de evidência que ninguém
+    classificou.
+    """
+    from carchuna.confianca import base_pior_caso
+
+    with pytest.raises(ValueError, match="palpite|inválid"):
+        base_pior_caso("calculado", "chutado")
+
+
+def test_a_nota_do_conjunto_perde_os_15_pontos_da_premissa():
+    """Ponta a ponta: o pior caso entra na rubrica e derruba a evidência."""
+    from carchuna.confianca import base_pior_caso
+
+    so_calculado = avaliar_confianca(
+        BASE_PEQUENA, base=base_pior_caso("calculado", "calculado")
+    )
+    com_estimado = avaliar_confianca(
+        BASE_PEQUENA, base=base_pior_caso("calculado", "estimado")
+    )
+
+    def _evidencia(nota):
+        return next(c for c in nota.componentes if c.nome == "evidencia").pontos
+
+    assert _evidencia(so_calculado) == 40
+    assert _evidencia(com_estimado) == 25
+    assert so_calculado.pct - com_estimado.pct == 15

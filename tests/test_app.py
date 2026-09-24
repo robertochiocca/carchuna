@@ -1041,3 +1041,84 @@ def test_excesso_grande_explica_na_tela_em_vez_de_estourar():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# A nota global da tela não pode afirmar mais que o pior sinal que ela resume
+# ---------------------------------------------------------------------------
+
+
+def _nota_global_da_tela(teste) -> tuple[int, str]:
+    """A nota de confiança da tela (pct) e a frase que a acompanha.
+
+    O rótulo vem do expander "Quanto dá para confiar nestes números?";
+    a frase é o markdown em itálico dentro dele.
+    """
+    import re
+
+    alvo = [m.value for m in teste.markdown if "Confiança da base:" in str(m.value)]
+    assert alvo, "a nota global não apareceu na tela"
+    (pct,) = re.findall(r"(\d+)%", alvo[0])
+    frases = [
+        str(m.value)
+        for m in teste.markdown
+        if "hipótese possível" in str(m.value) or "dados mostram isso" in str(m.value)
+    ]
+    assert frases, "a frase da nota global não apareceu"
+    return int(pct), frases[0]
+
+
+def test_a_nota_global_nao_afirma_dado_acima_de_uma_lista_com_estimado(tmp_path):
+    """O defeito: a nota global era construída com `base="calculado"` fixo.
+
+    Ela é publicada logo abaixo do bloco de Ações, que soma achados e
+    `ganho_estimado_mensal` das oportunidades. Com a base pregada em
+    "calculado" ela reservava 40/40 de evidência e podia imprimir "Os
+    dados mostram isso." acima de uma lista que contém palpite.
+
+    Este arquivo produz pelo menos um sinal estimado (produto com margem
+    magra e oportunidade de reajuste), então a nota da tela tem de cair
+    para o ramo da hipótese.
+    """
+    vendas = tmp_path / "vendas.csv"
+    linhas = [
+        "data;canal;produto;valor_bruto;custo_produto;frete_pago;comissao_cobrada"
+    ]
+    for mes in (1, 2, 3, 4):
+        linhas.append(f"15/{mes:02d}/2026;shopee;Capinha;100,00;66,35;10,00;14,00")
+        linhas.append(f"16/{mes:02d}/2026;shopee;Fone;100,00;20,00;5,00;14,00")
+    vendas.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    radar = _motor_radar(vendas)
+    estimados = [s for s in radar if s.base_evidencia == "estimado"]
+    assert estimados, "o cenário do teste precisa produzir sinal estimado"
+
+    _pct, frase = _nota_global_da_tela(teste)
+    assert "hipótese possível" in frase
+
+
+def _motor_radar(arquivo):
+    """O radar do mesmo arquivo, direto do motor, para comparar com a tela."""
+    from carchuna.analise import AnalisadorMargem
+    from carchuna.dados import carregar_com_relatorio
+    from carchuna.margem import ConfigTributaria
+
+    return AnalisadorMargem(
+        carregar_com_relatorio(arquivo).transacoes,
+        ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("4200000")),
+    ).radar()
+
+
+def test_a_nota_global_nao_e_construida_com_base_fixa_no_fonte():
+    """Guarda estrutural: `base="calculado"` literal não pode voltar.
+
+    O grep do briefing procurava `base_evidencia="calculado"` dentro de
+    `carchuna/` e não pegava este caso — aqui a atribuição estava no
+    `app.py` e o parâmetro chama-se `base`.
+    """
+    fonte = Path(APP).read_text(encoding="utf-8")
+    assert 'avaliar_confianca(a.transacoes, base="calculado")' not in fonte
+    assert "base_pior_caso" in fonte

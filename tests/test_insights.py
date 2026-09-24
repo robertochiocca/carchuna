@@ -456,6 +456,36 @@ def test_o_frete_por_pedido_tambem_e_estimado_porque_compara_com_media_movel():
     )
 
 
+def test_receita_sobe_lucro_cai_e_estimado_porque_o_impacto_e_contrafactual():
+    """O terceiro sinal com premissa, que a primeira correção não pegou.
+
+    O impacto deste sinal é, no próprio comentário do código, "o lucro
+    que o mês teria se a MARGEM do mês anterior tivesse se mantido sobre
+    o faturamento novo". Margem que se mantém é premissa, não medição —
+    e é a MESMA forma que levou o frete por pedido a `estimado`, com
+    agravante: o frete projeta de três meses, este projeta de um só.
+
+    A comparação (receita subiu, margem caiu) é medida e continua sendo;
+    o R$/mês é que não é. E o texto ainda diz "Principal suspeita", que é
+    atribuição causal por heurística — a dedução que mais subiu em p.p.
+    """
+    vendas = [
+        _venda("1000", 1, comissao_cobrada=Decimal("120"), custo=Decimal("1000")),
+        _venda("1500", 2, comissao_cobrada=Decimal("500"), custo=Decimal("1500")),
+    ]
+    (i,) = [
+        x
+        for x in MotorInsights().radar(vendas, CONFIG)
+        if x.categoria == "receita_x_lucro"
+    ]
+    assert i.base_evidencia == "estimado"
+    evidencia = next(c for c in i.confianca.componentes if c.nome == "evidencia")
+    assert evidencia.pontos == 25
+    assert "premissa" in evidencia.motivo
+    # a explicação continua nomeando a suspeita, agora sem se dizer medida
+    assert "Principal suspeita" in i.explicacao
+
+
 def test_sinal_que_sai_do_extrato_e_da_lei_se_declara_calculado():
     """O contraste: nada aqui foi assumido, então vale os 40 pontos."""
     vendas = [_venda("1000", m, comissao_cobrada=Decimal("120")) for m in (1, 2, 3)] + [
