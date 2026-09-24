@@ -34,7 +34,7 @@ from carchuna import (
     carregar_com_relatorio,
     transacoes_sinteticas,
 )
-from carchuna.confianca import avaliar_confianca
+from carchuna.confianca import avaliar_confianca, base_pior_caso
 from carchuna.crescimento import AVISO_CRESCIMENTO
 from carchuna.dados import (
     COLUNAS_OBRIGATORIAS,
@@ -1009,7 +1009,6 @@ _MOTORES: tuple[tuple[str, Callable], ...] = (
     ("oportunidades", lambda a: a.crescimento()),
     ("radar", lambda a: a.radar()),
     ("linhagem", lambda a: a.linhagem()),
-    ("confianca", lambda a: avaliar_confianca(a.transacoes, base="calculado")),
     ("plausibilidade", lambda a: conferir_plausibilidade(a.decomposicao)),
     # A conferência que de fato valida o número: refaz o lucro lançamento
     # a lançamento, sem passar por `decompor_margem`. Ela existia desde o
@@ -1069,8 +1068,50 @@ def _resultados_cacheados(
         except (ValueError, TypeError) as erro:
             bandeja[chave] = None
             falhas[chave] = str(erro)
+    # Segunda passada: os motores que dependem do resultado dos outros. Ler
+    # a bandeja em vez de chamar `analise.radar()` outra vez importa —
+    # `radar`, `diagnosticar` e `crescimento` não são cacheados, e cada
+    # chamada reexecuta o motor inteiro sobre a base toda.
+    for chave, motor in _MOTORES_DA_BANDEJA:
+        try:
+            bandeja[chave] = motor(analise, bandeja)
+        except (ValueError, TypeError) as erro:
+            bandeja[chave] = None
+            falhas[chave] = str(erro)
     bandeja["falhas"] = falhas
     return bandeja
+
+
+def _base_da_tela(bandeja: dict) -> str:
+    """Pior caso entre os sinais que a tela publica com etiqueta de evidência.
+
+    São três listas: o radar, os achados e as oportunidades. Cada uma
+    carrega natureza de evidência própria, e a nota global fica logo
+    abaixo do bloco de Ações, que soma achados e `ganho_estimado_mensal`
+    — então ela resume, de fato, as três.
+
+    As deduções do raio-X ficam de fora **de propósito**, e não por
+    descuido: `comissoes_canal`, `adquirencia` e `antecipacao` são
+    `estimado` fixo em `margem.py` mesmo quando o extrato traz a comissão
+    real de cada venda. Incluí-las pregaria a nota global em `estimado`
+    para sempre, sem nada que o lojista possa fazer a respeito — trocaria
+    um ramo morto por outro, que é exatamente o defeito que esta função
+    existe para consertar. A evidência de cada dedução continua ao lado
+    dela no raio-X, que é onde ela é acionável.
+    """
+    rotulos = [s.base_evidencia for s in bandeja.get("radar") or []]
+    rotulos += [a.confianca for a in bandeja.get("achados") or []]
+    rotulos += [o.confianca for o in bandeja.get("oportunidades") or []]
+    return base_pior_caso(*rotulos)
+
+
+# Motores que leem a bandeja já montada, em vez do analisador.
+_MOTORES_DA_BANDEJA: tuple[tuple[str, Callable], ...] = (
+    (
+        "confianca",
+        lambda a, bandeja: avaliar_confianca(a.transacoes, base=_base_da_tela(bandeja)),
+    ),
+)
 
 
 def _lacunas_do_arquivo(transacoes) -> list[str]:

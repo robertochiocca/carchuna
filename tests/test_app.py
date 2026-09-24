@@ -717,9 +717,16 @@ def test_a_nota_de_confianca_na_tela_e_a_soma_dos_seus_componentes(app_demo):
     número mágico, que é o que a rubrica existe para não ser.
     """
     from carchuna.analise import AnalisadorMargem
-    from carchuna.confianca import avaliar_confianca
+    from carchuna.confianca import avaliar_confianca, base_pior_caso
 
-    nota = avaliar_confianca(AnalisadorMargem.demo(meses=6).transacoes, "calculado")
+    # A base não é mais fixa em "calculado": ela é o pior caso entre os
+    # sinais que a tela publica. Este teste deriva a base do mesmo jeito
+    # que o app, senão ele cobra na tela um número que o app não calcula.
+    analise = AnalisadorMargem.demo(meses=6)
+    rotulos = [s.base_evidencia for s in analise.radar()]
+    rotulos += [a.confianca for a in analise.diagnosticar()]
+    rotulos += [o.confianca for o in analise.crescimento()]
+    nota = avaliar_confianca(analise.transacoes, base_pior_caso(*rotulos))
     assert nota.pct == sum(c.pontos for c in nota.componentes)
 
     rotulos = [e.label for e in app_demo.expander]
@@ -1048,56 +1055,20 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 
 
-def _nota_global_da_tela(teste) -> tuple[int, str]:
-    """A nota de confiança da tela (pct) e a frase que a acompanha.
+def _frase_da_nota_global(teste) -> str:
+    """A frase que a nota global da tela publica, casada pela constante.
 
-    O rótulo vem do expander "Quanto dá para confiar nestes números?";
-    a frase é o markdown em itálico dentro dele.
+    Casar por "hipótese" solto não serve: o texto do sublimite do Simples
+    também tem a palavra, e o teste passaria pelo motivo errado. O app
+    escreve a frase em itálico (`st.markdown(f"_{frase}_")`), então é
+    essa a forma procurada.
     """
-    import re
+    from carchuna.confianca import FRASE_DADOS, FRASE_HIPOTESE
 
-    alvo = [m.value for m in teste.markdown if "Confiança da base:" in str(m.value)]
-    assert alvo, "a nota global não apareceu na tela"
-    (pct,) = re.findall(r"(\d+)%", alvo[0])
-    frases = [
-        str(m.value)
-        for m in teste.markdown
-        if "hipótese possível" in str(m.value) or "dados mostram isso" in str(m.value)
-    ]
-    assert frases, "a frase da nota global não apareceu"
-    return int(pct), frases[0]
-
-
-def test_a_nota_global_nao_afirma_dado_acima_de_uma_lista_com_estimado(tmp_path):
-    """O defeito: a nota global era construída com `base="calculado"` fixo.
-
-    Ela é publicada logo abaixo do bloco de Ações, que soma achados e
-    `ganho_estimado_mensal` das oportunidades. Com a base pregada em
-    "calculado" ela reservava 40/40 de evidência e podia imprimir "Os
-    dados mostram isso." acima de uma lista que contém palpite.
-
-    Este arquivo produz pelo menos um sinal estimado (produto com margem
-    magra e oportunidade de reajuste), então a nota da tela tem de cair
-    para o ramo da hipótese.
-    """
-    vendas = tmp_path / "vendas.csv"
-    linhas = [
-        "data;canal;produto;valor_bruto;custo_produto;frete_pago;comissao_cobrada"
-    ]
-    for mes in (1, 2, 3, 4):
-        linhas.append(f"15/{mes:02d}/2026;shopee;Capinha;100,00;66,35;10,00;14,00")
-        linhas.append(f"16/{mes:02d}/2026;shopee;Fone;100,00;20,00;5,00;14,00")
-    vendas.write_text("\n".join(linhas) + "\n", encoding="utf-8")
-
-    teste = _rodar_com_arquivo(vendas)
-    assert not teste.exception
-
-    radar = _motor_radar(vendas)
-    estimados = [s for s in radar if s.base_evidencia == "estimado"]
-    assert estimados, "o cenário do teste precisa produzir sinal estimado"
-
-    _pct, frase = _nota_global_da_tela(teste)
-    assert "hipótese possível" in frase
+    na_tela = [str(m.value) for m in teste.markdown]
+    achadas = [f for f in (FRASE_DADOS, FRASE_HIPOTESE) if f"_{f}_" in na_tela]
+    assert len(achadas) == 1, f"a nota global não apareceu uma vez só: {achadas}"
+    return achadas[0]
 
 
 def _motor_radar(arquivo):
@@ -1110,6 +1081,88 @@ def _motor_radar(arquivo):
         carregar_com_relatorio(arquivo).transacoes,
         ConfigTributaria(regime="simples", anexo_simples="I", rbt12=Decimal("4200000")),
     ).radar()
+
+
+def _csv_de_vendas(caminho, linhas):
+    caminho.write_text(
+        "data;canal;produto;valor_bruto;custo_produto;frete_pago;comissao_cobrada\n"
+        + "\n".join(linhas)
+        + "\n",
+        encoding="utf-8",
+    )
+    return caminho
+
+
+def _base_robusta(frete_do_ultimo_mes: str) -> list[str]:
+    """13 meses × 20 vendas, com comissão real do extrato em cada uma.
+
+    Base deliberadamente robusta: 40 de evidência + 20 de histórico + 20
+    de amostra + 13 de completude = 93 pontos se tudo for calculado. Isso
+    importa porque `NotaConfianca.frase` exige evidência cheia **e** nota
+    ≥ 70 — num cenário magro a frase cairia para a hipótese por falta de
+    dado, e o teste passaria sem nada provar sobre o rótulo.
+
+    O frete do último mês é o botão: mantido, nenhum sinal aparece;
+    saltando, o radar emite `frete_por_pedido` (estimado) ao lado de dois
+    sinais calculados.
+    """
+    meses = [(2025, m) for m in range(1, 13)] + [(2026, 1)]
+    return [
+        f"{(i % 28) + 1:02d}/{mes:02d}/{ano};shopee;Capa;100,00;40,00;"
+        f"{frete_do_ultimo_mes if (ano, mes) == (2026, 1) else '10,00'};14,00"
+        for ano, mes in meses
+        for i in range(20)
+    ]
+
+
+def test_a_nota_global_nao_afirma_dado_acima_de_uma_lista_com_estimado(tmp_path):
+    """O defeito: a nota global era construída com `base="calculado"` fixo.
+
+    Ela é publicada logo abaixo do bloco de Ações, que soma achados e
+    `ganho_estimado_mensal` das oportunidades. Com a base pregada em
+    "calculado" reservava 40/40 de evidência e podia imprimir "Os dados
+    mostram isso." acima de uma lista que contém palpite.
+
+    O cenário é o que mais cobra a regra: o radar emite TRÊS sinais, dois
+    calculados e um estimado. Maioria calculada, e o pior caso ainda tem
+    de vencer. Números conferidos à mão: 93 pontos com a base fixa contra
+    78 com o pior caso — os 15 pontos da premissa —, e é essa diferença
+    que faz a frase virar.
+    """
+    vendas = _csv_de_vendas(tmp_path / "vendas.csv", _base_robusta("40,00"))
+    naturezas = [s.base_evidencia for s in _motor_radar(vendas)]
+    assert naturezas.count("calculado") >= 2, f"cenário rendeu {naturezas}"
+    assert "estimado" in naturezas, f"cenário rendeu {naturezas}"
+
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    from carchuna.confianca import FRASE_HIPOTESE
+
+    assert _frase_da_nota_global(teste) == FRASE_HIPOTESE
+    # a queda de 15 pontos aparece na tela, não só na estrutura
+    assert any("78%" in e.label for e in teste.expander)
+    assert not any("93%" in e.label for e in teste.expander)
+
+
+def test_a_nota_global_volta_a_afirmar_quando_nada_na_tela_e_estimado(tmp_path):
+    """O outro ramo, vivo: sem palpite na tela, a nota pode afirmar.
+
+    Mesma base do teste anterior, só sem o salto de frete — então nenhum
+    sinal aparece, nada é estimado e os 93 pontos voltam. Sem este teste
+    a correção trocaria um ramo morto por outro, que é o defeito de
+    origem com o sinal invertido.
+    """
+    vendas = _csv_de_vendas(tmp_path / "vendas.csv", _base_robusta("10,00"))
+    assert all(s.base_evidencia == "calculado" for s in _motor_radar(vendas))
+
+    teste = _rodar_com_arquivo(vendas)
+    assert not teste.exception
+
+    from carchuna.confianca import FRASE_DADOS
+
+    assert _frase_da_nota_global(teste) == FRASE_DADOS
+    assert any("93%" in e.label for e in teste.expander)
 
 
 def test_a_nota_global_nao_e_construida_com_base_fixa_no_fonte():

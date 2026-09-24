@@ -491,6 +491,16 @@ class DeducaoForaDoPadrao(AnaliseInsight):
 
     É aqui que mora a resposta a "este mês fugiu do padrão?" — nomeando
     a dedução que se mexeu, em vez de só dizer que a margem mudou.
+
+    **Por que este sinal é ``calculado`` e o frete por pedido não**, se os
+    dois usam média do passado como ``esperado``: aqui a média vem
+    acompanhada de teste de dispersão (IQR ou z-score, publicado em
+    ``metodo``), então a afirmação é "este mês é atípico face à
+    distribuição observada" — coisa que os dados sustentam. O frete
+    compara com a média móvel contra limiar fixo, sem medir dispersão:
+    ali a média é um valor esperado assumido, e assumir é premissa. A
+    distinção é fina e estava só na cabeça de quem escreveu; fica escrita
+    porque é ela que decide 15 pontos da rubrica.
     """
 
     def avaliar(self, ctx: ContextoInsights) -> list[Insight]:
@@ -661,8 +671,13 @@ class ReceitaSobeLucroCai(AnaliseInsight):
                     "aba Histórico: crescer pagando mais caro por venda é o "
                     "vazamento mais silencioso."
                 ),
-                base_evidencia="calculado",
-                confianca=ctx.nota("calculado"),
+                # o impacto é o lucro que o mês TERIA se a margem do mês
+                # anterior tivesse se mantido — margem que se mantém é
+                # premissa, não medição. A divergência em si (receita subiu,
+                # margem caiu) é medida; o R$/mês é projeção, e de um mês só,
+                # base mais magra que a média móvel do frete por pedido.
+                base_evidencia="estimado",
+                confianca=ctx.nota("estimado"),
                 esperado=(
                     f"R$ {esperado} de lucro (se a margem de {mes_a} tivesse "
                     "se mantido sobre o faturamento novo)"

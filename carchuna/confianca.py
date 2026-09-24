@@ -72,6 +72,31 @@ class NotaConfianca:
         return FRASE_HIPOTESE
 
 
+BASES = ("calculado", "estimado")
+
+
+def base_pior_caso(*rotulos: str) -> str:
+    """A natureza de evidência de um CONJUNTO de sinais: o pior deles manda.
+
+    Uma nota que resume vários sinais não pode afirmar mais que o mais
+    fraco deles. Dizer "os dados mostram isso" acima de uma lista que
+    contém ganho estimado empresta autoridade de dado a um palpite — e o
+    lojista lê a nota, não a procedência de cada linha.
+
+    Conjunto vazio é ``"calculado"``: sem sinal na tela não há premissa a
+    qualificar. Rótulo desconhecido estoura, em vez de escorregar para
+    ``"calculado"`` — silenciar aqui faria a nota afirmar sobre uma
+    natureza de evidência que ninguém classificou.
+    """
+    for rotulo in rotulos:
+        if rotulo not in BASES:
+            raise ValueError(
+                f"base {rotulo!r} inválida; use 'calculado' ou 'estimado'. "
+                "Rótulo novo precisa de lugar na rubrica antes de virar nota."
+            )
+    return "estimado" if "estimado" in rotulos else "calculado"
+
+
 def _pontos_historico(meses: int) -> tuple[int, str]:
     if meses >= 12:
         pontos = 20
@@ -125,7 +150,7 @@ def avaliar_confianca(
     """
     if not transacoes:
         raise ValueError("`transacoes` não pode ser vazio.")
-    if base not in ("calculado", "estimado"):
+    if base not in BASES:
         raise ValueError(f"base {base!r} inválida; use 'calculado' ou 'estimado'.")
 
     if base == "calculado":
