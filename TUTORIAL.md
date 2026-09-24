@@ -162,8 +162,19 @@ Também na barra lateral:
   maquininha, antecipação, frete e devoluções. A diferença entre as duas é a
   **perda de margem**, e o app diz de onde ela veio.
 - Cada número tem uma etiqueta de **confiança**: `calculado` (sai dos seus
-  dados e da lei) ou `estimado` (usa uma tabela padrão editável — troque pelos
-  números do seu contrato para virar `calculado`).
+  dados e da lei) ou `estimado`. Há **duas** razões diferentes para um número
+  ser `estimado`, e elas não se resolvem do mesmo jeito:
+  - **tabela padrão** — a comissão, a taxa da maquininha e a de antecipação vêm
+    com um valor de mercado editável. Troque pelos números do seu contrato e o
+    número passa a ser o seu;
+  - **premissa** — o sinal só existe porque se assumiu algo que os seus dados
+    não dizem: que o volume não cai depois de um reajuste, ou que o mês seria
+    parecido com a média dos anteriores. **Esse não vira `calculado` editando
+    nada** — é hipótese por natureza, e a etiqueta está ali para você tratá-la
+    como tal.
+- A nota de confiança no alto da tela resume a tela toda, e **vale o pior caso**:
+  se qualquer coisa ali é estimada, ela diz "esta é uma hipótese possível" em vez
+  de "os dados mostram isso" — mesmo que a maioria dos sinais seja calculada.
 - O **Diagnóstico Legal aponta indícios, não certezas**: "há indício, com base
   no art. X — leve ao seu contador". Desconfie de quem promete "recuperar
   R$ X de impostos" sem análise: esse mercado é cheio de golpes.
